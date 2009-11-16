@@ -1,6 +1,13 @@
 module Main (main)
 where
 
-import BCode
+import System.Environment
+import qualified BCode
 
-main = print "Hello world"
+main = do
+  [fname] <- getArgs
+  torrent <- readFile fname
+  let bcoded = BCode.decode torrent
+  case bcoded of
+    Left pe -> print $ pe
+    Right bcoded -> putStr $ BCode.prettyPrint bcoded
