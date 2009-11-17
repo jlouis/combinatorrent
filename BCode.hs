@@ -4,16 +4,27 @@ module BCode (
               encode,
               decode,
               search,
+              announce,
+              comment,
+              creationDate,
+              info,
+              infoLength,
+              infoName,
+              infoNameUtf8,
+              infoPieceLength,
+              infoPieces,
               prettyPrint
              )
 
 where
 
+import Control.Monad
 import Data.List
 import Data.Maybe
 import qualified Data.Map as M
 import Text.ParserCombinators.Parsec
 import Text.PrettyPrint.HughesPJ hiding (char)
+
 
 data BCode = BInt Int
            | BString String
@@ -73,10 +84,45 @@ decode = parse parseBCode "(unknown)"
 
 {- Simple search function over BCoded data structures, general case. In practice, we
    will prefer some simpler mnemonics -}
-search :: [Path] -> BCode -> BCode
-search [] bc = bc
-search (PInt i : rest) (BArray bs) = search rest (bs!!i)
-search (PString s : rest) (BDict mp) = search rest (fromJust $ M.lookup s mp)
+search :: [Path] -> BCode -> Maybe BCode
+search [] bc = Just bc
+search (PInt i : rest) (BArray bs) | i < 0 || i > length bs = Nothing
+                                   | otherwise = search rest (bs!!i)
+search (PString s : rest) (BDict mp) = M.lookup s mp >>= search rest
+search _ _ = Nothing
+
+search' :: String -> BCode -> Maybe String
+search' str b = case search [PString str] b of
+                  Nothing -> Nothing
+                  Just (BString s) -> Just s
+                  _ -> Nothing
+
+searchInfo :: String -> BCode -> Maybe BCode
+searchInfo str = search [PString "info", PString str]
+
+{- Various accessors -}
+announce, comment, creationDate :: BCode -> Maybe String
+announce = search' "announce"
+comment  = search' "comment"
+creationDate = search' "creation date"
+
+info :: BCode -> Maybe BCode
+info = search [PString "info"]
+
+infoLength, infoName, infoNameUtf8, infoPieceLength :: BCode -> Maybe BCode
+infoLength = searchInfo "length"
+infoName   = searchInfo "name"
+infoNameUtf8 = searchInfo "name.utf-8"
+infoPieceLength = searchInfo "piece length"
+
+infoPieces :: BCode -> Maybe [String]
+infoPieces b = do t <- searchInfo "pieces" b
+                  case t of
+                    BString str -> return $ sha1Split str
+                    _ -> mzero
+      where sha1Split "" = []
+            sha1Split r  = block : sha1Split rest
+                where (block, rest) = splitAt 20 r
 
 pp :: BCode -> Doc
 pp bc =
@@ -86,7 +132,7 @@ pp bc =
       BArray arr -> cat $ intersperse comma al
           where al = map pp arr
       BDict mp -> cat $ intersperse comma mpl
-          where mpl = map (\(s, bc) -> text s <+> text "->" <+> pp bc) $ M.toList mp
+          where mpl = map (\(s, bc') -> text s <+> text "->" <+> pp bc') $ M.toList mp
 
 prettyPrint :: BCode -> String
 prettyPrint = render . pp
