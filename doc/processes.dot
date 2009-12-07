@@ -1,0 +1,43 @@
+digraph {
+
+	HTTP;
+	Tracker;
+	Peer_Mgr;
+	Peer;
+	Socket;
+	Status;
+	FS;
+	Master;
+	Console;
+	Timer;
+
+	Tracker -> HTTP;
+	HTTP    -> Tracker;
+
+	Tracker -> Peer_Mgr;
+	Tracker -> Timer;
+
+	Timer -> Tracker [label="Tick"];
+
+	Peer_Mgr -> Peer;
+	Peer_Mgr -> Status;
+
+	Peer -> Peer_Mgr;
+	Peer -> Socket;
+	Peer -> FS;
+	Peer -> Status;
+
+	FS -> Peer;
+	FS -> Status;
+
+	Master -> Console;
+	Master -> FS;
+
+	Console -> Master;
+
+	Status -> Tracker [label="Up/Down/State"];
+	Status -> Master;
+
+	Listener -> Socket;
+	Listener -> Peer_Mgr;
+}

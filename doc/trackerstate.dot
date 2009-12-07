@@ -1,0 +1,10 @@
+digraph {
+	Stopped;
+	Started;
+	Completed;
+
+	Stopped -> Started;
+	Started -> Stopped;
+	Started -> Completed;
+	Completed -> Stopped;
+}
