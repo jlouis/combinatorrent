@@ -1,3 +1,4 @@
 *.hi
 *.o
 Main
+/doc/processes.pdf
