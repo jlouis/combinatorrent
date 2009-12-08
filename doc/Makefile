@@ -1,6 +1,6 @@
 .PHONY: all
 
-all: processes.pdf
+all: processes.pdf timer.pdf
 
 %.pdf: %.dot
 	dot -Tpdf $<  > $@

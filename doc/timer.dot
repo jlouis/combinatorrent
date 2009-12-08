@@ -1,0 +1,23 @@
+digraph {
+	check [label="Check Head\nStore time as t", shape=box];
+	waitForHead [label="Wait for head", shape=box];
+	tick [label="Tick"];
+	remove [label="Remove"];
+	ext_event [label="*"];
+	ext_event_l [label="*"];
+	eventEnters [label="Event Enters"];
+	elapsedCalc [label="Event Leaves"];
+	advanceQueue [label="Advance Queue"];
+	insertItem [label="Insert New Item\nIn Queue"];
+
+	check -> waitForHead;
+	check -> eventEnters;
+	ext_event -> eventEnters;
+
+	waitForHead -> tick;
+	tick -> remove;
+	tick -> ext_event_l;
+	remove -> check;
+
+	eventEnters -> elapsedCalc -> advanceQueue -> insertItem -> check;
+}
