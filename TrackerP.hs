@@ -1,3 +1,12 @@
+{- The TrackerP module is responsible for keeping in touch with the Tracker of a torrent.
+   The tracker is contacted periodically, and we exchange information with it. Specifically,
+   we tell the tracker how much we have downloaded, uploaded and what is left. We also
+   tell it about our current state (i.e., are we a seeder or a leecher?).
+
+   The tracker responds to us with a new set of Peers and general information about the
+   torrent in question. It may also respond with an error in which case we should present
+   it to the user.
+-}
 module TrackerP
 
 where
@@ -11,13 +20,12 @@ import Data.List (intersperse)
 import Numeric (showHex)
 
 import qualified Status
+import qualified PeerMgrP
 import BCode hiding (encode)
 
 data Tasks = NeedPeers -- Don't fret too much, just ask the tracker
 
 -- Should be in another place
-data Peer = MkPeer { peerIP :: String,
-                     peerPort :: Int }
 
 data TrackerState = Started | Stopped | Completed
 
@@ -26,7 +34,7 @@ instance Show TrackerState where
     show Stopped = "stopped"
     show Completed = "completed"
 
-data TrackerResponse = ResponseOk { newPeers :: [Peer],
+data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                                     completeR :: Integer,
                                     incompleteR :: Integer,
                                     timeout_interval :: Integer,

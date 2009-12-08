@@ -6,6 +6,7 @@ import System.Environment
 import qualified BCode
 import qualified TrackerP()
 import qualified Status()
+import qualified PeerMgrP()
 
 main :: IO ()
 main = do
