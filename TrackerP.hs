@@ -1,23 +1,46 @@
-{- The TrackerP module is responsible for keeping in touch with the Tracker of a torrent.
-   The tracker is contacted periodically, and we exchange information with it. Specifically,
-   we tell the tracker how much we have downloaded, uploaded and what is left. We also
-   tell it about our current state (i.e., are we a seeder or a leecher?).
+-- Haskell Torrent
+-- Copyright (c) 2009, Jesper Louis Andersen,
+-- All rights reserved.
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, are permitted provided that the following conditions are
+-- met:
+--
+--  * Redistributions of source code must retain the above copyright
+--    notice, this list of conditions and the following disclaimer.
+--  * Redistributions in binary form must reproduce the above copyright
+--    notice, this list of conditions and the following disclaimer in the
+--    documentation and/or other materials provided with the distribution.
+--
+-- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+-- IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+-- THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+-- PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+-- CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+-- EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+-- PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+-- PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+-- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+-- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-   The tracker responds to us with a new set of Peers and general information about the
-   torrent in question. It may also respond with an error in which case we should present
-   it to the user.
-
-   TODO List: HTTP Client requests.
-              Timeout handling
-              External messaging to the tracker with timeout handling.
--}
+-- | The TrackerP module is responsible for keeping in touch with the Tracker of a torrent.
+--   The tracker is contacted periodically, and we exchange information with it. Specifically,
+--   we tell the tracker how much we have downloaded, uploaded and what is left. We also
+--   tell it about our current state (i.e., are we a seeder or a leecher?).
+--
+--   The tracker responds to us with a new set of Peers and general information about the
+--   torrent in question. It may also respond with an error in which case we should present
+--   it to the user.
+--
+--   TODO List: HTTP Client requests.
+--   Timeout handling
+--   External messaging to the tracker with timeout handling.
 module TrackerP
-
 where
 
 import Control.Concurrent.CHP
-import Control.Monad()
-import Control.Monad.Trans
+import Control.Monad.Trans (liftIO)
 
 import Data.Char (ord)
 import Data.List (intersperse)
@@ -30,6 +53,7 @@ import Numeric (showHex)
 
 import qualified Status
 import qualified PeerMgrP
+import TimerP
 import BCode hiding (encode)
 
 
@@ -73,13 +97,14 @@ data State = MkState {
       uploaded :: Integer,
       downloaded :: Integer,
       left :: Integer,
-      localPort :: Integer }
+      localPort :: Integer,
+      timerChannel :: TimerChannel }
 
 
 -- Main tracker CHP process
 -- Many of the values here should be merged into one
-tracker :: String -> String -> String -> Integer -> Integer -> Chanin Status.State -> CHP ()
-tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port
+tracker :: TimerChannel -> String -> String -> String -> Integer -> Integer -> Chanin Status.State -> CHP ()
+tracker timerC hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port timerC
   where lp s = updatestatus
           where updatestatus = do st <- readChannel statusIn
                                   let bu = uploaded s + Status.uploaded st

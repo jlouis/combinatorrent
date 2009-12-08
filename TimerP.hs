@@ -39,6 +39,7 @@
 --
 --   TODO: Get the timing code to work.
 module TimerP (Tick(..),
+               TimerChannel,
                register,
 
                timer)
