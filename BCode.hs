@@ -13,8 +13,15 @@ module BCode (
               infoNameUtf8,
               infoPieceLength,
               infoPieces,
-              prettyPrint
-             )
+              prettyPrint,
+
+              tracker_complete,
+              tracker_incomplete,
+              tracker_interval,
+              tracker_min_interval,
+              tracker_peers,
+              tracker_warning,
+              tracker_error )
 
 where
 
@@ -98,6 +105,12 @@ search' str b = case search [PString str] b of
                   Just (BString s) -> Just s
                   _ -> Nothing
 
+searchStr :: String -> BCode -> Maybe String
+searchStr = search'
+
+searchInt :: String -> BCode -> Maybe Integer
+searchInt str b = fmap read $ search' str b
+
 searchInfo :: String -> BCode -> Maybe BCode
 searchInfo str = search [PString "info", PString str]
 
@@ -106,6 +119,21 @@ announce, comment, creationDate :: BCode -> Maybe String
 announce = search' "announce"
 comment  = search' "comment"
 creationDate = search' "creation date"
+
+{- Tracker accessors -}
+tracker_complete, tracker_incomplete, tracker_interval :: BCode -> Maybe Integer
+tracker_min_interval :: BCode -> Maybe Integer
+tracker_complete = searchInt "complete"
+tracker_incomplete = searchInt "incomplete"
+tracker_interval = searchInt "interval"
+tracker_min_interval = searchInt "min interval"
+
+tracker_error, tracker_warning :: BCode -> Maybe String
+tracker_error = searchStr "error"
+tracker_warning = searchStr "warning"
+
+tracker_peers :: BCode -> Maybe String
+tracker_peers = searchStr "peers"
 
 info :: BCode -> Maybe BCode
 info = search [PString "info"]
