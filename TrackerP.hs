@@ -22,6 +22,10 @@ import Control.Monad.Trans()
 import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
+
+import Network.HTTP hiding (port)
+import Network.URI hiding (unreserved)
+
 import Numeric (showHex)
 
 import qualified Status
@@ -100,10 +104,32 @@ processResultDict d =
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps :: String -> [PeerMgrP.Peer]
 decodeIps [] = []
-decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = (PeerMgrP.MkPeer ip port) : decodeIps rest
+decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.MkPeer ip port : decodeIps rest
   where ip = (ord b1, ord b2, ord b3, ord b4)
         port = ord p1 * 256 + ord p2
 decodeIps _ = undefined -- Quench all other cases
+
+trackerRequest :: String -> IO (Either String TrackerResponse)
+trackerRequest url =
+    do resp <- simpleHTTP request
+       case resp of
+         Left x -> return $ Left ("Error connecting: " ++ show x)
+         Right r ->
+             case rspCode r of
+               (2,_,_) ->
+                   case BCode.decode (rspBody r) of
+                     Left pe -> return $ Left (show pe)
+                     Right bc -> return $ Right $ processResultDict bc
+               (3,_,_) ->
+                   case findHeader HdrLocation r of
+                     Nothing -> return $ Left (show r)
+                     Just newUrl -> trackerRequest newUrl
+               _ -> return $ Left (show r)
+  where request = Request {rqURI = uri,
+                           rqMethod = GET,
+                           rqHeaders = [],
+                           rqBody = ""}
+        uri = fromJust $ parseURI url
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> String
