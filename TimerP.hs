@@ -30,6 +30,13 @@
 --   act. This allows us to postpone events into the future at a
 --   designated time.
 --
+--   The timer keeps a queue of ticks and when to send them out. It
+--   keeps the amount of work it needs to do down to a minimum to
+--   keeping a delta-time for each queue element and in earliest first
+--   order. This is the same way most operating systems handles time
+--   tracking and jlouis first heard about it as used in the BSD4.4
+--   Unix implementation.
+--
 --   TODO: Get the timing code to work.
 module TimerP (Tick(..),
                register,
