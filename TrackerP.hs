@@ -6,6 +6,10 @@
    The tracker responds to us with a new set of Peers and general information about the
    torrent in question. It may also respond with an error in which case we should present
    it to the user.
+
+   TODO List: HTTP Client requests.
+              Timeout handling
+              External messaging to the tracker with timeout handling.
 -}
 module TrackerP
 
@@ -95,7 +99,11 @@ processResultDict d =
 
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps :: String -> [PeerMgrP.Peer]
-decodeIps _ = []
+decodeIps [] = []
+decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = (PeerMgrP.MkPeer ip port) : decodeIps rest
+  where ip = (ord b1, ord b2, ord b3, ord b4)
+        port = ord p1 * 256 + ord p2
+decodeIps _ = undefined -- Quench all other cases
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> String
@@ -120,4 +128,4 @@ rfc1738Encode = concatMap (\c -> if unreserved c then show c else encode c)
           -- I killed ~ from this list as the Mainline client doesn't announce it - jlouis
           chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_./"
           encode :: Char -> String
-          encode c = "%" : (showHex . ord $ c) ""
+          encode c = '%' : (showHex . ord $ c) ""
