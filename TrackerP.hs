@@ -11,6 +11,8 @@ import Data.List (intersperse)
 import Numeric (showHex)
 
 import qualified Status
+import BCode hiding (encode)
+
 data Tasks = NeedPeers -- Don't fret too much, just ask the tracker
 
 -- Should be in another place
@@ -23,6 +25,14 @@ instance Show TrackerState where
     show Started = "started"
     show Stopped = "stopped"
     show Completed = "completed"
+
+data TrackerResponse = ResponseOk { newPeers :: [Peer],
+                                    completeR :: Integer,
+                                    incompleteR :: Integer,
+                                    timeout_interval :: Integer,
+                                    timeout_minInterval :: Integer }
+                     | ResponseWarning String
+                     | ResponseError String
 
 data State = MkState {
       infoHash :: String,
@@ -43,6 +53,8 @@ tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0
                                   let bd = downloaded s + Status.downloaded st
                                   lp s{uploaded = bu, downloaded = bd}
 
+processResultDict :: BCode -> TrackerResponse
+processResultDict _ = ResponseError "Not implemented yet"
 
 buildRequestUrl :: State -> String
 buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
