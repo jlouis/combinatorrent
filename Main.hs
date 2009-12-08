@@ -7,6 +7,7 @@ import qualified BCode
 import qualified TrackerP()
 import qualified Status()
 import qualified PeerMgrP()
+import qualified TimerP()
 
 main :: IO ()
 main = do
