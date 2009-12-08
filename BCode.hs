@@ -15,13 +15,13 @@ module BCode (
               infoPieces,
               prettyPrint,
 
-              tracker_complete,
-              tracker_incomplete,
-              tracker_interval,
-              tracker_min_interval,
-              tracker_peers,
-              tracker_warning,
-              tracker_error )
+              trackerComplete,
+              trackerIncomplete,
+              trackerInterval,
+              trackerMinInterval,
+              trackerPeers,
+              trackerWarning,
+              trackerError )
 
 where
 
@@ -109,7 +109,7 @@ searchStr :: String -> BCode -> Maybe String
 searchStr = search'
 
 searchInt :: String -> BCode -> Maybe Integer
-searchInt str b = fmap read $ search' str b
+searchInt str = fmap read . search' str
 
 searchInfo :: String -> BCode -> Maybe BCode
 searchInfo str = search [PString "info", PString str]
@@ -121,19 +121,19 @@ comment  = search' "comment"
 creationDate = search' "creation date"
 
 {- Tracker accessors -}
-tracker_complete, tracker_incomplete, tracker_interval :: BCode -> Maybe Integer
-tracker_min_interval :: BCode -> Maybe Integer
-tracker_complete = searchInt "complete"
-tracker_incomplete = searchInt "incomplete"
-tracker_interval = searchInt "interval"
-tracker_min_interval = searchInt "min interval"
+trackerComplete, trackerIncomplete, trackerInterval :: BCode -> Maybe Integer
+trackerMinInterval :: BCode -> Maybe Integer
+trackerComplete = searchInt "complete"
+trackerIncomplete = searchInt "incomplete"
+trackerInterval = searchInt "interval"
+trackerMinInterval = searchInt "min interval"
 
-tracker_error, tracker_warning :: BCode -> Maybe String
-tracker_error = searchStr "error"
-tracker_warning = searchStr "warning"
+trackerError, trackerWarning :: BCode -> Maybe String
+trackerError = searchStr "error"
+trackerWarning = searchStr "warning"
 
-tracker_peers :: BCode -> Maybe String
-tracker_peers = searchStr "peers"
+trackerPeers :: BCode -> Maybe String
+trackerPeers = searchStr "peers"
 
 info :: BCode -> Maybe BCode
 info = search [PString "info"]

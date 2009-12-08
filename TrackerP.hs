@@ -51,8 +51,8 @@ instance Show TrackerState where
 data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                                     completeR :: Integer,
                                     incompleteR :: Integer,
-                                    timeout_interval :: Integer,
-                                    timeout_minInterval :: Integer }
+                                    timeoutInterval :: Integer,
+                                    timeoutMinInterval :: Integer }
                      | ResponseWarning String
                      | ResponseError String
 
@@ -78,18 +78,18 @@ tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0
 
 processResultDict :: BCode -> TrackerResponse
 processResultDict d =
-    case BCode.tracker_error d of
+    case BCode.trackerError d of
       Just err -> ResponseError err
-      Nothing -> case BCode.tracker_warning d of
+      Nothing -> case BCode.trackerWarning d of
                    Just warn -> ResponseWarning warn
                    Nothing -> decodeOk
   where decodeOk =
             ResponseOk peers complete incomplete interval min_interval
-        complete = fromJust $ BCode.tracker_complete d
-        incomplete = fromJust $ BCode.tracker_incomplete d
-        interval = fromJust $ BCode.tracker_interval d
-        min_interval = fromJust $ BCode.tracker_min_interval d
-        peers = decodeIps $ fromJust $ BCode.tracker_peers d
+        complete = fromJust $ BCode.trackerComplete d
+        incomplete = fromJust $ BCode.trackerIncomplete d
+        interval = fromJust $ BCode.trackerInterval d
+        min_interval = fromJust $ BCode.trackerMinInterval d
+        peers = decodeIps $ fromJust $ BCode.trackerPeers d
 
 -- TODO
 decodeIps :: String -> [PeerMgrP.Peer]
@@ -100,8 +100,8 @@ buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
-          headers = [("info_hash", rfc1738_encode $ infoHash s),
-                     ("peer_id", rfc1738_encode $ peerId s),
+          headers = [("info_hash", rfc1738Encode $ infoHash s),
+                     ("peer_id", rfc1738Encode $ peerId s),
                      ("uploaded", show $ uploaded s),
                      ("downloaded", show $ downloaded s),
                      ("left", show $ left s),
@@ -110,10 +110,10 @@ buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
                      ("event", show $ state s)]
 
 -- Carry out Url-encoding of a string
-rfc1738_encode :: String -> String
-rfc1738_encode str = concatMap (\c -> if unreserved c then show c else encode c) str
-    where unreserved c = c `elem` chars
+rfc1738Encode :: String -> String
+rfc1738Encode = concatMap (\c -> if unreserved c then show c else encode c)
+    where unreserved = (`elem` chars)
           -- I killed ~ from this list as the Mainline client doesn't announce it - jlouis
           chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_./"
           encode :: Char -> String
-          encode c = "%" ++ (showHex . ord $ c) ""
+          encode c = "%" : (showHex . ord $ c) ""

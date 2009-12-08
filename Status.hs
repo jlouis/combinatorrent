@@ -16,5 +16,5 @@ data State = MkState { uploaded :: Integer,
 status :: TorrentState -> Chanout State -> CHP ()
 status tstate trackerChan = lp $ MkState 0 0 tstate
   where lp s =
-            do waitFor (10*1000000) >> (writeChannel trackerChan s)
+            do waitFor (10*1000000) >> writeChannel trackerChan s
                lp s
