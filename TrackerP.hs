@@ -17,7 +17,7 @@ where
 
 import Control.Concurrent.CHP
 import Control.Monad()
-import Control.Monad.Trans()
+import Control.Monad.Trans
 
 import Data.Char (ord)
 import Data.List (intersperse)
@@ -84,6 +84,15 @@ tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0
                                   let bu = uploaded s + Status.uploaded st
                                   let bd = downloaded s + Status.downloaded st
                                   lp s{uploaded = bu, downloaded = bd}
+
+
+pokeTracker :: State -> CHP ()
+pokeTracker s =
+    do resp <- liftIO $ trackerRequest (buildRequestUrl s)
+       case resp of
+         Left _err -> return ()
+         Right _ok -> return ()
+
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
