@@ -30,6 +30,7 @@ data BCode = BInt Int
            | BString String
            | BArray [BCode]
            | BDict (M.Map String BCode)
+  deriving Show
 
 data Path = PString String
           | PInt Int
