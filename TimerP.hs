@@ -47,6 +47,9 @@ where
 
 import Control.Concurrent.CHP
 
+import Control.Monad.Trans
+import Data.Time.Clock.POSIX
+
 -- | A Tick is a single timer tick. It contains a version concept,
 --   wherein an Integer defines what version we are currently waiting
 --   for. The versioning allows silent cancel of future timer events
@@ -67,9 +70,16 @@ register timerChannel secs version chan = do
 -- | A timer process.
 timer :: Shared Chanin (Integer, Integer, Chanout Tick) -> CHP ()
 timer chan = lp (MkState [])
-  where seconds x = x * 1000000
-        lp s = do s' <- (waitFor (seconds 10) >> processTick s) <-> (processRegister s chan)
-                  lp s'
+  where seconds :: Integer -> Int
+        seconds x = (fromInteger x) * 1000000
+        lp s = do sTime <- liftIO getPOSIXTime
+                  case timerQueue s of
+                    [] -> do s' <- (processRegister sTime s chan)
+                             lp s'
+                    (secsToWait, _) : _ ->
+                        do s' <- (waitFor (seconds secsToWait) >> processTick s)
+                                    <-> (processRegister sTime s chan)
+                           lp s'
 
 processTick :: State -> CHP State
 processTick s = do
@@ -79,12 +89,19 @@ processTick s = do
     (_, (version, outC)) : t -> do writeChannel outC (Tick version)
                                    return $ s { timerQueue = t }
 
-processRegister :: State -> Shared Chanin (Integer, Integer, Chanout Tick) -> CHP State
-processRegister s inC = do (secs, version, outC) <- claim inC readChannel
-                           return $ insertTick secs version outC
-  where insertTick secs version outC = s {timerQueue = merge secs (version, outC) (timerQueue s)}
+processRegister :: POSIXTime -> State -> Shared Chanin (Integer, Integer, Chanout Tick) -> CHP State
+processRegister t s inC = do (secs, version, outC) <- claim inC readChannel
+                             now <- liftIO getPOSIXTime
+                             let elapsed = t - now
+                             s' <- return $ decreaseQueue s (floor elapsed)
+                             return $ insertTick s' secs version outC
+  where insertTick st secs version outC = st {timerQueue = merge secs (version, outC) (timerQueue st)}
         merge secs tsk [] = [(secs, tsk)]
-        merge secs tsk ((secs', tsk') : rest) | secs > secs' = (secs', tsk') : merge (secs - secs') tsk rest
-                                              | otherwise =
-                                                  (secs, tsk) : map (\(s', tsk'') -> (s' - secs, tsk'')) rest
+        merge secs tsk ((secs', tsk') : rest) | secs <= secs' =
+                                                  (secs, tsk) : (secs' - secs, tsk') : rest
+                                              | otherwise = (secs', tsk') : merge (secs - secs') tsk rest
+        decreaseQueue st elapsed =
+            case timerQueue s of
+              [] -> st
+              (secs, tsk) : r -> st { timerQueue = (secs - elapsed, tsk) : r }
 
