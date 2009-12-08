@@ -67,6 +67,7 @@ data State = MkState {
       left :: Integer,
       localPort :: Integer }
 
+-- Main tracker CHP process
 -- Many of the values here should be merged into one
 tracker :: String -> String -> String -> Integer -> Integer -> Chanin Status.State -> CHP ()
 tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port
@@ -76,6 +77,7 @@ tracker hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0
                                   let bd = downloaded s + Status.downloaded st
                                   lp s{uploaded = bu, downloaded = bd}
 
+-- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
 processResultDict d =
     case BCode.trackerError d of
@@ -91,10 +93,11 @@ processResultDict d =
         min_interval = fromJust $ BCode.trackerMinInterval d
         peers = decodeIps $ fromJust $ BCode.trackerPeers d
 
--- TODO
+-- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps :: String -> [PeerMgrP.Peer]
 decodeIps _ = []
 
+-- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> String
 buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
     where hlist :: [String]
@@ -109,7 +112,8 @@ buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
                      ("compact", "1"),
                      ("event", show $ state s)]
 
--- Carry out Url-encoding of a string
+-- Carry out Url-encoding of a string. Note that the clients seems to do it the wrong way
+--   so we explicitly code it up here in the same wrong way, jlouis.
 rfc1738Encode :: String -> String
 rfc1738Encode = concatMap (\c -> if unreserved c then show c else encode c)
     where unreserved = (`elem` chars)
