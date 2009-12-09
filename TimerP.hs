@@ -38,6 +38,9 @@
 --   Unix implementation.
 --
 --   TODO: Get the timing code to work.
+--         Another approach is to simply run each timer as a new process and
+--         then effectively use the underlying queue of the GHC system/OS for
+--         the problem.
 module TimerP (Tick(..),
                TimerChannel,
                register,
