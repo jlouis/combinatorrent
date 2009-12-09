@@ -57,18 +57,17 @@ import TimerP
 import BCode hiding (encode)
 
 
-{- The tracker state is used to tell the tracker our current state. In order to output it
-   correctly, we override the default show instance with the version below. This may be
-   wrong to do in the long run, but for now it works fine.
-
-   The state is either started or stopped upon the client starting. The tracker will create
-   an entry for us if we tell it that we started, and it will tear down this entry if we tell
-   it that we stopped. It will know if we are a seeder or a leecher based on how much data
-   is left for us to download.
-
-   the 'Completed' entry is used once in the lifetime of a torrent. It explains to the
-   tracker that we completed the torrent in question.
--}
+-- | The tracker state is used to tell the tracker our current state. In order to output it
+--   correctly, we override the default show instance with the version below. This may be
+--   wrong to do in the long run, but for now it works fine.
+--
+--   The state is either started or stopped upon the client starting. The tracker will create
+--   an entry for us if we tell it that we started, and it will tear down this entry if we tell
+--   it that we stopped. It will know if we are a seeder or a leecher based on how much data
+--   is left for us to download.
+--
+--   the 'Completed' entry is used once in the lifetime of a torrent. It explains to the
+--   tracker that we completed the torrent in question.
 data TrackerState = Started | Stopped | Completed
 
 instance Show TrackerState where
@@ -76,10 +75,9 @@ instance Show TrackerState where
     show Stopped = "stopped"
     show Completed = "completed"
 
-{- The tracker will in general respond with a BCoded dictionary. In our world, this is
-   not the data structure we would like to work with. Hence, we parse the structure into
-   the ADT below.
--}
+-- | The tracker will in general respond with a BCoded dictionary. In our world, this is
+--   not the data structure we would like to work with. Hence, we parse the structure into
+--   the ADT below.
 data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                                     completeR :: Integer,
                                     incompleteR :: Integer,
@@ -88,7 +86,7 @@ data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                      | ResponseWarning String
                      | ResponseError String
 
--- Internal state of the tracker CHP process
+-- | Internal state of the tracker CHP process
 data State = MkState {
       infoHash :: String,
       peerId :: String,
@@ -98,13 +96,14 @@ data State = MkState {
       downloaded :: Integer,
       left :: Integer,
       localPort :: Integer,
-      timerChannel :: TimerChannel }
+      timerChannel :: TimerChannel,
+      version :: Integer }
 
 
 -- Main tracker CHP process
 -- Many of the values here should be merged into one
 tracker :: TimerChannel -> String -> String -> String -> Integer -> Integer -> Chanin Status.State -> CHP ()
-tracker timerC hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port timerC
+tracker timerC hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port timerC 0
   where lp s = updatestatus
           where updatestatus = do st <- readChannel statusIn
                                   let bu = uploaded s + Status.uploaded st
