@@ -111,6 +111,16 @@ tracker timerC hash pid url port dleft statusIn = lp $ MkState hash pid url Stop
                                   lp s{uploaded = bu, downloaded = bd}
 
 
+tRequest :: State -> CHP State
+tRequest s =
+    do resp <- doRequest
+       case resp of
+         Left _err -> return s
+         Right _bc -> return s
+  where requestUrl = buildRequestUrl s
+        doRequest = liftIO $ trackerRequest requestUrl
+
+
 pokeTracker :: State -> CHP ()
 pokeTracker s =
     do resp <- liftIO $ trackerRequest (buildRequestUrl s)
