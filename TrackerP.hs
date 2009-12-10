@@ -52,7 +52,6 @@ import Network.URI hiding (unreserved)
 
 import Numeric (showHex)
 
-
 import Torrent
 import qualified ConsoleP
 import qualified PeerMgrP
@@ -101,7 +100,6 @@ data State = MkState {
       statusChanOut :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
-      ticker :: Channel TimerP.Tick,
       tickChan :: Channel TimerP.Tick,
       peerChan :: Channel [PeerMgrP.Peer] }
 
