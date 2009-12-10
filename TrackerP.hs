@@ -35,8 +35,6 @@
 --
 --   TODO List: HTTP Client requests.
 --              Timeout handling
---              External messaging to the tracker with timeout handling.
---              Should we have a single input channel for talking with the tracker?
 module TrackerP
 where
 
@@ -74,6 +72,10 @@ import BCode hiding (encode)
 --   tracker that we completed the torrent in question.
 data TrackerState = Started | Stopped | Completed
 
+-- | TrackerChannel is the channel of the tracker
+type TrackerChannel = Channel TrackerMsg
+data TrackerMsg = Poison | TrackerTick Integer
+
 instance Show TrackerState where
     show Started = "started"
     show Stopped = "stopped"
@@ -101,7 +103,7 @@ data State = MkState {
       statusChanOut :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
-      tickChan :: Channel TimerP.Tick,
+      trackerChan :: TrackerChannel,
       peerChan :: Channel [PeerMgrP.Peer] }
 
 -- TODO: Starting the tracker process.
@@ -121,17 +123,19 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusChanIn s) (\_ -> True)
 
 timerUpdate :: State -> Integer -> Integer -> IO State
 timerUpdate s interval minInterval =
-    do TimerP.register interval nt (tickChan s)
+    do TimerP.register interval (TrackerTick nt) (trackerChan s)
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = (nextContactTime s) + (fromInteger minInterval)
 
 loop :: State -> IO State
-loop s = sync tickEvent
-  where tickEvent = wrap (receive (tickChan s) (\_ -> True))
-                      (\version -> if version /= (TimerP.Tick $ nextTick s)
-                                   then loop s
-                                   else pokeTracker s >>= loop)
+loop s = sync trackerEvent
+  where trackerEvent = wrap (receive (trackerChan s) (\_ -> True))
+                      (\msg -> case msg of
+                                 TrackerTick version -> if version /= nextTick s
+                                                        then loop s
+                                                        else pokeTracker s >>= loop
+                                 Poison -> pokeTracker (s { state = Stopped }))
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse

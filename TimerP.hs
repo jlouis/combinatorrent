@@ -58,9 +58,9 @@ data Tick = Tick Integer
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
-register :: Integer -> Integer -> Channel Tick -> IO ()
-register secs version tickChan = do spawn timerProcess
-                                    return ()
+register :: Integer -> a -> Channel a -> IO ()
+register secs v tickChan = do spawn timerProcess
+                              return ()
   where timerProcess = do threadDelay $ fromInteger $ secs * 1000000
-                          sync $ transmit tickChan (Tick version)
+                          sync $ transmit tickChan v
 
