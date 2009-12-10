@@ -39,8 +39,7 @@
 module TrackerP
 where
 
-import Control.Concurrent.CHP
-import Control.Monad.Trans (liftIO)
+import Control.Concurrent.CML
 
 import Data.Char (ord)
 import Data.List (intersperse)
@@ -51,6 +50,7 @@ import Network.URI hiding (unreserved)
 
 import Numeric (showHex)
 
+import qualified ConsoleP
 import qualified PeerMgrP
 import BCode hiding (encode)
 
@@ -94,15 +94,15 @@ data State = MkState {
       downloaded :: Integer,
       left :: Integer,
       localPort :: Integer,
+      logChan :: Channel String,
       version :: Integer }
 
-pokeTracker :: State -> CHP ()
-pokeTracker s =
-    do resp <- liftIO $ trackerRequest (buildRequestUrl s)
-       case resp of
-         Left _err -> return ()
-         Right _ok -> return ()
-
+pokeTracker :: State -> IO State
+pokeTracker s = do resp <- trackerRequest (buildRequestUrl s)
+                   case resp of
+                     Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
+                                    return s
+                     Right _bc -> return s -- Wrong, should addPeers, update StatusP and timer intervals
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
