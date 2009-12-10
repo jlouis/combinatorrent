@@ -42,70 +42,24 @@
 --         then effectively use the underlying queue of the GHC system/OS for
 --         the problem.
 module TimerP (Tick(..),
-               TimerChannel,
-               register,
-
-               timer)
+               register)
 
 where
 
-import Control.Concurrent.CHP
-
-import Control.Monad.Trans
-import Data.Time.Clock.POSIX
+import Control.Concurrent
+import Control.Concurrent.CML
 
 -- | A Tick is a single timer tick. It contains a version concept,
 --   wherein an Integer defines what version we are currently waiting
 --   for. The versioning allows silent cancel of future timer events
 --   since a process can just ignore old ticks.
-data Tick = Tick Integer
-
--- The internal type of timer channels.
-type TimerChannel = Shared Chanout (Integer, Integer, Chanout Tick)
-
-data State = MkState { timerQueue :: [(Integer, (Integer, Chanout Tick))] }
+data Tick = Tick Int
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
-register :: TimerChannel -> Integer -> Integer -> Chanout Tick -> CHP ()
-register timerChannel secs version chan = do
-  claim timerChannel (flip writeChannel (secs, version, chan))
-
--- | A timer process.
-timer :: Shared Chanin (Integer, Integer, Chanout Tick) -> CHP ()
-timer chan = lp (MkState [])
-  where seconds :: Integer -> Int
-        seconds x = (fromInteger x) * 1000000
-        lp s = do sTime <- liftIO getPOSIXTime
-                  case timerQueue s of
-                    [] -> do s' <- (processRegister sTime s chan)
-                             lp s'
-                    (secsToWait, _) : _ ->
-                        do s' <- (waitFor (seconds secsToWait) >> processTick s)
-                                    <-> (processRegister sTime s chan)
-                           lp s'
-
-processTick :: State -> CHP State
-processTick s = do
-  let q = timerQueue s
-  case q of
-    [] -> return s
-    (_, (version, outC)) : t -> do writeChannel outC (Tick version)
-                                   return $ s { timerQueue = t }
-
-processRegister :: POSIXTime -> State -> Shared Chanin (Integer, Integer, Chanout Tick) -> CHP State
-processRegister t s inC = do (secs, version, outC) <- claim inC readChannel
-                             now <- liftIO getPOSIXTime
-                             let elapsed = t - now
-                             s' <- return $ decreaseQueue s (floor elapsed)
-                             return $ insertTick s' secs version outC
-  where insertTick st secs version outC = st {timerQueue = merge secs (version, outC) (timerQueue st)}
-        merge secs tsk [] = [(secs, tsk)]
-        merge secs tsk ((secs', tsk') : rest) | secs <= secs' =
-                                                  (secs, tsk) : (secs' - secs, tsk') : rest
-                                              | otherwise = (secs', tsk') : merge (secs - secs') tsk rest
-        decreaseQueue st elapsed =
-            case timerQueue s of
-              [] -> st
-              (secs, tsk) : r -> st { timerQueue = (secs - elapsed, tsk) : r }
+register :: Int -> Int -> Channel Tick -> IO ()
+register secs version tickChan = do spawn timerProcess
+                                    return ()
+  where timerProcess = do threadDelay $ secs * 1000000
+                          sync $ transmit tickChan (Tick version)
 

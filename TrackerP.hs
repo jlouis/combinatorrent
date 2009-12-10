@@ -51,9 +51,7 @@ import Network.URI hiding (unreserved)
 
 import Numeric (showHex)
 
-import qualified Status
 import qualified PeerMgrP
-import TimerP
 import BCode hiding (encode)
 
 
@@ -96,30 +94,7 @@ data State = MkState {
       downloaded :: Integer,
       left :: Integer,
       localPort :: Integer,
-      timerChannel :: TimerChannel,
       version :: Integer }
-
-
--- Main tracker CHP process
--- Many of the values here should be merged into one
-tracker :: TimerChannel -> String -> String -> String -> Integer -> Integer -> Chanin Status.State -> CHP ()
-tracker timerC hash pid url port dleft statusIn = lp $ MkState hash pid url Stopped 0 0 dleft port timerC 0
-  where lp s = updatestatus
-          where updatestatus = do st <- readChannel statusIn
-                                  let bu = uploaded s + Status.uploaded st
-                                  let bd = downloaded s + Status.downloaded st
-                                  lp s{uploaded = bu, downloaded = bd}
-
-
-tRequest :: State -> CHP State
-tRequest s =
-    do resp <- doRequest
-       case resp of
-         Left _err -> return s
-         Right _bc -> return s
-  where requestUrl = buildRequestUrl s
-        doRequest = liftIO $ trackerRequest requestUrl
-
 
 pokeTracker :: State -> CHP ()
 pokeTracker s =
