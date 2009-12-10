@@ -44,15 +44,20 @@ import Control.Concurrent.CML
 import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
+import Data.Time.Clock.POSIX
+
 
 import Network.HTTP hiding (port)
 import Network.URI hiding (unreserved)
 
 import Numeric (showHex)
 
+
+
 import qualified ConsoleP
 import qualified PeerMgrP
 import qualified StatusP
+import qualified TimerP
 import BCode hiding (encode)
 
 
@@ -95,8 +100,10 @@ data State = MkState {
       logChan :: Channel String,
       statusChanIn :: Channel StatusP.State,
       statusChanOut :: Channel (Integer, Integer),
-      peerChan :: Channel [PeerMgrP.Peer],
-      version :: Integer }
+      nextContactTime :: POSIXTime,
+      nextTick :: Integer,
+      tickChan :: Channel TimerP.Tick,
+      peerChan :: Channel [PeerMgrP.Peer] }
 
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
@@ -112,7 +119,11 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusChanIn s) (\_ -> True)
                                     timerUpdate s (timeoutInterval bc) (timeoutMinInterval bc)
 
 timerUpdate :: State -> Integer -> Integer -> IO State
-timerUpdate s _interval _minInterval = return s
+timerUpdate s interval minInterval =
+    do TimerP.register interval nt (tickChan s)
+       return $ s {nextTick = nt + 1, nextContactTime = ntime }
+  where nt = nextTick s
+        ntime = (nextContactTime s) + (fromInteger minInterval)
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse

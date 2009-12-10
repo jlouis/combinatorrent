@@ -53,13 +53,13 @@ import Control.Concurrent.CML
 --   wherein an Integer defines what version we are currently waiting
 --   for. The versioning allows silent cancel of future timer events
 --   since a process can just ignore old ticks.
-data Tick = Tick Int
+data Tick = Tick Integer
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
-register :: Int -> Int -> Channel Tick -> IO ()
+register :: Integer -> Integer -> Channel Tick -> IO ()
 register secs version tickChan = do spawn timerProcess
                                     return ()
-  where timerProcess = do threadDelay $ secs * 1000000
+  where timerProcess = do threadDelay $ fromInteger $ secs * 1000000
                           sync $ transmit tickChan (Tick version)
 
