@@ -34,8 +34,9 @@
 --   it to the user.
 --
 --   TODO List: HTTP Client requests.
---   Timeout handling
---   External messaging to the tracker with timeout handling.
+--              Timeout handling
+--              External messaging to the tracker with timeout handling.
+--              Should we have a single input channel for talking with the tracker?
 module TrackerP
 where
 
@@ -102,6 +103,8 @@ data State = MkState {
       nextTick :: Integer,
       tickChan :: Channel TimerP.Tick,
       peerChan :: Channel [PeerMgrP.Peer] }
+
+-- TODO: Starting the tracker process.
 
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
