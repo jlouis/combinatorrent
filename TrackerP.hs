@@ -93,16 +93,26 @@ data State = MkState {
       state :: TrackerState,
       localPort :: Integer,
       logChan :: Channel String,
-      statusChan :: Channel StatusP.State,
+      statusChanIn :: Channel StatusP.State,
+      statusChanOut :: Channel (Integer, Integer),
+      peerChan :: Channel [PeerMgrP.Peer],
       version :: Integer }
 
+failTimerInterval :: Integer
+failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
+
 pokeTracker :: State -> IO State
-pokeTracker s = do upDownLeft <- sync $ receive (statusChan s) (\_ -> True)
+pokeTracker s = do upDownLeft <- sync $ receive (statusChanIn s) (\_ -> True)
                    resp <- trackerRequest (buildRequestUrl s upDownLeft)
                    case resp of
                      Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
-                                    return s
-                     Right _bc -> return s -- Wrong, should addPeers, update StatusP and timer intervals
+                                    timerUpdate s failTimerInterval failTimerInterval
+                     Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
+                                    sync $ transmit (statusChanOut s) (completeR bc, incompleteR bc)
+                                    timerUpdate s (timeoutInterval bc) (timeoutMinInterval bc)
+
+timerUpdate :: State -> Integer -> Integer -> IO State
+timerUpdate s _interval _minInterval = return s
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
