@@ -1,3 +1,35 @@
+-- Haskell Torrent
+-- Copyright (c) 2009, Jesper Louis Andersen,
+-- All rights reserved.
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, are permitted provided that the following conditions are
+-- met:
+--
+--  * Redistributions of source code must retain the above copyright
+--    notice, this list of conditions and the following disclaimer.
+--  * Redistributions in binary form must reproduce the above copyright
+--    notice, this list of conditions and the following disclaimer in the
+--    documentation and/or other materials provided with the distribution.
+--
+-- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+-- IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+-- THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+-- PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+-- CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+-- EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+-- PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+-- PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+-- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+-- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- | The status code runs a Status Process. This process keeps track
+--   of a number of interval valies for a given torrent file and it
+--   periodically updates the tracker process with the relevant
+--   information about data uploaded, downloaded and how much is
+--   left. The tracker is then responsible for using this data
+--   correctly to tell the tracker what to do
 module Status (TorrentState(..),
                State(uploaded, downloaded, state),
                start)
@@ -6,15 +38,14 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 
-import Control.Monad()
-import Control.Monad.Trans()
-
 data TorrentState = Seeding | Leeching
 
 data State = MkState { uploaded :: Integer,
                        downloaded :: Integer,
                        state :: TorrentState }
 
+-- | Start a new Status process with an initial torrent state and a
+--   channel on which to transmit status updates to the tracker.
 start :: TorrentState -> Channel State -> IO ()
 start tstate trackerChan = lp $ MkState 0 0 tstate
   where lp s = do threadDelay (10 * 1000000)
