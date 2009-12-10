@@ -52,6 +52,7 @@ import Numeric (showHex)
 
 import qualified ConsoleP
 import qualified PeerMgrP
+import qualified Status
 import BCode hiding (encode)
 
 
@@ -90,15 +91,14 @@ data State = MkState {
       peerId :: String,
       announceUrl :: String,
       state :: TrackerState,
-      uploaded :: Integer,
-      downloaded :: Integer,
-      left :: Integer,
       localPort :: Integer,
       logChan :: Channel String,
+      statusChan :: Channel Status.State,
       version :: Integer }
 
 pokeTracker :: State -> IO State
-pokeTracker s = do resp <- trackerRequest (buildRequestUrl s)
+pokeTracker s = do upDownLeft <- sync $ receive (statusChan s) (\_ -> True)
+                   resp <- trackerRequest (buildRequestUrl s upDownLeft)
                    case resp of
                      Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
                                     return s
@@ -151,16 +151,16 @@ trackerRequest url =
         uri = fromJust $ parseURI url
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestUrl :: State -> String
-buildRequestUrl s = concat [announceUrl s, "?", concat hlist]
+buildRequestUrl :: State -> Status.State -> String
+buildRequestUrl s ss = concat [announceUrl s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
           headers = [("info_hash", rfc1738Encode $ infoHash s),
                      ("peer_id", rfc1738Encode $ peerId s),
-                     ("uploaded", show $ uploaded s),
-                     ("downloaded", show $ downloaded s),
-                     ("left", show $ left s),
+                     ("uploaded", show $ Status.uploaded ss),
+                     ("downloaded", show $ Status.downloaded ss),
+                     ("left", show $ Status.left ss),
                      ("port", show $ localPort s),
                      ("compact", "1"),
                      ("event", show $ state s)]

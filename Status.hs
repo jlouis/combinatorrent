@@ -31,23 +31,28 @@
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
 module Status (TorrentState(..),
-               State(uploaded, downloaded, state),
+               State(uploaded, downloaded, state, left),
                start)
 where
 
-import Control.Concurrent
 import Control.Concurrent.CML
 
 data TorrentState = Seeding | Leeching
 
 data State = MkState { uploaded :: Integer,
                        downloaded :: Integer,
+                       left :: Integer,
+                       incomplete :: Int,
+                       complete :: Int,
                        state :: TorrentState }
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: TorrentState -> Channel State -> IO ()
-start tstate trackerChan = lp $ MkState 0 0 tstate
-  where lp s = do threadDelay (10 * 1000000)
-                  sync $ transmit trackerChan s
-                  lp s
+start :: Integer -> TorrentState -> Channel State -> Channel (Int, Int) -> IO ()
+start l tstate trackerChanOut trackerChanIn = lp $ MkState 0 0 l 0 0 tstate
+  where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
+                  lp s'
+        sendEvent s = wrap (transmit trackerChanOut s)
+                        (\_ -> return s)
+        recvEvent s = wrap (receive trackerChanIn (\_ -> True))
+                        (\(ic, c) -> return s { incomplete = ic, complete = c})
