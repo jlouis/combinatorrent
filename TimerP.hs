@@ -54,6 +54,7 @@ import Control.Concurrent.CML
 --   for. The versioning allows silent cancel of future timer events
 --   since a process can just ignore old ticks.
 data Tick = Tick Integer
+  deriving (Show, Eq)
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.

@@ -53,7 +53,7 @@ import Network.URI hiding (unreserved)
 import Numeric (showHex)
 
 
-
+import Torrent
 import qualified ConsoleP
 import qualified PeerMgrP
 import qualified StatusP
@@ -92,9 +92,8 @@ data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
 
 -- | Internal state of the tracker CHP process
 data State = MkState {
-      infoHash :: String,
-      peerId :: String,
-      announceUrl :: String,
+      torrentInfo :: TorrentInfo,
+      peerId :: PeerId,
       state :: TrackerState,
       localPort :: Integer,
       logChan :: Channel String,
@@ -102,6 +101,7 @@ data State = MkState {
       statusChanOut :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
+      ticker :: Channel TimerP.Tick,
       tickChan :: Channel TimerP.Tick,
       peerChan :: Channel [PeerMgrP.Peer] }
 
@@ -124,6 +124,13 @@ timerUpdate s interval minInterval =
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = (nextContactTime s) + (fromInteger minInterval)
+
+loop :: State -> IO State
+loop s = sync tickEvent
+  where tickEvent = wrap (receive (tickChan s) (\_ -> True))
+                      (\version -> if version /= (TimerP.Tick $ nextTick s)
+                                   then loop s
+                                   else pokeTracker s >>= loop)
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
@@ -173,11 +180,11 @@ trackerRequest url =
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> StatusP.State -> String
-buildRequestUrl s ss = concat [announceUrl s, "?", concat hlist]
+buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
-          headers = [("info_hash", rfc1738Encode $ infoHash s),
+          headers = [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
                      ("peer_id", rfc1738Encode $ peerId s),
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
