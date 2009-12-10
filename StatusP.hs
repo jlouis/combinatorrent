@@ -30,9 +30,9 @@
 --   information about data uploaded, downloaded and how much is
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
-module Status (TorrentState(..),
-               State(uploaded, downloaded, state, left),
-               start)
+module StatusP (TorrentState(..),
+                State(uploaded, downloaded, state, left),
+                start)
 where
 
 import Control.Concurrent.CML

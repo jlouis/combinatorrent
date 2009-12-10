@@ -52,7 +52,7 @@ import Numeric (showHex)
 
 import qualified ConsoleP
 import qualified PeerMgrP
-import qualified Status
+import qualified StatusP
 import BCode hiding (encode)
 
 
@@ -93,7 +93,7 @@ data State = MkState {
       state :: TrackerState,
       localPort :: Integer,
       logChan :: Channel String,
-      statusChan :: Channel Status.State,
+      statusChan :: Channel StatusP.State,
       version :: Integer }
 
 pokeTracker :: State -> IO State
@@ -151,16 +151,16 @@ trackerRequest url =
         uri = fromJust $ parseURI url
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestUrl :: State -> Status.State -> String
+buildRequestUrl :: State -> StatusP.State -> String
 buildRequestUrl s ss = concat [announceUrl s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
           headers = [("info_hash", rfc1738Encode $ infoHash s),
                      ("peer_id", rfc1738Encode $ peerId s),
-                     ("uploaded", show $ Status.uploaded ss),
-                     ("downloaded", show $ Status.downloaded ss),
-                     ("left", show $ Status.left ss),
+                     ("uploaded", show $ StatusP.uploaded ss),
+                     ("downloaded", show $ StatusP.downloaded ss),
+                     ("left", show $ StatusP.left ss),
                      ("port", show $ localPort s),
                      ("compact", "1"),
                      ("event", show $ state s)]

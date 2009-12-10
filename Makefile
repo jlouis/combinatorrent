@@ -3,3 +3,6 @@ all:
 
 hlint:
 	hlint *.hs
+
+clean:
+	rm *.hi *.o

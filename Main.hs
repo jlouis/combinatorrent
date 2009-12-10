@@ -5,7 +5,7 @@ import System.Environment
 
 import qualified BCode
 import qualified TrackerP()
-import qualified Status()
+import qualified StatusP()
 import qualified PeerMgrP()
 import qualified TimerP()
 
