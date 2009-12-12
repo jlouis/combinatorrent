@@ -26,8 +26,19 @@
 
 -- | The following module is responsible for general types used
 --   throughout the system.
-module Torrent (InfoHash, PeerId, AnnounceURL, TorrentInfo(..))
+module Torrent (InfoHash,
+                PeerId,
+                AnnounceURL,
+                TorrentInfo(..),
+                haskellTorrentVersion,
+                mkPeerId,
+                mkTorrentInfo)
 where
+
+import System.Random
+import Data.List
+
+import BCode
 
 -- | The type of Infohashes as used in torrents. These are identifiers
 --   of torrents
@@ -40,6 +51,25 @@ type PeerId   = String
 -- | The internal type of Announce URLs
 type AnnounceURL = String
 
+-- | Internal type for a torrent. It identifies a torrent in various places of the system.
 data TorrentInfo = TorrentInfo {
       infoHash :: InfoHash,
       announceURL :: AnnounceURL } deriving Show
+
+-- | The current version of Haskell-Torrent. It should be be here.
+haskellTorrentVersion :: String
+haskellTorrentVersion = "d001"
+
+-- | Convert a BCode block into its corresponding TorrentInfo block, perhaps
+--   failing in the process.
+mkTorrentInfo :: BCode -> Maybe TorrentInfo
+mkTorrentInfo bc =
+    do ann <- announce bc
+       ih  <- hashInfoDict bc
+       return $ TorrentInfo { infoHash = ih, announceURL = ann }
+
+-- | Create a new PeerId for this client
+mkPeerId :: StdGen -> PeerId
+mkPeerId gen = "-ET" ++ haskellTorrentVersion ++ "-" ++ show (randomList 10 gen)
+  where randomList :: Int -> StdGen -> String
+        randomList n = take n . unfoldr (Just . random)

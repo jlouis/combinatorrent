@@ -2,12 +2,14 @@ module BCode (
               BCode,
               Path(..),
               encode,
+              encodeBS,
               decode,
               search,
               announce,
               comment,
               creationDate,
               info,
+              hashInfoDict,
               infoLength,
               infoName,
               infoNameUtf8,
@@ -26,6 +28,9 @@ module BCode (
 where
 
 import Control.Monad
+import qualified Data.ByteString.Lazy as B
+import Data.Char
+import Data.Digest.Pure.SHA
 import Data.List
 import Data.Maybe
 import qualified Data.Map as M
@@ -49,6 +54,15 @@ encode (BArray arr) = "l" ++ concatMap encode arr ++ "e"
 encode (BDict mp) = "d" ++ concatMap encPair (M.toList mp) ++ "e"
     where encPair (k, v) = encode (BString k) ++ encode v
 
+encodeBS :: BCode -> B.ByteString
+encodeBS = B.pack . (map $ fromIntegral . ord) . encode
+
+-- | Return the hash of the info-dict in a torrent file
+hashInfoDict :: BCode -> Maybe String
+hashInfoDict bc =
+    do ih <- info bc
+       let encoded = encodeBS $ ih
+       return $ showDigest $ sha1 encoded
 
 parseInt :: GenParser Char st BCode
 parseInt = do
