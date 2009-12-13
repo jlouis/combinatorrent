@@ -31,14 +31,16 @@ module Torrent (InfoHash,
                 AnnounceURL,
                 TorrentInfo(..),
                 PieceNum,
+                MissingMap,
                 haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
                 mkTorrentInfo)
 where
 
-import System.Random
 import Data.List
+import qualified Data.Map as M
+import System.Random
 
 import BCode
 
@@ -59,6 +61,8 @@ data TorrentInfo = TorrentInfo {
       announceURL :: AnnounceURL } deriving Show
 
 type PieceNum = Integer
+
+type MissingMap = M.Map Integer Bool
 
 -- | Default port to communicate on
 haskellTorrentPort :: Integer

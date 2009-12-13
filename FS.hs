@@ -30,7 +30,8 @@
 module FS (PieceInfo(..),
            PieceMap,
            readPiece,
-           writePiece)
+           writePiece,
+           checkFile)
 where
 
 
@@ -72,6 +73,16 @@ writePiece pn handle mp bs =
          else do hSeek handle AbsoluteSeek (offset pInfo)
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
                  return $ Right ()
+
+checkFile :: Handle -> PieceMap -> IO MissingMap
+checkFile handle pm = do l <- mapM checkPiece pieces
+                         return $ M.fromList l
+    where pieces = M.toAscList pm
+          checkPiece :: (Integer, FS.PieceInfo) -> IO (Integer, Bool)
+          checkPiece (pn, pInfo) =
+              do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good, it may not be
+                 bs <- B.hGet handle (fromInteger . len $ pInfo)
+                 return (pn, sha1 bs == digest pInfo)
 
 
 

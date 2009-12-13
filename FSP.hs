@@ -61,4 +61,3 @@ start handle pm = do wc  <- channel
                                  sync $ transmit c bs
                                  return s)
 
---checkFile :: Handle -> FS.PieceMap -> IO MissingMap
