@@ -73,7 +73,6 @@ import BCode hiding (encode)
 data TrackerState = Started | Stopped | Completed
 
 -- | TrackerChannel is the channel of the tracker
-type TrackerChannel = Channel TrackerMsg
 data TrackerMsg = Poison | TrackerTick Integer
 
 instance Show TrackerState where
@@ -99,47 +98,55 @@ data State = State {
       state :: TrackerState,
       localPort :: Integer,
       logChan :: Channel String,
-      statusChanIn :: Channel StatusP.State,
-      statusChanOut :: Channel (Integer, Integer),
+      statusC :: Channel StatusP.State,
+      completeIncompleteC :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
-      trackerChan :: TrackerChannel,
+      trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
-{-
-start :: TorrentInfo -> PeerId -> Integer -> Channel String -> StatusP.Chan -> IO ()
-start ti pid lp lchan = spawn $ loop s
-  where s = State { torrentInfo = ti,
-                    peerId = pid,
-                    state = Stopped,
-                    localPort = lp,
-                    logChan = lchan,
-                    statusChan = ...
--}
+start :: TorrentInfo -> PeerId -> Integer -> Channel String -> Channel StatusP.State
+      -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
+start ti pid port lchan sc cic msgC pc =
+    do tm <- getPOSIXTime
+       spawn $ lp State { torrentInfo = ti,
+                            peerId = pid,
+                            state = Stopped,
+                            localPort = port,
+                            logChan = lchan,
+                            statusC = sc,
+                            completeIncompleteC = cic,
+                            nextContactTime = tm,
+                            nextTick = 0,
+                            trackerMsgC = msgC,
+                            peerChan = pc }
+       return ()
+  where lp s = do s' <- loop s
+                  lp s'
 
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
-pokeTracker s = do upDownLeft <- sync $ receive (statusChanIn s) (\_ -> True)
+pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (\_ -> True)
                    resp <- trackerRequest (buildRequestUrl s upDownLeft)
                    case resp of
                      Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
-                                    sync $ transmit (statusChanOut s) (completeR bc, incompleteR bc)
+                                    sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
                                     timerUpdate s (timeoutInterval bc) (timeoutMinInterval bc)
 
 timerUpdate :: State -> Integer -> Integer -> IO State
 timerUpdate s interval minInterval =
-    do TimerP.register interval (TrackerTick nt) (trackerChan s)
+    do TimerP.register interval (TrackerTick nt) (trackerMsgC s)
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = (nextContactTime s) + (fromInteger minInterval)
 
 loop :: State -> IO State
 loop s = sync trackerEvent
-  where trackerEvent = wrap (receive (trackerChan s) (\_ -> True))
+  where trackerEvent = wrap (receive (trackerMsgC s) (\_ -> True))
                       (\msg -> case msg of
                                  TrackerTick version -> if version /= nextTick s
                                                         then loop s
