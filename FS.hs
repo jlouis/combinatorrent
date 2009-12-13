@@ -44,11 +44,6 @@ import System.IO
 import BCode
 import Torrent
 
-data PieceInfo = PieceInfo {
-      offset :: Integer,
-      len :: Integer,
-      digest :: String } deriving (Eq, Show)
-
 type PieceMap = M.Map PieceNum PieceInfo
 
 
@@ -83,7 +78,7 @@ checkFile :: Handle -> PieceMap -> IO MissingMap
 checkFile handle pm = do l <- mapM checkPiece pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
-          checkPiece :: (Integer, FS.PieceInfo) -> IO (Integer, Bool)
+          checkPiece :: (Integer, PieceInfo) -> IO (Integer, Bool)
           checkPiece (pn, pInfo) =
               do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good.
                  bs <- B.hGet handle (fromInteger . len $ pInfo)

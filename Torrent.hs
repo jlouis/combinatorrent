@@ -32,6 +32,7 @@ module Torrent (InfoHash,
                 TorrentInfo(..),
                 PieceNum,
                 MissingMap,
+                PieceInfo(..),
                 haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
@@ -61,6 +62,11 @@ data TorrentInfo = TorrentInfo {
       announceURL :: AnnounceURL } deriving Show
 
 type PieceNum = Integer
+
+data PieceInfo = PieceInfo {
+      offset :: Integer,
+      len :: Integer,
+      digest :: String } deriving (Eq, Show)
 
 type MissingMap = M.Map Integer Bool
 
