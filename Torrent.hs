@@ -30,6 +30,7 @@ module Torrent (InfoHash,
                 PeerId,
                 AnnounceURL,
                 TorrentInfo(..),
+                PieceNum,
                 haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
@@ -56,6 +57,8 @@ type AnnounceURL = String
 data TorrentInfo = TorrentInfo {
       infoHash :: InfoHash,
       announceURL :: AnnounceURL } deriving Show
+
+type PieceNum = Integer
 
 -- | Default port to communicate on
 haskellTorrentPort :: Integer

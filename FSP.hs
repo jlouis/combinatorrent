@@ -24,54 +24,19 @@
 -- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
--- | Filesystem routines. These are used for working with and
---   manipulating files in the filesystem.
-
-module FS (PieceInfo(..),
-           readPiece,
-           writePiece)
+-- | File system process. Acts as a maintainer for the filesystem in question
+module FSP
 where
 
+import Control.Concurrent.CML
 
 import qualified Data.ByteString.Lazy as B
-import Data.Digest.Pure.SHA
-import qualified Data.Map as M
-import Data.Maybe
-import System.IO
 
 import Torrent
 
-data PieceInfo = PieceInfo {
-      offset :: Integer,
-      len :: Integer,
-      digest :: Digest } deriving (Eq, Show)
+data State = State {
+      incomingC :: Channel (PieceNum, B.ByteString) }
 
-type PieceMap = M.Map PieceNum PieceInfo
-
-
-pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
-pInfoLookup pn mp = case M.lookup pn mp of
-                      Nothing -> fail "FS: Error lookup in PieceMap"
-                      Just i -> return i
-
-readPiece :: PieceNum -> Handle -> PieceMap -> IO B.ByteString
-readPiece pn handle mp =
-    do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo)
-       bs <- B.hGet handle (fromInteger . len $ pInfo)
-       if B.length bs == (fromInteger . len $ pInfo)
-          then return bs
-          else fail "FS: Wrong number of bytes read"
-
-writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
-writePiece pn handle mp bs =
-    do pInfo <- pInfoLookup pn mp
-       if sha1 bs /= digest pInfo
-         then return $ Left $ "PieceCheck Error"
-         else do hSeek handle AbsoluteSeek (offset pInfo)
-                 B.hPut handle bs -- Will always get the right size due to SHA the digest
-                 return $ Right ()
-
-
-
-
+-- Think some more about request-reply constructions, are there any
+-- need for these? And we should think about this as it is
+-- nontrivial to get right.
