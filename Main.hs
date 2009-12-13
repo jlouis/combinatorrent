@@ -2,10 +2,13 @@ module Main (main)
 where
 
 import Control.Concurrent.CML
+import Data.Maybe
 import System.Environment
+import System.Random
 
 import qualified BCode
-import qualified TrackerP()
+import Torrent
+import qualified TrackerP
 import qualified StatusP
 import qualified PeerMgrP()
 import qualified TimerP()
@@ -17,11 +20,18 @@ main = do
   let bcoded = BCode.decode torrent
   case bcoded of
     Left pe -> print pe
-    Right _bc -> do trackerChannel <- channel
-                    statusChannel  <- channel
-                    _sp <- StatusP.start 10000 -- Left, just a hack
-                                         StatusP.Leeching
-                                         trackerChannel
-                                         statusChannel
-                    return ()
+    Right bc -> do trackerC <- channel
+                   statusC  <- channel
+                   logC <- channel
+                   ciC  <- channel
+                   pmC <- channel
+                   gen <- getStdGen
+                   pid <- return $ mkPeerId gen
+                   ti <- return $ fromJust $ mkTorrentInfo bc
+                   StatusP.start 10000
+                                 StatusP.Leeching
+                                 statusC
+                                 ciC
+                   TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
+                   return ()
 

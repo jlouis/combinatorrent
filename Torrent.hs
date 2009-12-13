@@ -30,6 +30,7 @@ module Torrent (InfoHash,
                 PeerId,
                 AnnounceURL,
                 TorrentInfo(..),
+                haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
                 mkTorrentInfo)
@@ -55,6 +56,10 @@ type AnnounceURL = String
 data TorrentInfo = TorrentInfo {
       infoHash :: InfoHash,
       announceURL :: AnnounceURL } deriving Show
+
+-- | Default port to communicate on
+haskellTorrentPort :: Integer
+haskellTorrentPort = 1579
 
 -- | The current version of Haskell-Torrent. It should be be here.
 haskellTorrentVersion :: String

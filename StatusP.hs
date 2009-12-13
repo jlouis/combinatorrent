@@ -31,7 +31,6 @@
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
 module StatusP (TorrentState(..),
-                Chan,
                 State(uploaded, downloaded, state, left),
                 start)
 where
@@ -43,15 +42,13 @@ data TorrentState = Seeding | Leeching
 data State = MkState { uploaded :: Integer,
                        downloaded :: Integer,
                        left :: Integer,
-                       incomplete :: Int,
-                       complete :: Int,
+                       incomplete :: Integer,
+                       complete :: Integer,
                        state :: TorrentState }
-
-type Chan = Channel (Int, Int)
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Integer -> TorrentState -> Channel State -> Chan -> IO ()
+start :: Integer -> TorrentState -> Channel State -> Channel (Integer, Integer) -> IO ()
 start l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
   where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
                   lp s'
