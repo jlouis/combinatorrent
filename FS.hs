@@ -1,0 +1,77 @@
+-- Haskell Torrent
+-- Copyright (c) 2009, Jesper Louis Andersen,
+-- All rights reserved.
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, are permitted provided that the following conditions are
+-- met:
+--
+--  * Redistributions of source code must retain the above copyright
+--    notice, this list of conditions and the following disclaimer.
+--  * Redistributions in binary form must reproduce the above copyright
+--    notice, this list of conditions and the following disclaimer in the
+--    documentation and/or other materials provided with the distribution.
+--
+-- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+-- IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+-- THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+-- PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+-- CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+-- EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+-- PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+-- PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+-- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+-- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- | Filesystem routines. These are used for working with and
+--   manipulating files in the filesystem.
+
+module FS (PieceInfo(..),
+           readPiece,
+           writePiece)
+where
+
+
+import qualified Data.ByteString.Lazy as B
+import Data.Digest.Pure.SHA
+import qualified Data.Map as M
+import Data.Maybe
+import System.IO
+
+
+data PieceInfo = PieceInfo {
+      offset :: Integer,
+      len :: Integer,
+      digest :: Digest } deriving (Eq, Show)
+
+type PieceNum = Int
+type PieceMap = M.Map PieceNum PieceInfo
+
+
+pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
+pInfoLookup pn mp = case M.lookup pn mp of
+                      Nothing -> fail "FS: Error lookup in PieceMap"
+                      Just i -> return i
+
+readPiece :: PieceNum -> Handle -> PieceMap -> IO B.ByteString
+readPiece pn handle mp =
+    do pInfo <- pInfoLookup pn mp
+       hSeek handle AbsoluteSeek (offset pInfo)
+       bs <- B.hGet handle (fromInteger . len $ pInfo)
+       if B.length bs == (fromInteger . len $ pInfo)
+          then return bs
+          else fail "FS: Wrong number of bytes read"
+
+writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
+writePiece pn handle mp bs =
+    do pInfo <- pInfoLookup pn mp
+       if sha1 bs /= digest pInfo
+         then return $ Left $ "PieceCheck Error"
+         else do hSeek handle AbsoluteSeek (offset pInfo)
+                 B.hPut handle bs -- Will always get the right size due to SHA digest
+                 return $ Right ()
+
+
+
+
