@@ -33,15 +33,13 @@ where
 
 import Control.Concurrent.CML
 
-type LogChan = Channel String
-
 -- | Log a message to a channel
 logMsg :: Channel String -> String -> IO ()
 logMsg c s = sync $ transmit c s
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: IO LogChan
+start :: IO (Channel String)
 start = do c <- channel
            spawn (logger c)
            return c

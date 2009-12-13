@@ -6,10 +6,12 @@ import Data.Maybe
 import System.Environment
 import System.Random
 
-import qualified BCode
 import Torrent
+
+import qualified BCode
 import qualified TrackerP
 import qualified StatusP
+import qualified ConsoleP
 import qualified PeerMgrP()
 import qualified TimerP()
 
@@ -22,7 +24,7 @@ main = do
     Left pe -> print pe
     Right bc -> do trackerC <- channel
                    statusC  <- channel
-                   logC <- channel
+                   logC <- ConsoleP.start
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
