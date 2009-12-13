@@ -24,7 +24,8 @@
 -- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
--- | File system process. Acts as a maintainer for the filesystem in question
+-- | File system process. Acts as a maintainer for the filesystem in
+--   question and can only do single-file torrents.
 module FSP
 where
 
@@ -59,3 +60,5 @@ start handle pm = do wc  <- channel
                               do bs <- FS.readPiece pn (fileHandle s) (pieceMap s)
                                  sync $ transmit c bs
                                  return s)
+
+--checkFile :: Handle -> FS.PieceMap -> IO MissingMap
