@@ -30,10 +30,7 @@ main = do
                    gen <- getStdGen
                    pid <- return $ mkPeerId gen
                    ti <- return $ fromJust $ mkTorrentInfo bc
-                   StatusP.start 10000
-                                 StatusP.Leeching
-                                 statusC
-                                 ciC
+                   StatusP.start 10000 StatusP.Leeching statusC ciC
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
                    return ()
 
