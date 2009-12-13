@@ -25,7 +25,9 @@
 -- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- | File system process. Acts as a maintainer for the filesystem in
---   question and can only do single-file torrents.
+--   question and can only do single-file torrents. It should be
+--   fairly easy to add Multi-file torrents by altering this file and
+--   the FS module.
 module FSP
 where
 

@@ -26,7 +26,6 @@
 
 -- | Filesystem routines. These are used for working with and
 --   manipulating files in the filesystem.
-
 module FS (PieceInfo(..),
            PieceMap,
            readPiece,
@@ -76,17 +75,22 @@ writePiece pn handle mp bs =
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
                  return $ Right ()
 
+-- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
+--   the file and then check it against the digest. It will create a map of what we are missing
+--   in the file as a missing map. We could alternatively choose a list of pieces missing rather
+--   then creating the data structure here. This is perhaps better in the long run.
 checkFile :: Handle -> PieceMap -> IO MissingMap
 checkFile handle pm = do l <- mapM checkPiece pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
           checkPiece :: (Integer, FS.PieceInfo) -> IO (Integer, Bool)
           checkPiece (pn, pInfo) =
-              do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good, it may not be
+              do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good.
                  bs <- B.hGet handle (fromInteger . len $ pInfo)
                  return (pn, (showDigest . sha1) bs == digest pInfo)
 
 -- | Extract the PieceMap from a bcoded structure
+--   Needs some more defense in the long run.
 mkPieceMap :: BCode -> Maybe PieceMap
 mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
