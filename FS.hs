@@ -31,6 +31,7 @@ module FS (PieceInfo(..),
            PieceMap,
            readPiece,
            writePiece,
+           mkPieceMap,
            checkFile)
 where
 
@@ -41,12 +42,13 @@ import qualified Data.Map as M
 import Data.Maybe
 import System.IO
 
+import BCode
 import Torrent
 
 data PieceInfo = PieceInfo {
       offset :: Integer,
       len :: Integer,
-      digest :: Digest } deriving (Eq, Show)
+      digest :: String } deriving (Eq, Show)
 
 type PieceMap = M.Map PieceNum PieceInfo
 
@@ -68,7 +70,7 @@ readPiece pn handle mp =
 writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
 writePiece pn handle mp bs =
     do pInfo <- pInfoLookup pn mp
-       if sha1 bs /= digest pInfo
+       if (showDigest . sha1) bs /= digest pInfo
          then return $ Left $ "PieceCheck Error"
          else do hSeek handle AbsoluteSeek (offset pInfo)
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
@@ -82,7 +84,29 @@ checkFile handle pm = do l <- mapM checkPiece pieces
           checkPiece (pn, pInfo) =
               do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good, it may not be
                  bs <- B.hGet handle (fromInteger . len $ pInfo)
-                 return (pn, sha1 bs == digest pInfo)
+                 return (pn, (showDigest . sha1) bs == digest pInfo)
+
+-- | Extract the PieceMap from a bcoded structure
+mkPieceMap :: BCode -> Maybe PieceMap
+mkPieceMap bc = fetchData
+  where fetchData = do pLen <- infoPieceLength bc
+                       pieceData <- infoPieces bc
+                       tLen <- infoLength bc
+                       return $ M.fromList $ zip [1..] $ extract pLen tLen 0 pieceData
+        extract :: Integer -> Integer -> Integer -> [String] -> [PieceInfo]
+        extract _  0  _  [] = []
+        extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
+                                                          len = tl,
+                                                          digest = p } : extract pl 0 (os + pl) ps
+                                  | otherwise = inf : extract pl (tl - pl) (os + pl) ps
+                                       where inf = PieceInfo { offset = os,
+                                                               len = pl,
+                                                               digest = p }
+        extract _ _ _ [] = undefined -- Can never be hit (famous last words)
+
+
+
+
 
 
 

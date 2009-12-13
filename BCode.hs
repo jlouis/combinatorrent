@@ -40,7 +40,7 @@ import Text.ParserCombinators.Parsec
 import Text.PrettyPrint.HughesPJ hiding (char)
 
 
-data BCode = BInt Int
+data BCode = BInt Integer
            | BString String
            | BArray [BCode]
            | BDict (M.Map String BCode)
@@ -154,11 +154,17 @@ trackerPeers = searchStr "peers"
 info :: BCode -> Maybe BCode
 info = search [PString "info"]
 
-infoLength, infoName, infoNameUtf8, infoPieceLength :: BCode -> Maybe BCode
-infoLength = searchInfo "length"
+infoName, infoNameUtf8 :: BCode -> Maybe BCode
 infoName   = searchInfo "name"
 infoNameUtf8 = searchInfo "name.utf-8"
-infoPieceLength = searchInfo "piece length"
+
+infoPieceLength ::BCode -> Maybe Integer
+infoPieceLength bc = do BInt i <- search [PString "info", PString "piece length"] bc
+                        return i
+
+infoLength :: BCode -> Maybe Integer
+infoLength bc = do BInt i <- search [PString "info", PString "length"] bc
+                   return i
 
 infoPieces :: BCode -> Maybe [String]
 infoPieces b = do t <- searchInfo "pieces" b
@@ -172,7 +178,7 @@ infoPieces b = do t <- searchInfo "pieces" b
 pp :: BCode -> Doc
 pp bc =
     case bc of
-      BInt i -> int i
+      BInt i -> integer i
       BString s -> text s
       BArray arr -> cat $ intersperse comma al
           where al = map pp arr
