@@ -1,3 +1,5 @@
+-- | Add a copyright header and module description here
+--   also add descriptions to each function.
 module BCode (
               BCode,
               Path(..),
