@@ -93,7 +93,7 @@ data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                      | ResponseError String
 
 -- | Internal state of the tracker CHP process
-data State = MkState {
+data State = State {
       torrentInfo :: TorrentInfo,
       peerId :: PeerId,
       state :: TrackerState,
@@ -106,7 +106,16 @@ data State = MkState {
       trackerChan :: TrackerChannel,
       peerChan :: Channel [PeerMgrP.Peer] }
 
--- TODO: Starting the tracker process.
+{-
+start :: TorrentInfo -> PeerId -> Integer -> Channel String -> StatusP.Chan -> IO ()
+start ti pid lp lchan = spawn $ loop s
+  where s = State { torrentInfo = ti,
+                    peerId = pid,
+                    state = Stopped,
+                    localPort = lp,
+                    logChan = lchan,
+                    statusChan = ...
+-}
 
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes

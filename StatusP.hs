@@ -31,6 +31,7 @@
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
 module StatusP (TorrentState(..),
+                Chan,
                 State(uploaded, downloaded, state, left),
                 start)
 where
@@ -46,13 +47,15 @@ data State = MkState { uploaded :: Integer,
                        complete :: Int,
                        state :: TorrentState }
 
+type Chan = Channel (Int, Int)
+
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Integer -> TorrentState -> Channel State -> Channel (Int, Int) -> IO ()
-start l tstate trackerChanOut trackerChanIn = lp $ MkState 0 0 l 0 0 tstate
+start :: Integer -> TorrentState -> Channel State -> Chan -> IO ()
+start l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
   where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
                   lp s'
         sendEvent s = wrap (transmit trackerChanOut s)
                         (\_ -> return s)
-        recvEvent s = wrap (receive trackerChanIn (\_ -> True))
+        recvEvent s = wrap (receive statusChan (\_ -> True))
                         (\(ic, c) -> return s { incomplete = ic, complete = c})
