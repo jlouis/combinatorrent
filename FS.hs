@@ -70,7 +70,7 @@ writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either Strin
 writePiece pn handle mp bs =
     do pInfo <- pInfoLookup pn mp
        if (showDigest . sha1) bs /= digest pInfo
-         then return $ Left $ "PieceCheck Error"
+         then return $ Left "PieceCheck Error"
          else do hSeek handle AbsoluteSeek (offset pInfo)
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
                  return $ Right ()

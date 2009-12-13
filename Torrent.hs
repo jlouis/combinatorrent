@@ -78,7 +78,7 @@ mkTorrentInfo :: BCode -> Maybe TorrentInfo
 mkTorrentInfo bc =
     do ann <- announce bc
        ih  <- hashInfoDict bc
-       return $ TorrentInfo { infoHash = ih, announceURL = ann }
+       return TorrentInfo { infoHash = ih, announceURL = ann }
 
 -- | Create a new PeerId for this client
 mkPeerId :: StdGen -> PeerId

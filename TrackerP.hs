@@ -121,14 +121,13 @@ start ti pid port lchan sc cic msgC pc =
                             trackerMsgC = msgC,
                             peerChan = pc }
        return ()
-  where lp s = do s' <- loop s
-                  lp s'
+  where lp s = loop s >>= lp
 
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
-pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (\_ -> True)
+pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                    resp <- trackerRequest (buildRequestUrl s upDownLeft)
                    case resp of
                      Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
@@ -142,11 +141,11 @@ timerUpdate s interval minInterval =
     do TimerP.register interval (TrackerTick nt) (trackerMsgC s)
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
-        ntime = (nextContactTime s) + (fromInteger minInterval)
+        ntime = nextContactTime s + fromInteger minInterval
 
 loop :: State -> IO State
 loop s = sync trackerEvent
-  where trackerEvent = wrap (receive (trackerMsgC s) (\_ -> True))
+  where trackerEvent = wrap (receive (trackerMsgC s) (const True))
                       (\msg -> case msg of
                                  TrackerTick version -> if version /= nextTick s
                                                         then loop s

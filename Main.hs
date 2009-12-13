@@ -28,8 +28,8 @@ main = do
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
-                   pid <- return $ mkPeerId gen
-                   ti <- return $ fromJust $ mkTorrentInfo bc
+                   let pid = mkPeerId gen
+                   let ti = fromJust $ mkTorrentInfo bc
                    StatusP.start 10000 StatusP.Leeching statusC ciC
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
                    return ()

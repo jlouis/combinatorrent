@@ -53,11 +53,11 @@ start handle pm = do wc  <- channel
                      return (wc, rpcc)
   where lp s = do s' <- sync $ choose [writeEvent s, readEvent s]
                   lp s'
-        writeEvent s = wrap (receive (writeC s) (\_ -> True))
+        writeEvent s = wrap (receive (writeC s) (const True))
                          (\(pn, bs) ->
                            do FS.writePiece pn (fileHandle s) (pieceMap s) bs
                               return s)
-        readEvent s  = wrap (receive (rpcC s) (\_ -> True))
+        readEvent s  = wrap (receive (rpcC s) (const True))
                          (\(pn, c) ->
                               do bs <- FS.readPiece pn (fileHandle s) (pieceMap s)
                                  sync $ transmit c bs

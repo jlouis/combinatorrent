@@ -54,5 +54,5 @@ start l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
                   lp s'
         sendEvent s = wrap (transmit trackerChanOut s)
                         (\_ -> return s)
-        recvEvent s = wrap (receive statusChan (\_ -> True))
+        recvEvent s = wrap (receive statusChan (const True))
                         (\(ic, c) -> return s { incomplete = ic, complete = c})

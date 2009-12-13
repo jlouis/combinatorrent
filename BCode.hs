@@ -57,13 +57,13 @@ encode (BDict mp) = "d" ++ concatMap encPair (M.toList mp) ++ "e"
     where encPair (k, v) = encode (BString k) ++ encode v
 
 encodeBS :: BCode -> B.ByteString
-encodeBS = B.pack . (map $ fromIntegral . ord) . encode
+encodeBS = B.pack . map (fromIntegral . ord) . encode
 
 -- | Return the hash of the info-dict in a torrent file
 hashInfoDict :: BCode -> Maybe String
 hashInfoDict bc =
     do ih <- info bc
-       let encoded = encodeBS $ ih
+       let encoded = encodeBS ih
        return $ showDigest $ sha1 encoded
 
 parseInt :: GenParser Char st BCode
