@@ -29,14 +29,33 @@ module FSP
 where
 
 import Control.Concurrent.CML
+import System.IO
 
 import qualified Data.ByteString.Lazy as B
 
 import Torrent
+import qualified FS
 
 data State = State {
-      incomingC :: Channel (PieceNum, B.ByteString) }
+      writeC :: Channel (PieceNum, B.ByteString),
+      rpcC :: Channel (PieceNum, Channel B.ByteString),
+      fileHandle :: Handle,
+      pieceMap :: FS.PieceMap}
 
--- Think some more about request-reply constructions, are there any
--- need for these? And we should think about this as it is
--- nontrivial to get right.
+start :: Handle -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
+                                      Channel (PieceNum, Channel B.ByteString))
+start handle pm = do wc  <- channel
+                     rpcc <- channel
+                     spawn $ lp $ State wc rpcc handle pm
+                     return (wc, rpcc)
+  where lp s = do s' <- sync $ choose [writeEvent s, readEvent s]
+                  lp s'
+        writeEvent s = wrap (receive (writeC s) (\_ -> True))
+                         (\(pn, bs) ->
+                           do FS.writePiece pn (fileHandle s) (pieceMap s) bs
+                              return s)
+        readEvent s  = wrap (receive (rpcC s) (\_ -> True))
+                         (\(pn, c) ->
+                              do bs <- FS.readPiece pn (fileHandle s) (pieceMap s)
+                                 sync $ transmit c bs
+                                 return s)

@@ -28,6 +28,7 @@
 --   manipulating files in the filesystem.
 
 module FS (PieceInfo(..),
+           PieceMap,
            readPiece,
            writePiece)
 where
