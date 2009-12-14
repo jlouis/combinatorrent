@@ -9,6 +9,8 @@ import qualified Data.ByteString.Lazy as B
 import Data.ByteString.Builder
 import Data.ByteString.Parser
 
+import Test.QuickCheck
+
 import Torrent
 
 type BitField = B.ByteString
@@ -26,6 +28,20 @@ data Message = KeepAlive
              | Piece PieceNum PieceOffset PieceLength B.ByteString
              | Cancel PieceNum PieceOffset PieceLength
              | Port Integer
+  deriving (Eq, Show)
+
+instance Arbitrary Message where
+  arbitrary = oneof [-- Skip KeepAlive
+                     return Choke,
+                     return Unchoke,
+                     return Interested,
+                     return NotInterested,
+                     -- Skip BitField :P
+                     Have <$> arbitrary,
+                     Request <$> arbitrary <*> arbitrary <*> arbitrary,
+                     -- Skip Piece
+                     Cancel <$> arbitrary <*> arbitrary <*> arbitrary,
+                     Port <$> arbitrary]
 
 putPieceInfo :: PieceOffset -> PieceLength -> Builder
 putPieceInfo os sz = mconcat [pw os, pw sz]
@@ -74,3 +90,12 @@ encode m = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
   where bld = encodeMsg m
         sz = B.length $ toLazyByteString bld -- Suboptimal, but works :)
 
+-- TESTS
+
+testDecodeEncodeProp1 :: Message -> Bool
+testDecodeEncodeProp1 m =
+    let encoded = toLazyByteString $ encodeMsg m
+        decoded = runParser decodeMsg encoded
+    in case decoded of
+         Left _ -> False
+         Right m' -> m == m'
