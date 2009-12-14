@@ -16,7 +16,7 @@ isEmpty (Queue [] []) = True
 isEmpty _             = False
 
 push :: Queue a -> a -> Queue a
-push (Queue front back) e = Queue front (e : back)
+push (Queue front back) = Queue front . (: back)
 
 
 pop :: Queue a -> Maybe (a, Queue a)

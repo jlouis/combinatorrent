@@ -30,7 +30,7 @@ sendQueueP inC outC = lp empty
                        else sync $ choose [queueEvent eventQ, sendEvent eventQ]
                lp eq
         queueEvent q = wrap (receive inC (const True))
-                         (\msg -> return $ push q msg)
+                        (return . push q)
         sendEvent q =
             let Just (e, r) = pop q
             in wrap (transmit outC $ Just e)
