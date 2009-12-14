@@ -25,7 +25,7 @@ data Message = KeepAlive
              | Have PieceNum
              | BitField BitField
              | Request PieceNum PieceOffset PieceLength
-             | Piece PieceNum PieceOffset PieceLength B.ByteString
+             | Piece PieceNum PieceOffset B.ByteString
              | Cancel PieceNum PieceOffset PieceLength
              | Port Integer
   deriving (Eq, Show)
@@ -58,9 +58,9 @@ encodeMsg (Have pn)       = mconcat [singleton 4, putWord32be . fromInteger $ pn
 encodeMsg (BitField bf)   = mconcat [singleton 5, fromLazyByteString bf]
 encodeMsg (Request pn os sz) = mconcat [singleton 6, putWord32be . fromInteger $ pn,
                                         putPieceInfo os sz]
-encodeMsg (Piece pn os sz c) = mconcat [singleton 7, putWord32be . fromInteger $ pn,
-                                        putPieceInfo os sz,
-                                        fromLazyByteString c]
+encodeMsg (Piece pn os c) = mconcat [singleton 7, putWord32be . fromInteger $ pn,
+                                     putWord32be . fromInteger $ os,
+                                     fromLazyByteString c]
 encodeMsg (Cancel pn os sz)  = mconcat [singleton 8, putWord32be . fromInteger $ pn,
                                         putPieceInfo os sz]
 encodeMsg (Port p)        = mconcat [singleton 9, putWord16be . fromInteger $ p]
@@ -76,7 +76,7 @@ decodeMsg =
          4 -> Have     <$> gw32
          5 -> BitField <$> getRemainingLazyByteString
          6 -> Request  <$> gw32 <*> gw32 <*> gw32
-         7 -> Piece    <$> gw32 <*> gw32 <*> gw32 <*> getRemainingLazyByteString
+         7 -> Piece    <$> gw32 <*> gw32 <*> getRemainingLazyByteString
          8 -> Cancel   <$> gw32 <*> gw32 <*> gw32
          9 -> Port     <$> (fromIntegral <$> getWord16be)
          _ -> fail "Incorrect message parse"
