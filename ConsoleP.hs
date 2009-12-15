@@ -36,16 +36,40 @@ import Control.Concurrent.CML
 
 type LogChannel = Channel String
 
+data Cmd = Quit -- Quit the program
+         deriving (Eq, Show)
+
+type CmdChannel = Channel Cmd
+
 -- | Log a message to a channel
 logMsg :: LogChannel -> String -> IO ()
 logMsg c = sync . transmit c
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: IO (Channel String)
-start = do c <- channel
-           spawn (logger c)
-           return c
-  where logger chan = do msg <- sync $ receive chan (const True)
-                         putStrLn msg
-                         logger chan
+start :: Channel () -> IO (Channel String)
+start waitCh = do c <- channel
+                  cmdCh <- readerP c
+                  spawn (logger cmdCh c)
+                  return c
+  where logger cmdCh logCh = do sync $ choose [logEvent logCh,
+                                               quitEvent cmdCh]
+                                logger cmdCh logCh
+        logEvent logCh = wrap (receive logCh (const True))
+                           (\msg -> putStrLn msg)
+        quitEvent ch = wrap (receive ch (==Quit))
+                     (\_ -> do sync $ transmit waitCh ())
+
+
+
+
+
+readerP :: LogChannel -> IO CmdChannel
+readerP logCh = do cmdCh <- channel
+                   spawn $ lp cmdCh
+                   return cmdCh
+  where lp cmdCh = do c <- getLine
+                      case c of
+                        "quit" -> sync $ transmit cmdCh Quit
+                        cmd      -> do logMsg logCh $ "Unrecognized command: " ++ show cmd
+                                       lp cmdCh

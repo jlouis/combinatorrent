@@ -24,7 +24,8 @@ main = do
     Left pe -> print pe
     Right bc -> do trackerC <- channel
                    statusC  <- channel
-                   logC <- ConsoleP.start
+                   waitCh <- channel
+                   logC <- ConsoleP.start waitCh
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
@@ -32,5 +33,6 @@ main = do
                    let ti = fromJust $ mkTorrentInfo bc
                    StatusP.start logC 10000 StatusP.Leeching statusC ciC
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
+                   sync $ receive waitCh (const True)
                    return ()
 
