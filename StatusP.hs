@@ -37,6 +37,8 @@ where
 
 import Control.Concurrent.CML
 
+import ConsoleP (LogChannel, logMsg)
+
 data TorrentState = Seeding | Leeching
 
 data State = MkState { uploaded :: Integer,
@@ -48,11 +50,14 @@ data State = MkState { uploaded :: Integer,
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Integer -> TorrentState -> Channel State -> Channel (Integer, Integer) -> IO ()
-start l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
+start :: LogChannel -> Integer -> TorrentState -> Channel State
+      -> Channel (Integer, Integer) -> IO ()
+start logCh l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
   where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
                   lp s'
         sendEvent s = wrap (transmit trackerChanOut s)
-                        (\_ -> return s)
+                        (\_ -> do logMsg logCh "Sending event to Tracker"
+                                  return s)
         recvEvent s = wrap (receive statusChan (const True))
-                        (\(ic, c) -> return s { incomplete = ic, complete = c})
+                        (\(ic, c) -> do logMsg logCh "Receiving event from Tracker"
+                                        return s { incomplete = ic, complete = c})
