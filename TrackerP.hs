@@ -51,12 +51,14 @@ import Network.URI hiding (unreserved)
 
 import Numeric (showHex)
 
-import Torrent
-import qualified ConsoleP
+
+import BCode hiding (encode)
+import ConsoleP (LogChannel, logMsg)
 import qualified PeerMgrP
 import qualified StatusP
 import qualified TimerP
-import BCode hiding (encode)
+import Torrent
+
 
 
 -- | The tracker state is used to tell the tracker our current state. In order to output it
@@ -97,7 +99,7 @@ data State = State {
       peerId :: PeerId,
       state :: TrackerState,
       localPort :: Integer,
-      logChan :: Channel String,
+      logChan :: LogChannel,
       statusC :: Channel StatusP.State,
       completeIncompleteC :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
@@ -105,7 +107,7 @@ data State = State {
       trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
-start :: TorrentInfo -> PeerId -> Integer -> Channel String -> Channel StatusP.State
+start :: TorrentInfo -> PeerId -> Integer -> LogChannel -> Channel StatusP.State
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
 start ti pid port lchan sc cic msgC pc =
     do tm <- getPOSIXTime
@@ -128,7 +130,7 @@ failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
-                   resp <- trackerRequest (buildRequestUrl s upDownLeft)
+                   resp <- trackerRequest (logChan s) (buildRequestUrl s upDownLeft)
                    case resp of
                      Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
@@ -139,6 +141,7 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
 timerUpdate :: State -> Integer -> Integer -> IO State
 timerUpdate s interval minInterval =
     do TimerP.register interval (TrackerTick nt) (trackerMsgC s)
+       logMsg (logChan s) $ "Sat timer to " ++ show interval
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = nextContactTime s + fromInteger minInterval
@@ -146,11 +149,12 @@ timerUpdate s interval minInterval =
 loop :: State -> IO State
 loop s = sync trackerEvent
   where trackerEvent = wrap (receive (trackerMsgC s) (const True))
-                      (\msg -> case msg of
-                                 TrackerTick version -> if version /= nextTick s
-                                                        then loop s
-                                                        else pokeTracker s >>= loop
-                                 Poison -> pokeTracker (s { state = Stopped }))
+                      (\msg -> do logMsg (logChan s) "Got Tracker Event"
+                                  case msg of
+                                    TrackerTick version -> if version /= nextTick s
+                                                           then loop s
+                                                           else pokeTracker s >>= loop
+                                    Poison -> pokeTracker (s { state = Stopped }))
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
@@ -176,8 +180,8 @@ decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.MkPeer ip port : decod
         port = ord p1 * 256 + ord p2
 decodeIps _ = undefined -- Quench all other cases
 
-trackerRequest :: String -> IO (Either String TrackerResponse)
-trackerRequest url =
+trackerRequest :: LogChannel -> String -> IO (Either String TrackerResponse)
+trackerRequest logCh url =
     do resp <- simpleHTTP request
        case resp of
          Left x -> return $ Left ("Error connecting: " ++ show x)
@@ -186,11 +190,12 @@ trackerRequest url =
                (2,_,_) ->
                    case BCode.decode (rspBody r) of
                      Left pe -> return $ Left (show pe)
-                     Right bc -> return $ Right $ processResultDict bc
+                     Right bc -> do logMsg logCh (BCode.prettyPrint bc)
+                                    return $ Right $ processResultDict bc
                (3,_,_) ->
                    case findHeader HdrLocation r of
                      Nothing -> return $ Left (show r)
-                     Just newUrl -> trackerRequest newUrl
+                     Just newUrl -> trackerRequest logCh newUrl
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
