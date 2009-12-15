@@ -25,14 +25,20 @@ main = do
     Right bc -> do trackerC <- channel
                    statusC  <- channel
                    waitCh <- channel
+                   putStrLn "Created channels"
                    logC <- ConsoleP.start waitCh
+                   putStrLn "Started logger"
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
                    let pid = mkPeerId gen
                    let ti = fromJust $ mkTorrentInfo bc
+                   putStrLn "Created various data"
                    StatusP.start logC 10000 StatusP.Leeching statusC ciC
+                   putStrLn "Started Status Process"
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
+                   putStrLn "Started Tracker Process"
                    sync $ receive waitCh (const True)
+                   TrackerP.poison trackerC
                    return ()
 
