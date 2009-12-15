@@ -52,7 +52,8 @@ data State = MkState { uploaded :: Integer,
 --   channel on which to transmit status updates to the tracker.
 start :: LogChannel -> Integer -> TorrentState -> Channel State
       -> Channel (Integer, Integer) -> IO ()
-start logCh l tstate trackerChanOut statusChan = lp $ MkState 0 0 l 0 0 tstate
+start logCh l tstate trackerChanOut statusChan = do spawn $ lp $ MkState 0 0 l 0 0 tstate
+                                                    return ()
   where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
                   lp s'
         sendEvent s = wrap (transmit trackerChanOut s)
