@@ -125,6 +125,9 @@ start ti pid port lchan sc cic msgC pc =
        return ()
   where lp s = loop s >>= lp
 
+poison :: Channel TrackerMsg -> IO ()
+poison ch = sync $ transmit ch Poison
+
 failTimerInterval :: Integer
 failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
