@@ -27,14 +27,17 @@
 -- | The Console process has two main purposes. It is a telnet-like
 --   interface with the user and it is our first simple logging device
 --   for what happens inside the system.
-module ConsoleP (start,
+module ConsoleP (LogChannel,
+                 start,
                  logMsg)
 where
 
 import Control.Concurrent.CML
 
+type LogChannel = Channel String
+
 -- | Log a message to a channel
-logMsg :: Channel String -> String -> IO ()
+logMsg :: LogChannel -> String -> IO ()
 logMsg c = sync . transmit c
 
 -- | Start the logging process and return a channel to it. Sending on this
