@@ -145,8 +145,8 @@ trackerInterval = searchInt "interval"
 trackerMinInterval = searchInt "min interval"
 
 trackerError, trackerWarning :: BCode -> Maybe String
-trackerError = searchStr "error"
-trackerWarning = searchStr "warning"
+trackerError = searchStr "failure reason"
+trackerWarning = searchStr "warning mesage"
 
 trackerPeers :: BCode -> Maybe String
 trackerPeers = searchStr "peers"
