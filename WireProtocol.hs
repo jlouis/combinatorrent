@@ -9,8 +9,6 @@ import qualified Data.ByteString.Lazy as B
 import Data.ByteString.Builder
 import Data.ByteString.Parser
 
-import Test.QuickCheck
-
 import Torrent
 
 type BitField = B.ByteString
@@ -29,19 +27,6 @@ data Message = KeepAlive
              | Cancel PieceNum PieceOffset PieceLength
              | Port Integer
   deriving (Eq, Show)
-
-instance Arbitrary Message where
-  arbitrary = oneof [-- Skip KeepAlive
-                     return Choke,
-                     return Unchoke,
-                     return Interested,
-                     return NotInterested,
-                     -- Skip BitField :P
-                     Have <$> arbitrary,
-                     Request <$> arbitrary <*> arbitrary <*> arbitrary,
-                     -- Skip Piece
-                     Cancel <$> arbitrary <*> arbitrary <*> arbitrary,
-                     Port <$> arbitrary]
 
 putPieceInfo :: PieceOffset -> PieceLength -> Builder
 putPieceInfo os sz = mconcat [pw os, pw sz]
