@@ -5,7 +5,10 @@ where
 import Control.Applicative hiding (empty)
 import Control.Concurrent.CML
 import qualified Data.ByteString.Lazy as B
+import Data.Bits
 import Data.ByteString.Parser hiding (isEmpty)
+import Data.Maybe
+import Data.Word
 import System.IO
 
 import ConsoleP
@@ -105,4 +108,23 @@ peerP logCh h = do outBound <- sendP h
                            )
 
 createPeerPieces :: B.ByteString -> [PieceNum]
-createPeerPieces _ = undefined
+createPeerPieces = map fromIntegral . concat . decodeBytes 0 . B.unpack
+  where decodeByte :: Int -> Word8 -> [Maybe Int]
+        decodeByte soFar w =
+            let dBit n = if testBit w n
+                           then Just (n+soFar)
+                           else Nothing
+            in fmap dBit [1..8]
+        decodeBytes _ [] = []
+        decodeBytes soFar (w : ws) = (catMaybes $ decodeByte soFar w) : (decodeBytes (soFar + 8) ws)
+
+constructBitField :: Integer -> [PieceNum] -> B.ByteString
+constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
+    where pad = 8 - (sz `mod` 8)
+          build [] = []
+          build l  = let (first, rest) = splitAt 8 l
+                     in bytify first : build rest
+          bytify bl = foldl bitSetter 0 $ zip [1..] bl
+          bitSetter :: Word8 -> (Integer, Bool) -> Word8
+          bitSetter w (_pos, False) = w
+          bitSetter w (pos, True)  = setBit w (fromInteger pos)
