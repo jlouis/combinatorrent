@@ -100,11 +100,39 @@ protocolHandshake = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
         sz = length protocolHeader
 
 -- | Receive the header parts from the other end
-receiveHeader :: Handle -> InfoHash -> IO ()
-receiveHeader _h _ih = return ()
+receiveHeader :: Handle -> InfoHash -> IO (Either String ([Capabilities],
+                                                          B.ByteString))
+receiveHeader h ih =
+    do handshake <- B.hGet h handshakeSize
+       return $ parseHeader handshake
+  where handshakeSize = 68
+        protocolHeaderSize = length protocolHeader
+        parseHeader = runParser parser
+        parser =
+            do hdSz <- getWord8
+               if fromIntegral hdSz /= protocolHeaderSize
+                 then fail "Wrong header size"
+                 else return ()
+               protoString <- getString protocolHeaderSize
+               if protoString /= protocolHeader
+                 then fail "Wrong protocol header"
+                 else return ()
+               caps <- getWord64be
+               ihR   <- getString 20
+               if ihR /= ih
+                 then fail "Wrong InfoHash"
+                 else return ()
+               pid <- getLazyByteString 20
+               return (decodeCapabilities(caps), pid)
+
+data Capabilities = Fast
+
+decodeCapabilities :: Word64 -> [Capabilities]
+decodeCapabilities _ = []
 
 -- | Initiate a handshake on a socket
-initiateHandshake :: Handle -> PeerId -> InfoHash -> IO ()
+initiateHandshake :: Handle -> PeerId -> InfoHash -> IO (Either String ([Capabilities],
+                                                                        B.ByteString))
 initiateHandshake handle peerid infohash = do B.hPut handle msg
                                               receiveHeader handle infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
