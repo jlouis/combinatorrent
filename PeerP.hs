@@ -12,6 +12,7 @@ import Data.Word
 import System.IO
 
 import ConsoleP
+import FSP
 import Queue
 import Torrent
 import WireProtocol
@@ -52,15 +53,15 @@ sendP handle = do inC <- channel
 
 
 receiverP :: LogChannel -> Handle -> IO (Channel (Maybe Message))
-receiverP logCh hndl = do ch <- channel
-                          spawn $ run ch
-                          return ch
+receiverP logC hndl = do ch <- channel
+                         spawn $ run ch
+                         return ch
   where run ch =
           let lp = do l <- conv <$> B.hGet hndl 4
                       bs <- B.hGet hndl l
                       case runParser decodeMsg bs of
                         Left _ -> do sync $ transmit ch Nothing
-                                     logMsg logCh "Incorrect parse in receiver, dying!"
+                                     logMsg logC "Incorrect parse in receiver, dying!"
                                      return () -- Die!
                         Right msg -> do sync $ transmit ch (Just msg)
                                         lp
@@ -72,19 +73,24 @@ receiverP logCh hndl = do ch <- channel
 
 data State = MkState { inCh :: Channel (Maybe Message),
                        outCh :: Channel Message,
+                       logCh :: LogChannel,
+                       fsCh :: FSPChannel,
                        peerChoke :: Bool,
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
 
-peerP :: LogChannel -> Handle -> IO ()
-peerP logCh h = do outBound <- sendP h
-                   inBound  <- receiverP logCh h
-                   spawn $ lp MkState { inCh = inBound,
-                                        outCh = outBound,
-                                        peerChoke = True,
-                                        peerInterested = False,
-                                        peerPieces = [] }
-                   return ()
+peerP :: FSPChannel -> LogChannel -> Handle -> IO ()
+peerP fsC logC h = do
+    outBound <- sendP h
+    inBound  <- receiverP logC h
+    spawn $ lp MkState { inCh = inBound,
+                         outCh = outBound,
+                         logCh = logC,
+                         fsCh  = fsC,
+                         peerChoke = True,
+                         peerInterested = False,
+                         peerPieces = [] }
+    return ()
   where lp s = (sync $ choose [peerMsgEvent s]) >>= lp
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
@@ -100,7 +106,12 @@ peerP logCh h = do outBound <- sendP h
                                                   case peerPieces s of
                                                     [] -> return s { peerPieces = createPeerPieces bf }
                                                     _  -> undefined -- TODO: Kill off gracefully
-                                              Request _ _ _ -> undefined
+                                              Request pn os sz ->
+                                                   do c <- channel
+                                                      readBlock (fsCh s) c pn os sz
+                                                      bs <- sync $ receive c (const True)
+                                                      sync $ transmit (outCh s) (Piece pn os bs)
+                                                      return s
                                               Piece _ _ _ -> undefined
                                               Cancel _ _ _ -> undefined
                                               Port _ -> return s -- No DHT Yet, silently ignore

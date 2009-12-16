@@ -44,6 +44,7 @@ import System.IO
 
 import BCode
 import Torrent
+import WireProtocol
 
 type PieceMap = M.Map PieceNum PieceInfo
 
@@ -62,11 +63,11 @@ readPiece pn handle mp =
           then return bs
           else fail "FS: Wrong number of bytes read"
 
-readBlock :: PieceNum -> Int -> Int -> Handle -> PieceMap -> IO B.ByteString
+readBlock :: PieceNum -> PieceOffset -> PieceLength -> Handle -> PieceMap -> IO B.ByteString
 readBlock pn os sz handle mp =
     do pInfo <- pInfoLookup pn mp
        hSeek handle AbsoluteSeek (offset pInfo + fromIntegral os)
-       B.hGet handle sz
+       B.hGet handle (fromInteger sz)
 
 writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
 writePiece pn handle mp bs =

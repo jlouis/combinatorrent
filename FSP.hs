@@ -38,15 +38,20 @@ import qualified Data.ByteString.Lazy as B
 
 import Torrent
 import qualified FS
+import WireProtocol
 
 data FSPMsg = ReadPiece PieceNum
-            | ReadBlock PieceNum Int Int
+            | ReadBlock PieceNum PieceOffset PieceLength
+
+type FSPChannel = Channel (FSPMsg, Channel B.ByteString)
 
 data State = State {
       writeC :: Channel (PieceNum, B.ByteString),
-      rpcC :: Channel (FSPMsg, Channel B.ByteString),
+      rpcC :: FSPChannel,
       fileHandle :: Handle,
       pieceMap :: FS.PieceMap}
+
+
 
 start :: Handle -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
                                       Channel (FSPMsg, Channel B.ByteString))
@@ -68,3 +73,5 @@ start handle pm = do wc  <- channel
                                  sync $ transmit c bs
                                  return s)
 
+readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> PieceOffset -> PieceLength -> IO ()
+readBlock fspc c pn os sz = sync $ transmit fspc (ReadBlock pn os sz, c)
