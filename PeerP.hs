@@ -10,6 +10,7 @@ import System.IO
 
 import ConsoleP
 import Queue
+import Torrent
 import WireProtocol
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
@@ -66,8 +67,42 @@ receiverP logCh hndl = do ch <- channel
             where [b1,b2,b3,b4] = map fromIntegral $ B.unpack bs
 
 
+data State = MkState { inCh :: Channel (Maybe Message),
+                       outCh :: Channel Message,
+                       peerChoke :: Bool,
+                       peerInterested :: Bool,
+                       peerPieces :: [PieceNum]}
+
 peerP :: LogChannel -> Handle -> IO ()
-peerP logCh h = do _outBound <- sendP h
-                   _inBound  <- receiverP logCh h
+peerP logCh h = do outBound <- sendP h
+                   inBound  <- receiverP logCh h
+                   spawn $ lp MkState { inCh = inBound,
+                                        outCh = outBound,
+                                        peerChoke = True,
+                                        peerInterested = False,
+                                        peerPieces = [] }
                    return ()
-             
+  where lp s = (sync $ choose [peerMsgEvent s]) >>= lp
+        peerMsgEvent s = wrap (receive (inCh s) (const True))
+                           (\msg ->
+                                case msg of
+                                  Just m -> case m of
+                                              KeepAlive -> return s -- Do nothing here
+                                              Choke     -> return s { peerChoke = True }
+                                              Unchoke   -> return s { peerChoke = False }
+                                              Interested -> return s { peerInterested = True }
+                                              NotInterested -> return s { peerInterested = False }
+                                              Have pn -> return  s { peerPieces = pn : (peerPieces s)}
+                                              BitField bf ->
+                                                  case peerPieces s of
+                                                    [] -> return s { peerPieces = createPeerPieces bf }
+                                                    _  -> undefined -- TODO: Kill off gracefully
+                                              Request _ _ _ -> undefined
+                                              Piece _ _ _ -> undefined
+                                              Cancel _ _ _ -> undefined
+                                              Port _ -> return s -- No DHT Yet, silently ignore
+                                  Nothing -> undefined -- TODO: Kill off gracefully
+                           )
+
+createPeerPieces :: B.ByteString -> [PieceNum]
+createPeerPieces _ = undefined
