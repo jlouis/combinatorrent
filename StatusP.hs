@@ -54,8 +54,7 @@ start :: LogChannel -> Integer -> TorrentState -> Channel State
       -> Channel (Integer, Integer) -> IO ()
 start logCh l tstate trackerChanOut statusChan = do spawn $ lp $ MkState 0 0 l 0 0 tstate
                                                     return ()
-  where lp s = do s' <- sync $ choose [sendEvent s, recvEvent s]
-                  lp s'
+  where lp s = (sync $ choose [sendEvent s, recvEvent s]) >>= lp
         sendEvent s = wrap (transmit trackerChanOut s)
                         (\_ -> do logMsg logCh "Sending event to Tracker"
                                   return s)
