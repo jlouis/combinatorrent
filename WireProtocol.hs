@@ -8,8 +8,12 @@ import Data.Monoid
 import qualified Data.ByteString.Lazy as B
 import Data.ByteString.Builder
 import Data.ByteString.Parser
+import Data.Word
+import System.IO
 
 import Torrent
+
+------------------------------------------------------------
 
 type BitField = B.ByteString
 
@@ -27,6 +31,17 @@ data Message = KeepAlive
              | Cancel PieceNum PieceOffset PieceLength
              | Port Integer
   deriving (Eq, Show)
+
+
+-- | The Protocol header for the Peer Wire Protocol
+protocolHeader :: String
+protocolHeader = "BitTorrent protocol"
+
+extensionBasis :: Word64
+extensionBasis = 0
+
+extensionFast :: Word64
+extensionFast = 4
 
 putPieceInfo :: PieceOffset -> PieceLength -> Builder
 putPieceInfo os sz = mconcat [pw os, pw sz]
@@ -68,15 +83,35 @@ decodeMsg =
   where gw32 = fromIntegral <$> getWord32be
 
 
--- We should consider Message encoding directly on the socket rather than this thing
+-- | encode a message for transmit on a socket
 encode :: Message -> B.ByteString
 encode m = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
                                        bld]
   where bld = encodeMsg m
         sz = B.length $ toLazyByteString bld -- Suboptimal, but works :)
 
--- TESTS
 
+-- | Protocol handshake code. This encodes the protocol handshake part
+protocolHandshake :: B.ByteString
+protocolHandshake = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
+                                                putString protocolHeader,
+                                                putWord64be caps]
+  where caps = extensionBasis
+        sz = length protocolHeader
+
+-- | Receive the header parts from the other end
+receiveHeader :: Handle -> InfoHash -> IO ()
+receiveHeader _h _ih = return ()
+
+-- | Initiate a handshake on a socket
+initiateHandshake :: Handle -> PeerId -> InfoHash -> IO ()
+initiateHandshake handle peerid infohash = do B.hPut handle msg
+                                              receiveHeader handle infohash -- TODO: Exceptions
+  where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
+                                          putString infohash,
+                                          putString peerid]
+
+-- TESTS
 testDecodeEncodeProp1 :: Message -> Bool
 testDecodeEncodeProp1 m =
     let encoded = toLazyByteString $ encodeMsg m
@@ -84,3 +119,4 @@ testDecodeEncodeProp1 m =
     in case decoded of
          Left _ -> False
          Right m' -> m == m'
+
