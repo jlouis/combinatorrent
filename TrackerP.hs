@@ -109,19 +109,22 @@ data State = State {
 
 start :: TorrentInfo -> PeerId -> Integer -> LogChannel -> Channel StatusP.State
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
-start ti pid port lchan sc cic msgC pc =
+start ti pid port logCh sc cic msgC pc =
     do tm <- getPOSIXTime
        spawn $ lp State { torrentInfo = ti,
                             peerId = pid,
                             state = Stopped,
                             localPort = port,
-                            logChan = lchan,
+                            logChan = logCh,
                             statusC = sc,
                             completeIncompleteC = cic,
                             nextContactTime = tm,
                             nextTick = 0,
                             trackerMsgC = msgC,
                             peerChan = pc }
+       -- Install a timer which triggers in 5 seconds
+       TimerP.register 5 (TrackerTick 0) msgC
+       logMsg logCh "Timer in 5 seconds"
        return ()
   where lp s = loop s >>= lp
 
@@ -135,8 +138,14 @@ pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                    resp <- trackerRequest (logChan s) (buildRequestUrl s upDownLeft)
                    case resp of
-                     Left err -> do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
+                     Left err -> do ConsoleP.logMsg (logChan s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
+                     Right (ResponseWarning wrn) ->
+                         do ConsoleP.logMsg (logChan s) ("Tracker Warning: " ++ wrn)
+                            timerUpdate s failTimerInterval failTimerInterval
+                     Right (ResponseError err) ->
+                         do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
+                            timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
                                     timerUpdate s (timeoutInterval bc) (timeoutMinInterval bc)
@@ -144,7 +153,7 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
 timerUpdate :: State -> Integer -> Integer -> IO State
 timerUpdate s interval minInterval =
     do TimerP.register interval (TrackerTick nt) (trackerMsgC s)
-       logMsg (logChan s) $ "Sat timer to " ++ show interval
+       logMsg (logChan s) $ "Set timer to " ++ show interval
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = nextContactTime s + fromInteger minInterval
@@ -193,7 +202,7 @@ trackerRequest logCh url =
                (2,_,_) ->
                    case BCode.decode (rspBody r) of
                      Left pe -> return $ Left (show pe)
-                     Right bc -> do logMsg logCh (BCode.prettyPrint bc)
+                     Right bc -> do logMsg logCh $ "Response: " ++ (BCode.prettyPrint bc)
                                     return $ Right $ processResultDict bc
                (3,_,_) ->
                    case findHeader HdrLocation r of
