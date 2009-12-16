@@ -39,14 +39,17 @@ import qualified Data.ByteString.Lazy as B
 import Torrent
 import qualified FS
 
+data FSPMsg = ReadPiece PieceNum
+            | ReadBlock PieceNum Int Int
+
 data State = State {
       writeC :: Channel (PieceNum, B.ByteString),
-      rpcC :: Channel (PieceNum, Channel B.ByteString),
+      rpcC :: Channel (FSPMsg, Channel B.ByteString),
       fileHandle :: Handle,
       pieceMap :: FS.PieceMap}
 
 start :: Handle -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
-                                      Channel (PieceNum, Channel B.ByteString))
+                                      Channel (FSPMsg, Channel B.ByteString))
 start handle pm = do wc  <- channel
                      rpcc <- channel
                      spawn $ lp $ State wc rpcc handle pm
@@ -58,8 +61,10 @@ start handle pm = do wc  <- channel
                            do FS.writePiece pn (fileHandle s) (pieceMap s) bs
                               return s)
         readEvent s  = wrap (receive (rpcC s) (const True))
-                         (\(pn, c) ->
-                              do bs <- FS.readPiece pn (fileHandle s) (pieceMap s)
+                         (\(msg, c) ->
+                              do bs <- case msg of
+                                         ReadPiece pn -> FS.readPiece pn (fileHandle s) (pieceMap s)
+                                         ReadBlock pn os sz -> FS.readBlock pn os sz (fileHandle s) (pieceMap s)
                                  sync $ transmit c bs
                                  return s)
 
