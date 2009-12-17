@@ -1,43 +1,58 @@
 digraph {
 
-	HTTP;
+	node [shape=box];
 	Tracker;
-	Peer_Mgr;
-	Peer;
-	Socket;
+	PeerMgr;
+	Peer [shape=box3d];
+
 	Status;
 	FS;
-	Master;
+	Main;
 	Console;
 	Timer;
+	PieceMgr;
 
+	Listener;
+
+	node [shape=diamond];
+	HTTP;
+	Socket;
+
+	edge [style=dotted];
 	Tracker -> HTTP;
 	HTTP    -> Tracker;
-
-	Tracker -> Peer_Mgr;
-	Tracker -> Timer;
-
-	Timer -> Tracker [label="Tick"];
-
-	Peer_Mgr -> Peer;
-	Peer_Mgr -> Status;
-
-	Peer -> Peer_Mgr;
 	Peer -> Socket;
-	Peer -> FS;
-	Peer -> Status;
+	Listener-> Socket;
+
+	edge [style=solid];
+
+	Tracker -> PeerMgr;
+	Tracker -> Timer;
+	Tracker -> Status
+
+	Timer -> Tracker;
+
+	PeerMgr -> Peer;
+	PeerMgr -> Status;
+
+	Peer -> PeerMgr;
 
 	FS -> Peer;
+	Peer -> Status;
+
+	Peer -> PieceMgr;
+
+	PieceMgr -> FS;
+
 	FS -> Status;
 
-	Master -> Console;
-	Master -> FS;
+	Main -> Console;
+	Main -> FS;
 
-	Console -> Master;
+	Console -> Main;
 
-	Status -> Tracker [label="Up/Down/State"];
-	Status -> Master;
+	Status -> Tracker;
+	Status -> Main;
 
-	Listener -> Socket;
-	Listener -> Peer_Mgr;
+	Listener -> Peer [style=dashed];
 }
