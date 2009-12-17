@@ -28,3 +28,4 @@ the same thing.
     * Get the connector code in PeerP correct.
     * Don't connect twice to the same client id. Track the clients we
       connected to.
+    * Use overwriteable mailboxes in the direction of PeerMgr -> Peer.

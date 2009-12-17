@@ -3,7 +3,9 @@ digraph {
 	node [shape=box];
 	Tracker;
 	PeerMgr;
-	Peer [shape=box3d];
+	Peer [shape=tab];
+
+	OMBox [shape=Msquare];
 
 	Status;
 	FS;
@@ -32,7 +34,7 @@ digraph {
 
 	Timer -> Tracker;
 
-	PeerMgr -> Peer;
+	PeerMgr -> OMBox -> Peer;
 	PeerMgr -> Peer [style=dashed];
 	PeerMgr -> Status;
 
