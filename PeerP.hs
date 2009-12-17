@@ -109,7 +109,13 @@ peerP pMgrC fsC logC h = do
                                 peerInterested = False,
                                 peerPieces = [] }
     return ()
-  where lp s = sync (choose [peerMsgEvent s]) >>= lp
+  where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
+        peerMgrEvent s = wrap (receive (peerC s) (const True))
+                           (\msg ->
+                                do case msg of
+                                     ChokePeer -> sync $ transmit (outCh s) Choke
+                                     UnchokePeer -> sync $ transmit (outCh s) Unchoke
+                                   return s)
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
                                 case msg of
