@@ -41,6 +41,9 @@ where
 
 import Data.List
 import qualified Data.Map as M
+
+import Network
+
 import System.Random
 
 import BCode
@@ -71,8 +74,8 @@ data PieceInfo = PieceInfo {
 type MissingMap = M.Map Integer Bool
 
 -- | Default port to communicate on
-haskellTorrentPort :: Integer
-haskellTorrentPort = 1579
+haskellTorrentPort :: PortID
+haskellTorrentPort = PortNumber $ fromInteger 1579
 
 -- | The current version of Haskell-Torrent. It should be be here.
 haskellTorrentVersion :: String

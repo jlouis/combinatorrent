@@ -98,7 +98,7 @@ data State = State {
       torrentInfo :: TorrentInfo,
       peerId :: PeerId,
       state :: TrackerState,
-      localPort :: Integer,
+      localPort :: PortID,
       logChan :: LogChannel,
       statusC :: Channel StatusP.State,
       completeIncompleteC :: Channel (Integer, Integer),
@@ -107,7 +107,7 @@ data State = State {
       trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
-start :: TorrentInfo -> PeerId -> Integer -> LogChannel -> Channel StatusP.State
+start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
 start ti pid port logCh sc cic msgC pc =
     do tm <- getPOSIXTime
@@ -226,9 +226,13 @@ buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
                      ("left", show $ StatusP.left ss),
-                     ("port", show $ localPort s),
+                     ("port", show $ prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
+          prt :: Integer
+          prt = case localPort s of
+                  PortNumber pnum -> fromIntegral pnum
+                  _ -> undefined
 
 -- Carry out Url-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.
