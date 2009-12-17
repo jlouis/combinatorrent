@@ -21,11 +21,8 @@ list if you want, but do coordinate so we don't do multiple work on
 the same thing.
 
     * Get the Peer Manager into a state where it can manage peers
-    * Write the code for connecting to a new client from the peer
-      manager (define in PeerP)
     * Optimize reading of blocks by moving it to the sender Process in
-      PeerP
+      The Peer Process
+    * Make the system into a seeding client
     * Fix Tracker bugs
-    * Add the Listen code to the project
     * Update the dot-files in doc
-
