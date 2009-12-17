@@ -26,3 +26,5 @@ the same thing.
     * Make the system into a seeding client
     * Fix Tracker bugs
     * Get the connector code in PeerP correct.
+    * Don't connect twice to the same client id. Track the clients we
+      connected to.

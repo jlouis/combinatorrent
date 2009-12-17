@@ -27,12 +27,13 @@ digraph {
 	edge [style=solid];
 
 	Tracker -> PeerMgr;
-	Tracker -> Timer;
+	Tracker -> Timer [style=dashed];
 	Tracker -> Status
 
 	Timer -> Tracker;
 
 	PeerMgr -> Peer;
+	PeerMgr -> Peer [style=dashed];
 	PeerMgr -> Status;
 
 	Peer -> PeerMgr;
