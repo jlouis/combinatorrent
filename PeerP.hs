@@ -1,5 +1,8 @@
 -- | Peer proceeses
-module PeerP
+module PeerP (PeerMessage(..),
+              connect,
+              listenHandshake,
+              constructBitField)
 where
 
 import Control.Applicative hiding (empty)
@@ -20,6 +23,9 @@ import FSP
 import Queue
 import Torrent
 import WireProtocol
+
+data PeerMessage = ChokePeer
+                 | UnchokePeer
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: Handle -> Channel (Maybe Message) -> IO ()
@@ -145,14 +151,16 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
 
 connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
-        -> IO (Either String ())
-connect host port pid ih fsC logC =
-    do h <- connectTo host port
-       r <- initiateHandshake h pid ih
-       case r of
-         Left err -> return $ Left err
-         Right (_caps, _rpid) -> do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
-                                    return $ Right ()
+        -> IO ()
+connect host port pid ih fsC logC = spawn connector >> return ()
+  where connector =
+         do h <- connectTo host port
+            r <- initiateHandshake h pid ih
+            case r of
+              Left _err -> return ()
+              Right (_caps, _rpid) ->
+                  do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
+                     return ()
 
 listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
                 -> IO (Either String ())

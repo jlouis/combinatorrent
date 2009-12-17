@@ -187,7 +187,7 @@ processResultDict d =
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps :: String -> [PeerMgrP.Peer]
 decodeIps [] = []
-decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.MkPeer ip port : decodeIps rest
+decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeIps rest
   where ip = concat $ intersperse "." $ map (show . ord) [b1, b2, b3, b4]
         port = PortNumber $ fromIntegral $ ord p1 * 256 + ord p2
 decodeIps _ = undefined -- Quench all other cases
