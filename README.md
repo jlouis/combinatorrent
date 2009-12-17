@@ -23,7 +23,6 @@ the same thing.
     * Optimize reading of blocks by moving it to the sender Process in
       The Peer Process
     * Make the system into a seeding client
-    * Fix BCode bugs with respect to infohash calculations
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Make it possible to Poison OMBox'es. Currently we leak due to them.

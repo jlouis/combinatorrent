@@ -51,7 +51,7 @@ data Path = PString String
 
 encode :: BCode -> String
 encode (BInt i) = "i" ++ show i ++ "e"
-encode (BString s) = show (length s) ++ ":" ++ show s -- This isn't right yet, I think
+encode (BString s) = show (length s) ++ ":" ++ s
 encode (BArray arr) = "l" ++ concatMap encode arr ++ "e"
 encode (BDict mp) = "d" ++ concatMap encPair (M.toList mp) ++ "e"
     where encPair (k, v) = encode (BString k) ++ encode v
