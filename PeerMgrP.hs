@@ -33,7 +33,7 @@ start ch pid ih fsC logC = do mgrC <- channel
                              case msg of
                                Connect tid c -> newPeer s tid c
                                Disconnect tid -> removePeer s tid)
-        newPeer s tid c  = do sync $ transmit c UnchokePeer
+        newPeer s tid c  = do sync $ transmit c UnchokePeer -- TODO: This is a hack for now
                               return s { peers = M.insert tid c (peers s)}
         removePeer s tid = return s { peers = M.delete tid (peers s) }
         fillPeers s | M.size (peers s) > 40 = return s
