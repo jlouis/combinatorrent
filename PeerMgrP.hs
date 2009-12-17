@@ -7,18 +7,11 @@ import PeerP
 import Control.Concurrent
 import Control.Concurrent.CML
 
-import Network
-
+import PeerTypes
 import ConsoleP hiding (start)
 import FSP hiding (start)
 import Torrent hiding (infoHash)
 
--- A peer is an IP address and a Port.
-data Peer = Peer { peerHost :: HostName,
-                   peerPort :: PortID }
-
-data MgrMessage = Connect ThreadId (Channel PeerMessage)
-                | Disconnect ThreadId
 
 data State = MkState { peerCh :: Channel [Peer],
                        peersInQueue  :: [Peer],
@@ -38,13 +31,14 @@ start ch pid ih fsC logC = do mgrC <- channel
         peerEvent s = wrap (receive (mgrCh s) (const True))
                         (\msg ->
                              case msg of
-                               Connect tid c -> return $ newPeer s tid c
-                               Disconnect tid -> return $ removePeer s tid)
-        newPeer s tid c  = s { peers = M.insert tid c (peers s)}
-        removePeer s tid = s { peers = M.delete tid (peers s) }
+                               Connect tid c -> newPeer s tid c
+                               Disconnect tid -> removePeer s tid)
+        newPeer s tid c  = do sync $ transmit c UnchokePeer
+                              return s { peers = M.insert tid c (peers s)}
+        removePeer s tid = return s { peers = M.delete tid (peers s) }
         fillPeers s | M.size (peers s) > 40 = return s
                     | otherwise =
                         do let (toAdd, rest) = splitAt (40 - M.size (peers s)) (peersInQueue s)
                            mapM_ (addPeer s) toAdd
                            return s { peersInQueue = rest }
-        addPeer s (Peer hn prt) = PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s)
+        addPeer s (Peer hn prt) = PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s)

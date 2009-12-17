@@ -6,6 +6,7 @@ module PeerP (PeerMessage(..),
 where
 
 import Control.Applicative hiding (empty)
+import Control.Concurrent
 import Control.Concurrent.CML
 import qualified Data.ByteString.Lazy as B
 import Data.Bits
@@ -17,15 +18,15 @@ import Network
 
 import System.IO
 
-
+import PeerTypes
 import ConsoleP
 import FSP
+import qualified OMBox
 import Queue
 import Torrent
 import WireProtocol
 
-data PeerMessage = ChokePeer
-                 | UnchokePeer
+
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: Handle -> Channel (Maybe Message) -> IO ()
@@ -85,22 +86,28 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        outCh :: Channel Message,
                        logCh :: LogChannel,
                        fsCh :: FSPChannel,
+                       peerC :: PeerChannel,
                        peerChoke :: Bool,
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
 
 -- TODO: The PeerP should always attempt to move the BitField first
-peerP :: FSPChannel -> LogChannel -> Handle -> IO ()
-peerP fsC logC h = do
+peerP :: MgrChannel -> FSPChannel -> LogChannel -> Handle -> IO ()
+peerP pMgrC fsC logC h = do
     outBound <- sendP h
     inBound  <- receiverP logC h
-    spawn $ lp MkState { inCh = inBound,
-                         outCh = outBound,
-                         logCh = logC,
-                         fsCh  = fsC,
-                         peerChoke = True,
-                         peerInterested = False,
-                         peerPieces = [] }
+    (putC, getC) <- OMBox.new
+    spawn $ do
+      tid <- myThreadId
+      sync $ transmit pMgrC $ Connect tid putC
+      lp MkState { inCh = inBound,
+                                outCh = outBound,
+                                logCh = logC,
+                                peerC = getC,
+                                fsCh  = fsC,
+                                peerChoke = True,
+                                peerInterested = False,
+                                peerPieces = [] }
     return ()
   where lp s = sync (choose [peerMsgEvent s]) >>= lp
         peerMsgEvent s = wrap (receive (inCh s) (const True))
@@ -152,24 +159,25 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
 
 connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
+        -> MgrChannel
         -> IO ()
-connect host port pid ih fsC logC = spawn connector >> return ()
+connect host port pid ih fsC logC mgrC = spawn connector >> return ()
   where connector =
          do h <- connectTo host port
             r <- initiateHandshake h pid ih
             case r of
-              Left _err -> return ()
+              Left _err -> do logMsg logC $ "Peer handshake failure at host " ++ host
+                              return ()
               Right (_caps, _rpid) ->
-                  -- TODO: We should notify the PeerMgr we are up and running here
-                  do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
-                     return ()
+                  peerP mgrC fsC logC h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
+                -> MgrChannel
                 -> IO (Either String ())
-listenHandshake h pid ih fsC logC =
+listenHandshake h pid ih fsC logC mgrC =
     do r <- initiateHandshake h pid ih
        case r of
          Left err -> return $ Left err
-         Right (_caps, _rpid) -> do peerP fsC logC h -- TODO: Coerce with connect
+         Right (_caps, _rpid) -> do peerP mgrC fsC logC h -- TODO: Coerce with connect
                                     return $ Right ()

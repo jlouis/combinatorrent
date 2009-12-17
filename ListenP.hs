@@ -1,6 +1,8 @@
 module ListenP
 where
 
+-- TODO: Create the OMBox here rather than taking it as a parameter
+{-
 import Control.Concurrent.CML
 
 import Network
@@ -10,11 +12,14 @@ import PeerP
 import Torrent
 import FSP
 
+
+
 start :: PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO ()
 start port pid ih fsC logC =
     do sock <- listenOn port
        spawn $ acceptor sock pid ih fsC logC
        return ()
+
 
 acceptor :: Socket -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO ()
 acceptor sock pid ih fsC logC =
@@ -25,5 +30,5 @@ acceptor sock pid ih fsC logC =
          Left err -> do logMsg logC $ "Incoming peer Accept error" ++ err
                         return ()
          Right () -> return ()
-
+-}
 

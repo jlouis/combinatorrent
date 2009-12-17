@@ -29,3 +29,4 @@ the same thing.
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Use overwriteable mailboxes in the direction of PeerMgr -> Peer.
+    * Make it possible to Poison OMBox'es. Currently we leak due to them.
