@@ -56,9 +56,9 @@ start waitCh = do c <- channel
                                                quitEvent cmdCh]
                                 logger cmdCh logCh
         logEvent logCh = wrap (receive logCh (const True))
-                           (\msg -> putStrLn msg)
+                           putStrLn
         quitEvent ch = wrap (receive ch (==Quit))
-                     (\_ -> do sync $ transmit waitCh ())
+                     (\_ -> sync $ transmit waitCh ())
 
 
 

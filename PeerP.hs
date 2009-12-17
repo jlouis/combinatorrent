@@ -95,7 +95,7 @@ peerP fsC logC h = do
                          peerInterested = False,
                          peerPieces = [] }
     return ()
-  where lp s = (sync $ choose [peerMsgEvent s]) >>= lp
+  where lp s = sync (choose [peerMsgEvent s]) >>= lp
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
                                 case msg of
@@ -105,7 +105,7 @@ peerP fsC logC h = do
                                               Unchoke   -> return s { peerChoke = False }
                                               Interested -> return s { peerInterested = True }
                                               NotInterested -> return s { peerInterested = False }
-                                              Have pn -> return  s { peerPieces = pn : (peerPieces s)}
+                                              Have pn -> return  s { peerPieces = pn : peerPieces s}
                                               BitField bf ->
                                                   case peerPieces s of
                                                     [] -> return s { peerPieces = createPeerPieces bf }
@@ -131,7 +131,7 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . B.unpack
                            else Nothing
             in fmap dBit [1..8]
         decodeBytes _ [] = []
-        decodeBytes soFar (w : ws) = (catMaybes $ decodeByte soFar w) : (decodeBytes (soFar + 8) ws)
+        decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
 constructBitField :: Integer -> [PieceNum] -> B.ByteString
 constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
@@ -139,7 +139,7 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           build [] = []
           build l  = let (first, rest) = splitAt 8 l
                      in bytify first : build rest
-          bytify bl = foldl bitSetter 0 $ zip [1..] bl
+          bytify = foldl bitSetter 0 $ zip [1..]
           bitSetter :: Word8 -> (Integer, Bool) -> Word8
           bitSetter w (_pos, False) = w
           bitSetter w (pos, True)  = setBit w (fromInteger pos)

@@ -110,20 +110,14 @@ receiveHeader h ih =
         parseHeader = runParser parser
         parser =
             do hdSz <- getWord8
-               if fromIntegral hdSz /= protocolHeaderSize
-                 then fail "Wrong header size"
-                 else return ()
+               when (fromIntegral hdSz /= protocolHeaderSize) $ fail "Wrong header size"
                protoString <- getString protocolHeaderSize
-               if protoString /= protocolHeader
-                 then fail "Wrong protocol header"
-                 else return ()
+               when (protoString /= protocolHeader) $ fail "Wrong protocol header"
                caps <- getWord64be
                ihR   <- getString 20
-               if ihR /= ih
-                 then fail "Wrong InfoHash"
-                 else return ()
+               when (ihR /= ih) $ fail "Wrong InfoHash"
                pid <- getLazyByteString 20
-               return (decodeCapabilities(caps), pid)
+               return (decodeCapabilities caps, pid)
 
 data Capabilities = Fast
 

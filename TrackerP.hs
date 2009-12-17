@@ -202,7 +202,7 @@ trackerRequest logCh url =
                (2,_,_) ->
                    case BCode.decode (rspBody r) of
                      Left pe -> return $ Left (show pe)
-                     Right bc -> do logMsg logCh $ "Response: " ++ (BCode.prettyPrint bc)
+                     Right bc -> do logMsg logCh $ "Response: " ++ BCode.prettyPrint bc
                                     return $ Right $ processResultDict bc
                (3,_,_) ->
                    case findHeader HdrLocation r of
