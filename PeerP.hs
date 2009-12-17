@@ -139,7 +139,7 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           build [] = []
           build l  = let (first, rest) = splitAt 8 l
                      in bytify first : build rest
-          bytify = foldl bitSetter 0 $ zip [1..]
+          bytify bl = foldl bitSetter 0 $ zip [1..] bl
           bitSetter :: Word8 -> (Integer, Bool) -> Word8
           bitSetter w (_pos, False) = w
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
@@ -152,4 +152,13 @@ connect host port pid ih fsC logC =
        case r of
          Left err -> return $ Left err
          Right (_caps, _rpid) -> do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
+                                    return $ Right ()
+
+listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
+                -> IO (Either String ())
+listenHandshake h pid ih fsC logC =
+    do r <- initiateHandshake h pid ih
+       case r of
+         Left err -> return $ Left err
+         Right (_caps, _rpid) -> do peerP fsC logC h -- TODO: Coerce with connect
                                     return $ Right ()
