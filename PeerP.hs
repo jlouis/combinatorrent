@@ -9,7 +9,11 @@ import Data.Bits
 import Data.ByteString.Parser hiding (isEmpty)
 import Data.Maybe
 import Data.Word
+
+import Network
+
 import System.IO
+
 
 import ConsoleP
 import FSP
@@ -139,3 +143,13 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           bitSetter :: Word8 -> (Integer, Bool) -> Word8
           bitSetter w (_pos, False) = w
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
+
+connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
+        -> IO (Either String ())
+connect host port pid ih fsC logC =
+    do h <- connectTo host port
+       r <- initiateHandshake h pid ih
+       case r of
+         Left err -> return $ Left err
+         Right (_caps, _rpid) -> do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
+                                    return $ Right ()

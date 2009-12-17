@@ -45,7 +45,7 @@ import Data.List (intersperse)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX
 
-
+import Network
 import Network.HTTP hiding (port)
 import Network.URI hiding (unreserved)
 
@@ -188,8 +188,8 @@ processResultDict d =
 decodeIps :: String -> [PeerMgrP.Peer]
 decodeIps [] = []
 decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.MkPeer ip port : decodeIps rest
-  where ip = (ord b1, ord b2, ord b3, ord b4)
-        port = ord p1 * 256 + ord p2
+  where ip = concat $ intersperse "." $ map (show . ord) [b1, b2, b3, b4]
+        port = PortNumber $ fromIntegral $ ord p1 * 256 + ord p2
 decodeIps _ = undefined -- Quench all other cases
 
 trackerRequest :: LogChannel -> String -> IO (Either String TrackerResponse)
