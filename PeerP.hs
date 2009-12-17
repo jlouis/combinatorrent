@@ -89,6 +89,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
 
+-- TODO: The PeerP should always attempt to move the BitField first
 peerP :: FSPChannel -> LogChannel -> Handle -> IO ()
 peerP fsC logC h = do
     outBound <- sendP h
@@ -159,9 +160,11 @@ connect host port pid ih fsC logC = spawn connector >> return ()
             case r of
               Left _err -> return ()
               Right (_caps, _rpid) ->
+                  -- TODO: We should notify the PeerMgr we are up and running here
                   do peerP fsC logC h -- TODO: Pass the cpas and rpid to the peer
                      return ()
 
+-- TODO: Consider if this code is correct with what we did to [connect]
 listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
                 -> IO (Either String ())
 listenHandshake h pid ih fsC logC =
