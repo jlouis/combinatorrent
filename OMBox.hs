@@ -2,7 +2,7 @@
 -- | Overwritable mailboxes.
 --   An overwritable mailbox is like a SampleMVar in Haskells basic low-level concurrency, but
 --   implemented as a CML primitive.
-module OMbox
+module OMBox
 where
 
 import Control.Concurrent.CML
