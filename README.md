@@ -27,3 +27,5 @@ the same thing.
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Make it possible to Poison OMBox'es. Currently we leak due to them.
+    * Make a torrent checker and fail if we don't have the whole file
+      for now.
