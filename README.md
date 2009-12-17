@@ -25,4 +25,4 @@ the same thing.
       The Peer Process
     * Make the system into a seeding client
     * Fix Tracker bugs
-    * Update the dot-files in doc
+    * Get the connector code in PeerP correct.
