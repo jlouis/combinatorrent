@@ -99,7 +99,7 @@ data State = State {
       peerId :: PeerId,
       state :: TrackerState,
       localPort :: PortID,
-      logChan :: LogChannel,
+      logCh :: LogChannel,
       statusC :: Channel StatusP.State,
       completeIncompleteC :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
@@ -109,13 +109,13 @@ data State = State {
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
-start ti pid port logCh sc cic msgC pc =
+start ti pid port logC sc cic msgC pc =
     do tm <- getPOSIXTime
        spawn $ lp State { torrentInfo = ti,
                             peerId = pid,
                             state = Stopped,
                             localPort = port,
-                            logChan = logCh,
+                            logCh = logC,
                             statusC = sc,
                             completeIncompleteC = cic,
                             nextContactTime = tm,
@@ -123,8 +123,8 @@ start ti pid port logCh sc cic msgC pc =
                             trackerMsgC = msgC,
                             peerChan = pc }
        -- Install a timer which triggers in 5 seconds
-       TimerP.register 5 (TrackerTick 0) msgC
-       logMsg logCh "Timer in 5 seconds"
+       TimerP.register 2 (TrackerTick 0) msgC
+       logMsg logC "Timer in 2 seconds"
        return ()
   where lp s = loop s >>= lp
 
@@ -136,15 +136,17 @@ failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
-                   resp <- trackerRequest (logChan s) (buildRequestUrl s upDownLeft)
+                   url <- return $ buildRequestUrl s upDownLeft
+                   logMsg (logCh s) $ "Request URL: " ++ url
+                   resp <- trackerRequest (logCh s) url
                    case resp of
-                     Left err -> do ConsoleP.logMsg (logChan s) ("Tracker HTTP Error: " ++ err)
+                     Left err -> do ConsoleP.logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseWarning wrn) ->
-                         do ConsoleP.logMsg (logChan s) ("Tracker Warning: " ++ wrn)
+                         do ConsoleP.logMsg (logCh s) ("Tracker Warning: " ++ wrn)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseError err) ->
-                         do ConsoleP.logMsg (logChan s) ("Tracker Error: " ++ err)
+                         do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
@@ -153,7 +155,7 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
 timerUpdate :: State -> Integer -> Integer -> IO State
 timerUpdate s interval minInterval =
     do TimerP.register interval (TrackerTick nt) (trackerMsgC s)
-       logMsg (logChan s) $ "Set timer to " ++ show interval
+       logMsg (logCh s) $ "Set timer to " ++ show interval
        return $ s {nextTick = nt + 1, nextContactTime = ntime }
   where nt = nextTick s
         ntime = nextContactTime s + fromInteger minInterval
@@ -161,7 +163,7 @@ timerUpdate s interval minInterval =
 loop :: State -> IO State
 loop s = sync trackerEvent
   where trackerEvent = wrap (receive (trackerMsgC s) (const True))
-                      (\msg -> do logMsg (logChan s) "Got Tracker Event"
+                      (\msg -> do logMsg (logCh s) "Got Tracker Event"
                                   case msg of
                                     TrackerTick version -> if version /= nextTick s
                                                            then loop s
@@ -193,7 +195,7 @@ decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeI
 decodeIps _ = undefined -- Quench all other cases
 
 trackerRequest :: LogChannel -> String -> IO (Either String TrackerResponse)
-trackerRequest logCh url =
+trackerRequest logC url =
     do resp <- simpleHTTP request
        case resp of
          Left x -> return $ Left ("Error connecting: " ++ show x)
@@ -202,12 +204,12 @@ trackerRequest logCh url =
                (2,_,_) ->
                    case BCode.decode (rspBody r) of
                      Left pe -> return $ Left (show pe)
-                     Right bc -> do logMsg logCh $ "Response: " ++ BCode.prettyPrint bc
+                     Right bc -> do logMsg logC $ "Response: " ++ BCode.prettyPrint bc
                                     return $ Right $ processResultDict bc
                (3,_,_) ->
                    case findHeader HdrLocation r of
                      Nothing -> return $ Left (show r)
-                     Just newUrl -> trackerRequest logCh newUrl
+                     Just newUrl -> trackerRequest logC newUrl
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
@@ -237,7 +239,7 @@ buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
 -- Carry out Url-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.
 rfc1738Encode :: String -> String
-rfc1738Encode = concatMap (\c -> if unreserved c then show c else encode c)
+rfc1738Encode = concatMap (\c -> if unreserved c then [c] else encode c)
     where unreserved = (`elem` chars)
           -- I killed ~ from this list as the Mainline client doesn't announce it - jlouis
           chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_./"
