@@ -112,7 +112,7 @@ peerP fsC logC h = do
                                                     _  -> undefined -- TODO: Kill off gracefully
                                               Request pn os sz ->
                                                    do c <- channel
-                                                      readBlock (fsCh s) c pn os sz
+                                                      readBlock (fsCh s) c pn os sz -- Push this down in the Send Process
                                                       bs <- sync $ receive c (const True)
                                                       sync $ transmit (outCh s) (Piece pn os bs)
                                                       return s
