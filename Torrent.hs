@@ -39,6 +39,7 @@ module Torrent (InfoHash,
                 mkTorrentInfo)
 where
 
+import qualified Data.ByteString.Lazy as B
 import Data.List
 import qualified Data.Map as M
 
@@ -70,7 +71,7 @@ type PieceNum = Integer
 data PieceInfo = PieceInfo {
       offset :: Integer,
       len :: Integer,
-      digest :: String } deriving (Eq, Show)
+      digest :: B.ByteString } deriving (Eq, Show)
 
 type MissingMap = M.Map Integer Bool
 

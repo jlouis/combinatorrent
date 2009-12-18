@@ -74,7 +74,7 @@ readBlock pn os sz handle mp =
 writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
 writePiece pn handle mp bs =
     do pInfo <- pInfoLookup pn mp
-       if (showDigest . sha1) bs /= digest pInfo
+       if (bytestringDigest . sha1) bs /= digest pInfo
          then return $ Left "PieceCheck Error"
          else do hSeek handle AbsoluteSeek (offset pInfo)
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
@@ -92,7 +92,7 @@ checkFile handle pm = do l <- mapM checkPiece pieces
           checkPiece (pn, pInfo) =
               do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good.
                  bs <- B.hGet handle (fromInteger . len $ pInfo)
-                 return (pn, (showDigest . sha1) bs == digest pInfo)
+                 return (pn, (bytestringDigest . sha1) bs == digest pInfo)
 
 -- | Extract the PieceMap from a bcoded structure
 --   Needs some more defense in the long run.
@@ -102,7 +102,7 @@ mkPieceMap bc = fetchData
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
                        return $ M.fromList $ zip [1..] $ extract pLen tLen 0 pieceData
-        extract :: Integer -> Integer -> Integer -> [String] -> [PieceInfo]
+        extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _  0  _  [] = []
         extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
                                                           len = tl,
@@ -111,7 +111,7 @@ mkPieceMap bc = fetchData
                                        where inf = PieceInfo { offset = os,
                                                                len = pl,
                                                                digest = p }
-        extract _ _ _ [] = undefined -- Can never be hit (famous last words)
+        extract _ _ _ _ = undefined -- Can never be hit (famous last words)
 
 canSeed :: MissingMap -> Bool
 canSeed mmp = M.fold (&&) True mmp

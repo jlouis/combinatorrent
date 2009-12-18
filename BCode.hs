@@ -166,14 +166,14 @@ infoLength :: BCode -> Maybe Integer
 infoLength bc = do BInt i <- search [PString "info", PString "length"] bc
                    return i
 
-infoPieces :: BCode -> Maybe [String]
+infoPieces :: BCode -> Maybe [B.ByteString]
 infoPieces b = do t <- searchInfo "pieces" b
                   case t of
-                    BString str -> return $ sha1Split str
+                    BString str -> return $ sha1Split (B.pack $ map (fromIntegral . ord) str)
                     _ -> mzero
-      where sha1Split "" = []
-            sha1Split r  = block : sha1Split rest
-                where (block, rest) = splitAt 20 r
+      where sha1Split r | r == B.empty = []
+                        | otherwise = block : sha1Split rest
+                            where (block, rest) = B.splitAt 20 r
 
 pp :: BCode -> Doc
 pp bc =
