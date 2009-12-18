@@ -20,11 +20,12 @@ The list of things that needs done. Feel free to take anything on the
 list if you want, but do coordinate so we don't do multiple work on
 the same thing.
 
+    * Get the Peer Manager linked up and running.
     * Optimize reading of blocks by moving it to the sender Process in
       The Peer Process
     * Make the system into a seeding client
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Make it possible to Poison OMBox'es. Currently we leak due to them.
-    * Make a torrent checker and fail if we don't have the whole file
-      for now.
+    * Handle error cases when checking a torrent file.
+
