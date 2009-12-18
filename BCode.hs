@@ -14,7 +14,6 @@ module BCode (
               hashInfoDict,
               infoLength,
               infoName,
-              infoNameUtf8,
               infoPieceLength,
               infoPieces,
               prettyPrint,
@@ -154,9 +153,10 @@ trackerPeers = searchStr "peers"
 info :: BCode -> Maybe BCode
 info = search [PString "info"]
 
-infoName, infoNameUtf8 :: BCode -> Maybe BCode
-infoName   = searchInfo "name"
-infoNameUtf8 = searchInfo "name.utf-8"
+infoName :: BCode -> Maybe String
+infoName bc = case search [PString "info", PString "name"] bc of
+               Just (BString s) -> Just s
+               _ -> Nothing
 
 infoPieceLength ::BCode -> Maybe Integer
 infoPieceLength bc = do BInt i <- search [PString "info", PString "piece length"] bc
