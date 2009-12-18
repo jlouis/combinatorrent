@@ -118,11 +118,11 @@ canSeed mmp = M.fold (&&) True mmp
 
 -- | Process a BCoded torrent file. Open the file in question, check it and return a handle
 --   plus a missingMap for the file
-openAndCheckFile :: BCode -> IO (Handle, MissingMap)
+openAndCheckFile :: BCode -> IO (Handle, MissingMap, PieceMap)
 openAndCheckFile bc =
     do h <- openBinaryFile fpath ReadWriteMode
        missingMap <- checkFile h pieceMap
-       return (h, missingMap)
+       return (h, missingMap, pieceMap)
   where Just fpath = BCode.infoName bc
         Just pieceMap = mkPieceMap bc
 
