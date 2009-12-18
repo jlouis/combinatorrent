@@ -32,7 +32,9 @@ module FS (PieceInfo(..),
            readBlock,
            writePiece,
            mkPieceMap,
-           checkFile)
+           checkFile,
+           openAndCheckFile,
+           canSeed)
 where
 
 
@@ -111,7 +113,18 @@ mkPieceMap bc = fetchData
                                                                digest = p }
         extract _ _ _ [] = undefined -- Can never be hit (famous last words)
 
+canSeed :: MissingMap -> Bool
+canSeed mmp = M.fold (&&) True mmp
 
+-- | Process a BCoded torrent file. Open the file in question, check it and return a handle
+--   plus a missingMap for the file
+openAndCheckFile :: BCode -> IO (Handle, MissingMap)
+openAndCheckFile bc =
+    do h <- openBinaryFile fpath ReadWriteMode
+       missingMap <- checkFile h pieceMap
+       return (h, missingMap)
+  where Just fpath = BCode.infoName bc
+        Just pieceMap = mkPieceMap bc
 
 
 
