@@ -64,6 +64,7 @@ type AnnounceURL = String
 -- | Internal type for a torrent. It identifies a torrent in various places of the system.
 data TorrentInfo = TorrentInfo {
       infoHash :: InfoHash,
+      pieceCount :: Integer, -- Number of pieces in torrent
       announceURL :: AnnounceURL } deriving Show
 
 type PieceNum = Integer
@@ -89,7 +90,8 @@ mkTorrentInfo :: BCode -> Maybe TorrentInfo
 mkTorrentInfo bc =
     do ann <- announce bc
        ih  <- hashInfoDict bc
-       return TorrentInfo { infoHash = ih, announceURL = ann }
+       np  <- numberPieces bc
+       return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
 
 -- | Create a new PeerId for this client
 mkPeerId :: StdGen -> PeerId

@@ -22,10 +22,11 @@ data State = MkState { peerCh :: Channel [Peer],
                        fsCh :: FSPChannel,
                        logCh :: LogChannel }
 
-start :: Channel [Peer] -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO ()
-start ch pid ih fsC logC = do mgrC <- channel
-                              spawn $ lp (MkState ch [] mgrC M.empty pid ih fsC logC )
-                              return ()
+start :: Channel [Peer] -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> Integer -> IO ()
+start ch pid ih fsC logC nPieces =
+    do mgrC <- channel
+       spawn $ lp (MkState ch [] mgrC M.empty pid ih fsC logC )
+       return ()
   where lp s = do logMsg logC "Looping PeerMgr"
                   (sync $ choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
         trackerPeers s = wrap (receive (peerCh s) (const True))
@@ -50,5 +51,5 @@ start ch pid ih fsC logC = do mgrC <- channel
                            return s { peersInQueue = rest }
         addPeer s (Peer hn prt) = do
           logMsg (logCh s) "Adding peer"
-          PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s)
+          PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s) nPieces
           logMsg (logCh s) "... Added"

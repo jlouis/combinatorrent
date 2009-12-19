@@ -1,7 +1,6 @@
 -- | Peer proceeses
 module PeerP (PeerMessage(..),
               connect,
-              listenHandshake,
               constructBitField)
 where
 
@@ -101,8 +100,8 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        peerPieces :: [PieceNum]}
 
 -- TODO: The PeerP should always attempt to move the BitField first
-peerP :: MgrChannel -> FSPChannel -> LogChannel -> Handle -> IO ()
-peerP pMgrC fsC logC h = do
+peerP :: MgrChannel -> FSPChannel -> LogChannel -> Integer -> Handle -> IO ()
+peerP pMgrC fsC logC nPieces h = do
     outBound <- sendP logC h
     inBound  <- receiverP logC h
     (putC, getC) <- OMBox.new
@@ -111,6 +110,7 @@ peerP pMgrC fsC logC h = do
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
       sync $ transmit pMgrC $ Connect tid putC
+      sync $ transmit outBound $ BitField (constructBitField nPieces [1..nPieces])
       lp MkState { inCh = inBound,
                                 outCh = outBound,
                                 logCh = logC,
@@ -181,9 +181,9 @@ showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
 
 connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
-        -> MgrChannel
+        -> MgrChannel -> Integer
         -> IO ()
-connect host port pid ih fsC logC mgrC = spawn connector >> return ()
+connect host port pid ih fsC logC mgrC nPieces = spawn connector >> return ()
   where connector =
          do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
@@ -196,9 +196,10 @@ connect host port pid ih fsC logC mgrC = spawn connector >> return ()
                              return ()
               Right (_caps, _rpid) ->
                   do logMsg logC "entering peerP loop code"
-                     peerP mgrC fsC logC h
+                     peerP mgrC fsC logC nPieces h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
+{-
 listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
                 -> MgrChannel
                 -> IO (Either String ())
@@ -208,3 +209,4 @@ listenHandshake h pid ih fsC logC mgrC =
          Left err -> return $ Left err
          Right (_caps, _rpid) -> do peerP mgrC fsC logC h -- TODO: Coerce with connect
                                     return $ Right ()
+-}
