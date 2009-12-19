@@ -28,18 +28,25 @@ start ch pid ih fsC logC = do mgrC <- channel
                               return ()
   where lp s = (sync $ choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
         trackerPeers s = wrap (receive (peerCh s) (const True))
-                           (\ps -> return s { peersInQueue = ps ++ (peersInQueue s) })
+                           (\ps ->
+                                do logMsg (logCh s) "Adding peers to queue"
+                                   return s { peersInQueue = ps ++ (peersInQueue s) })
         peerEvent s = wrap (receive (mgrCh s) (const True))
                         (\msg ->
                              case msg of
                                Connect tid c -> newPeer s tid c
                                Disconnect tid -> removePeer s tid)
-        newPeer s tid c  = do sync $ transmit c UnchokePeer -- TODO: This is a hack for now
+        newPeer s tid c  = do logMsg (logCh s) "Unchoking new peer"
+                              sync $ transmit c UnchokePeer -- TODO: This is a hack for now
                               return s { peers = M.insert tid c (peers s)}
-        removePeer s tid = return s { peers = M.delete tid (peers s) }
+        removePeer s tid = do logMsg (logCh s) "Deleting peer"
+                              return s { peers = M.delete tid (peers s) }
         fillPeers s | M.size (peers s) > 40 = return s
                     | otherwise =
                         do let (toAdd, rest) = splitAt (40 - M.size (peers s)) (peersInQueue s)
+                           logMsg (logCh s) $ "Filling with up to " ++ show (40 - M.size (peers s)) ++ " peers"
                            mapM_ (addPeer s) toAdd
                            return s { peersInQueue = rest }
-        addPeer s (Peer hn prt) = PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s)
+        addPeer s (Peer hn prt) = do
+          logMsg (logCh s) "Adding peer"
+          PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s)
