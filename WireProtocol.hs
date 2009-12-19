@@ -11,6 +11,7 @@ import Data.ByteString.Parser
 import Data.Word
 import System.IO
 
+import ConsoleP
 import Torrent
 
 ------------------------------------------------------------
@@ -100,13 +101,12 @@ protocolHandshake = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
         sz = length protocolHeader
 
 -- | Receive the header parts from the other end
-receiveHeader :: Handle -> InfoHash -> IO (Either String ([Capabilities],
-                                                          B.ByteString))
-receiveHeader h ih =
-    do handshake <- B.hGet h handshakeSize
+receiveHeader :: Handle -> Int -> InfoHash -> IO (Either String ([Capabilities],
+                                                                   B.ByteString))
+receiveHeader h sz ih =
+    do handshake <- B.hGet h sz
        return $ parseHeader handshake
-  where handshakeSize = 68
-        protocolHeaderSize = length protocolHeader
+  where protocolHeaderSize = length protocolHeader
         parseHeader = runParser parser
         parser =
             do hdSz <- getWord8
@@ -125,13 +125,18 @@ decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities _ = []
 
 -- | Initiate a handshake on a socket
-initiateHandshake :: Handle -> PeerId -> InfoHash -> IO (Either String ([Capabilities],
+initiateHandshake :: LogChannel ->
+                     Handle -> PeerId -> InfoHash -> IO (Either String ([Capabilities],
                                                                         B.ByteString))
-initiateHandshake handle peerid infohash = do B.hPut handle msg
-                                              receiveHeader handle infohash -- TODO: Exceptions
+initiateHandshake logC handle peerid infohash = do
+    logMsg logC "Sending off handshake message"
+    B.hPut handle msg
+    logMsg logC "Receiving handshake from other end"
+    receiveHeader handle sz infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
                                           fromLazyByteString infohash,
                                           putString peerid]
+        sz = fromIntegral (B.length msg)
 
 -- TESTS
 testDecodeEncodeProp1 :: Message -> Bool

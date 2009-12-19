@@ -51,3 +51,4 @@ start ch pid ih fsC logC = do mgrC <- channel
         addPeer s (Peer hn prt) = do
           logMsg (logCh s) "Adding peer"
           PeerP.connect hn prt (peerId s) (infoHash s) (fsCh s) (logCh s) (mgrCh s)
+          logMsg (logCh s) "... Added"

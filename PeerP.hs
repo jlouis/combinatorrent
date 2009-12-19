@@ -166,26 +166,34 @@ constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
           bitSetter w (_pos, False) = w
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
 
+showPort :: PortID -> String
+showPort (PortNumber pn) = show pn
+showPort _               = "N/A"
+
 connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
         -> MgrChannel
         -> IO ()
 connect host port pid ih fsC logC mgrC = spawn connector >> return ()
   where connector =
-         do h <- connectTo host port
-            r <- initiateHandshake h pid ih
+         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
+            h <- connectTo host port
+            logMsg logC "Connected, initiating handShake"
+            r <- initiateHandshake logC h pid ih
+            logMsg logC "Handshake run"
             case r of
               Left err -> do logMsg logC $ ("Peer handshake failure at host " ++ host
                                               ++ " with error " ++ err)
                              return ()
               Right (_caps, _rpid) ->
-                  peerP mgrC fsC logC h
+                  do logMsg logC "entering peerP loop code"
+                     peerP mgrC fsC logC h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
                 -> MgrChannel
                 -> IO (Either String ())
 listenHandshake h pid ih fsC logC mgrC =
-    do r <- initiateHandshake h pid ih
+    do r <- initiateHandshake logC h pid ih
        case r of
          Left err -> return $ Left err
          Right (_caps, _rpid) -> do peerP mgrC fsC logC h -- TODO: Coerce with connect
