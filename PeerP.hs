@@ -172,8 +172,9 @@ connect host port pid ih fsC logC mgrC = spawn connector >> return ()
          do h <- connectTo host port
             r <- initiateHandshake h pid ih
             case r of
-              Left _err -> do logMsg logC $ "Peer handshake failure at host " ++ host
-                              return ()
+              Left err -> do logMsg logC $ ("Peer handshake failure at host " ++ host
+                                              ++ " with error " ++ err)
+                             return ()
               Right (_caps, _rpid) ->
                   peerP mgrC fsC logC h
 
