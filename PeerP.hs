@@ -29,54 +29,61 @@ import WireProtocol
 
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: Handle -> Channel (Maybe Message) -> IO ()
-senderP sock ch = lp
+senderP :: LogChannel -> Handle -> Channel (Maybe Message) -> IO ()
+senderP logC handle ch = lp
   where lp = do msg <- sync $ receive ch (const True)
                 case msg of
                   Nothing -> return ()
                   Just m  -> do let bs = encode m
-                                B.hPut sock bs
+                                B.hPut handle bs
+                                hFlush handle
+                                logMsg logC "Sent and flushed"
                                 lp
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
 --   TODO: Make it possible to stop again.
-sendQueueP :: Channel Message -> Channel (Maybe Message) -> IO ()
-sendQueueP inC outC = lp empty
+sendQueueP :: LogChannel -> Channel Message -> Channel (Maybe Message) -> IO ()
+sendQueueP logC inC outC = lp empty
   where lp eventQ =
             do eq <- if isEmpty eventQ
                        then sync $ queueEvent eventQ
                        else sync $ choose [queueEvent eventQ, sendEvent eventQ]
                lp eq
         queueEvent q = wrap (receive inC (const True))
-                        (return . push q)
+                        (\m -> do logMsg logC "Queueing event for sending"
+                                  return $ push q m)
         sendEvent q =
             let Just (e, r) = pop q
             in wrap (transmit outC $ Just e)
-                 (const $ return r)
+                   (\() -> do logMsg logC "Sent event"
+                              return r)
 
-sendP :: Handle -> IO (Channel Message)
-sendP handle = do inC <- channel
-                  outC <- channel
-                  spawn $ senderP handle outC
-                  spawn $ sendQueueP inC outC
-                  return inC
+sendP :: LogChannel -> Handle -> IO (Channel Message)
+sendP logC handle = do inC <- channel
+                       outC <- channel
+                       spawn $ senderP logC handle outC
+                       spawn $ sendQueueP logC inC outC
+                       return inC
 
 
 receiverP :: LogChannel -> Handle -> IO (Channel (Maybe Message))
 receiverP logC hndl = do ch <- channel
-                         spawn $ run ch
+                         spawn $ lp ch
                          return ch
-  where run ch =
-          let lp = do l <- conv <$> B.hGet hndl 4
-                      bs <- B.hGet hndl l
-                      case runParser decodeMsg bs of
-                        Left _ -> do sync $ transmit ch Nothing
-                                     logMsg logC "Incorrect parse in receiver, dying!"
-                                     return () -- Die!
-                        Right msg -> do sync $ transmit ch (Just msg)
-                                        lp
-          in lp
+  where lp ch = do logMsg logC "Peer waiting for input"
+                   l <- conv <$> B.hGet hndl 4
+                   if l == 0
+                      then lp ch
+                      else do logMsg logC $ "Reading off " ++ show l ++ " bytes"
+                              bs <- B.hGet hndl l
+                              logMsg logC $ "Read: " ++ show bs
+                              case runParser decodeMsg bs of
+                                Left _ -> do sync $ transmit ch Nothing
+                                             logMsg logC "Incorrect parse in receiver, dying!"
+                                             return () -- Die!
+                                Right msg -> do sync $ transmit ch (Just msg)
+                                                lp ch
         conv :: B.ByteString -> Int
         conv bs = b4 + (256 * b3) + (256 * 256 * b2) + (256 * 256 * 256 * b1)
             where [b1,b2,b3,b4] = map fromIntegral $ B.unpack bs
@@ -94,7 +101,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
 -- TODO: The PeerP should always attempt to move the BitField first
 peerP :: MgrChannel -> FSPChannel -> LogChannel -> Handle -> IO ()
 peerP pMgrC fsC logC h = do
-    outBound <- sendP h
+    outBound <- sendP logC h
     inBound  <- receiverP logC h
     (putC, getC) <- OMBox.new
     logMsg logC "Spawning Peer process"
@@ -138,10 +145,11 @@ peerP pMgrC fsC logC h = do
                                                       bs <- sync $ receive c (const True)
                                                       sync $ transmit (outCh s) (Piece pn os bs)
                                                       return s
-                                              Piece _ _ _ -> undefined
-                                              Cancel _ _ _ -> undefined
+                                              Piece _ _ _ -> return s -- Silently ignore these
+                                              Cancel _ _ _ -> return s -- Silently ignore these
                                               Port _ -> return s -- No DHT Yet, silently ignore
-                                  Nothing -> undefined -- TODO: Kill off gracefully
+                                  Nothing -> do logMsg (logCh s) "Unknown message"
+                                                undefined-- TODO: Kill off gracefully
                            )
 
 createPeerPieces :: B.ByteString -> [PieceNum]
