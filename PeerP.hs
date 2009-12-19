@@ -5,7 +5,6 @@ module PeerP (PeerMessage(..),
               constructBitField)
 where
 
-import Control.Applicative hiding (empty)
 import Control.Concurrent
 import Control.Concurrent.CML
 import qualified Data.ByteString.Lazy as B
@@ -72,22 +71,25 @@ receiverP logC hndl = do ch <- channel
                          spawn $ lp ch
                          return ch
   where lp ch = do logMsg logC "Peer waiting for input"
-                   l <- conv <$> B.hGet hndl 4
+                   bs' <- B.hGet hndl 4
+                   l <- conv bs'
                    if l == 0
                       then lp ch
                       else do logMsg logC $ "Reading off " ++ show l ++ " bytes"
-                              bs <- B.hGet hndl l
+                              bs <- B.hGet hndl (fromIntegral l)
                               logMsg logC $ "Read: " ++ show bs
                               case runParser decodeMsg bs of
                                 Left _ -> do sync $ transmit ch Nothing
                                              logMsg logC "Incorrect parse in receiver, dying!"
                                              return () -- Die!
-                                Right msg -> do sync $ transmit ch (Just msg)
+                                Right msg -> do logMsg logC $ "Decoded as: " ++ show msg
+                                                sync $ transmit ch (Just msg)
                                                 lp ch
-        conv :: B.ByteString -> Int
-        conv bs = b4 + (256 * b3) + (256 * 256 * b2) + (256 * 256 * 256 * b1)
-            where [b1,b2,b3,b4] = map fromIntegral $ B.unpack bs
-
+        conv :: B.ByteString -> IO Word32
+        conv bs = case runParser (getWord32be) bs of
+                    Left _ -> do logMsg logC "Incorrent length in receiver, dying!"
+                                 undefined
+                    Right i -> return i
 
 data State = MkState { inCh :: Channel (Maybe Message),
                        outCh :: Channel Message,
