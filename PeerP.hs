@@ -97,8 +97,10 @@ peerP pMgrC fsC logC h = do
     outBound <- sendP h
     inBound  <- receiverP logC h
     (putC, getC) <- OMBox.new
+    logMsg logC "Spawning Peer process"
     spawn $ do
       tid <- myThreadId
+      logMsg logC "Syncing a connect Back"
       sync $ transmit pMgrC $ Connect tid putC
       lp MkState { inCh = inBound,
                                 outCh = outBound,

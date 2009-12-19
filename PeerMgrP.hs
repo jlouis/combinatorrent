@@ -26,7 +26,8 @@ start :: Channel [Peer] -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO 
 start ch pid ih fsC logC = do mgrC <- channel
                               spawn $ lp (MkState ch [] mgrC M.empty pid ih fsC logC )
                               return ()
-  where lp s = (sync $ choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
+  where lp s = do logMsg logC "Looping PeerMgr"
+                  (sync $ choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
         trackerPeers s = wrap (receive (peerCh s) (const True))
                            (\ps ->
                                 do logMsg (logCh s) "Adding peers to queue"
