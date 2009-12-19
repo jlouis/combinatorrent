@@ -94,7 +94,7 @@ encode m = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
 
 -- | Protocol handshake code. This encodes the protocol handshake part
 protocolHandshake :: B.ByteString
-protocolHandshake = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
+protocolHandshake = toLazyByteString $ mconcat [putWord8 $ fromIntegral sz,
                                                 putString protocolHeader,
                                                 putWord64be caps]
   where caps = extensionBasis
