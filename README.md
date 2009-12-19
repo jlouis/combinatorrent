@@ -42,5 +42,6 @@ wish-list.
     * Write an ETA estimator
     * Implement a creator for torrent files
     * Implement a scraper on trackers
-    
+    * If we get a wrong URI, the code currently deadlocks since the tracker
+      dies. Handle this problem gracefully.
 
