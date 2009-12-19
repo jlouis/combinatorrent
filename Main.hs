@@ -13,7 +13,7 @@ import qualified BCode
 import qualified ConsoleP
 import FS
 import qualified FSP
-import qualified PeerMgrP()
+import qualified PeerMgrP
 import qualified StatusP
 import qualified TimerP()
 import Torrent
@@ -34,13 +34,15 @@ main = do
                    putStrLn "Created channels"
                    logC <- ConsoleP.start waitCh
                    putStrLn "Started logger"
-                   _ <- FSP.start h pieceMap
+                   -- The fst of the following is for writing data
+                   (_, fspC) <- FSP.start h pieceMap
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
                    let pid = mkPeerId gen
                    let ti = fromJust $ mkTorrentInfo bc
                    putStrLn "Created various data"
+                   PeerMgrP.start pmC pid (infoHash ti) fspC logC
                    StatusP.start logC 10000 StatusP.Leeching statusC ciC
                    putStrLn "Started Status Process"
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
