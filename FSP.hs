@@ -36,6 +36,7 @@ import System.IO
 
 import qualified Data.ByteString.Lazy as B
 
+import ConsoleP
 import Torrent
 import qualified FS
 import WireProtocol
@@ -53,12 +54,13 @@ data State = State {
 
 
 
-start :: Handle -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
-                                      Channel (FSPMsg, Channel B.ByteString))
-start handle pm = do wc  <- channel
-                     rpcc <- channel
-                     spawn $ lp $ State wc rpcc handle pm
-                     return (wc, rpcc)
+start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
+                                                    Channel (FSPMsg, Channel B.ByteString))
+start handle logC pm =
+    do wc  <- channel
+       rpcc <- channel
+       spawn $ lp $ State wc rpcc handle pm
+       return (wc, rpcc)
   where lp s = do s' <- sync $ choose [writeEvent s, readEvent s]
                   lp s'
         writeEvent s = wrap (receive (writeC s) (const True))
@@ -68,8 +70,13 @@ start handle pm = do wc  <- channel
         readEvent s  = wrap (receive (rpcC s) (const True))
                          (\(msg, c) ->
                               do bs <- case msg of
-                                         ReadPiece pn -> FS.readPiece pn (fileHandle s) (pieceMap s)
-                                         ReadBlock pn os sz -> FS.readBlock pn os sz (fileHandle s) (pieceMap s)
+                                         ReadPiece pn -> do
+                                                  logMsg logC $ "Reading piece #" ++ show pn
+                                                  FS.readPiece pn (fileHandle s) (pieceMap s)
+                                         ReadBlock pn os sz -> do
+                                                  logMsg logC $ "Reading block #" ++ show pn
+                                                                  ++ "(" ++ show os ++ ", " ++ show sz ++ ")"
+                                                  FS.readBlock pn os sz (fileHandle s) (pieceMap s)
                                  sync $ transmit c bs
                                  return s)
 

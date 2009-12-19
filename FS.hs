@@ -101,7 +101,7 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       return $ M.fromList $ zip [1..] $ extract pLen tLen 0 pieceData
+                       return $ M.fromList $ zip [0..] $ extract pLen tLen 0 pieceData
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _  0  _  [] = []
         extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,

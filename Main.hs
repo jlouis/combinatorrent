@@ -35,13 +35,13 @@ main = do
                    logC <- ConsoleP.start waitCh
                    putStrLn "Started logger"
                    -- The fst of the following is for writing data
-                   (_, fspC) <- FSP.start h pieceMap
+                   (_, fspC) <- FSP.start h logC pieceMap
                    ciC  <- channel
                    pmC <- channel
                    gen <- getStdGen
                    let pid = mkPeerId gen
                    let ti = fromJust $ mkTorrentInfo bc
-                   putStrLn "Created various data"
+                   putStrLn $ "Created various data, pieceCount is " ++ show (pieceCount ti)
                    PeerMgrP.start pmC pid (infoHash ti) fspC logC (pieceCount ti)
                    StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
                    putStrLn "Started Status Process"
