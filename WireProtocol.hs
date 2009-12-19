@@ -131,6 +131,7 @@ initiateHandshake :: LogChannel ->
 initiateHandshake logC handle peerid infohash = do
     logMsg logC "Sending off handshake message"
     B.hPut handle msg
+    hFlush handle
     logMsg logC "Receiving handshake from other end"
     receiveHeader handle sz infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
