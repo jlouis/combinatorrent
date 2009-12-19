@@ -141,7 +141,10 @@ pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                    url <- return $ buildRequestUrl s upDownLeft
                    logMsg (logCh s) $ "Request URL: " ++ url
-                   resp <- trackerRequest (logCh s) url
+                   uri <- case parseURI url of
+                            Nothing -> do fail ("Argh, could not parse the URL")
+                            Just u -> return u
+                   resp <- trackerRequest (logCh s) uri
                    case resp of
                      Left err -> do ConsoleP.logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
@@ -198,8 +201,8 @@ decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeI
         port = PortNumber $ fromIntegral $ ord p1 * 256 + ord p2
 decodeIps _ = undefined -- Quench all other cases
 
-trackerRequest :: LogChannel -> String -> IO (Either String TrackerResponse)
-trackerRequest logC url =
+trackerRequest :: LogChannel -> URI -> IO (Either String TrackerResponse)
+trackerRequest logC uri =
     do resp <- simpleHTTP request
        case resp of
          Left x -> return $ Left ("Error connecting: " ++ show x)
@@ -213,13 +216,12 @@ trackerRequest logC url =
                (3,_,_) ->
                    case findHeader HdrLocation r of
                      Nothing -> return $ Left (show r)
-                     Just newUrl -> trackerRequest logC newUrl
+                     Just newUrl -> trackerRequest logC (fromJust $ parseURI newUrl)
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
                            rqHeaders = [],
                            rqBody = ""}
-        uri = fromJust $ parseURI url
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> StatusP.State -> String
