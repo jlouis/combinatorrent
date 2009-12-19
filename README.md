@@ -49,3 +49,24 @@ wish-list.
     * Cleanup the BCode module, while keeping the interface somewhat
       stable. The code is an utter mess as it stands right now.
 
+
+Odd bugs
+--------
+
+Here is one we need to figure out. My guess is signedness somewhere
+when doing conversions. The solution is to use the right types I guess
+
+    jlouis@illithid:~/Projects/haskell-torrent$ ./Main testfile.txt.torrent 
+    Created channels
+    Started logger
+    Created various data
+    Started Status Process
+    Looping PeerMgr
+    Started Tracker Process
+    Timer in 2 seconds
+    Got Tracker Event
+    Sending event to Tracker
+    Main: Numeric.showIntAtBase: applied to negative number -2000450983540949075
+    Main: Numeric.showIntAtBase: applied to negative number -2000450983540949075
+
+
