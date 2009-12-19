@@ -43,7 +43,7 @@ main = do
                    let ti = fromJust $ mkTorrentInfo bc
                    putStrLn "Created various data"
                    PeerMgrP.start pmC pid (infoHash ti) fspC logC
-                   StatusP.start logC 10000 StatusP.Leeching statusC ciC
+                   StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
                    putStrLn "Started Status Process"
                    TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
                    putStrLn "Started Tracker Process"
