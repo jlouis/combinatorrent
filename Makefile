@@ -1,5 +1,5 @@
 all:
-	ghc -Wall --make *.hs
+	ghc -Wall --make -threaded *.hs
 
 hlint:
 	hlint *.hs
