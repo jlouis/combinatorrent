@@ -124,7 +124,9 @@ searchStr :: String -> BCode -> Maybe String
 searchStr = search'
 
 searchInt :: String -> BCode -> Maybe Integer
-searchInt str = fmap read . search' str
+searchInt str b = case search [PString str] b of
+                    Just (BInt i) -> Just i
+                    _ -> Nothing
 
 searchInfo :: String -> BCode -> Maybe BCode
 searchInfo str = search [PString "info", PString str]
