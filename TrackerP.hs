@@ -252,4 +252,7 @@ rfc1738Encode = concatMap (\c -> if unreserved c then [c] else encode c)
           -- I killed ~ from this list as the Mainline client doesn't announce it - jlouis
           chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_./"
           encode :: Char -> String
-          encode c = '%' : (showHex . ord $ c) ""
+          encode c = '%' : pHex c
+          pHex c =
+              let p = (showHex . ord $ c) ""
+              in if length p == 1 then '0' : p else p
