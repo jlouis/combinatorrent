@@ -22,12 +22,12 @@ the same thing. Feel free to add anything to the list as well. It
 partially acts like a bug tracker at the moment in addition to being a
 wish-list.
 
-    * Sprinkle the Peer code with debug messaging.
     * Change the sender Queue into having two queues, one for short
       messages and one for long messages.
-    * hFlush on the sender queue in the sender process, naively
-    * hFlush on the sender queue in the sender process, intelligently
-      (when we can naively)
+    * hFlush on the sender queue in the sender process, intelligently.
+      There is no reason to flush the queue before we are fairly sure
+      we got all the small messages into it. It is dependent on the
+      above part.
     * Optimize reading of blocks by moving it to the sender Process in
       The Peer Process
     * Make the system into a seeding client
