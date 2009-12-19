@@ -126,8 +126,8 @@ start ti pid port logC sc cic msgC pc =
                           trackerMsgC = msgC,
                           peerChan = pc }
        -- Install a timer which triggers in 5 seconds
-       TimerP.register 2 (TrackerTick 0) msgC
-       logMsg logC "Timer in 2 seconds"
+       TimerP.register 1 (TrackerTick 0) msgC
+       logMsg logC "Timer in 1 seconds"
        return ()
   where lp s = loop s >>= lp
 
