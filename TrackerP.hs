@@ -38,6 +38,7 @@
 module TrackerP
 where
 
+import Control.Applicative
 import Control.Concurrent.CML
 
 import qualified Data.ByteString.Lazy as B
@@ -91,6 +92,7 @@ data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                                     incompleteR :: Integer,
                                     timeoutInterval :: Integer,
                                     timeoutMinInterval :: Integer }
+                     | ResponseDecodeError String
                      | ResponseWarning String
                      | ResponseError String
 
@@ -178,14 +180,15 @@ processResultDict d =
       Just err -> ResponseError err
       Nothing -> case BCode.trackerWarning d of
                    Just warn -> ResponseWarning warn
-                   Nothing -> decodeOk
+                   Nothing -> case decodeOk of
+                                Nothing -> ResponseDecodeError "Could not decode response properly"
+                                Just rok -> rok
   where decodeOk =
-            ResponseOk peers complete incomplete interval min_interval
-        complete = fromJust $ BCode.trackerComplete d
-        incomplete = fromJust $ BCode.trackerIncomplete d
-        interval = fromJust $ BCode.trackerInterval d
-        min_interval = fromJust $ BCode.trackerMinInterval d
-        peers = decodeIps $ fromJust $ BCode.trackerPeers d
+            ResponseOk <$> (decodeIps <$> BCode.trackerPeers d)
+                       <*> BCode.trackerComplete d
+                       <*> BCode.trackerIncomplete d
+                       <*> BCode.trackerInterval d
+                       <*> BCode.trackerMinInterval d
 
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps :: String -> [PeerMgrP.Peer]
