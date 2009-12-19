@@ -97,5 +97,5 @@ mkPeerId gen = header ++ (take (20 - length header) ranString)
   where randomList :: Int -> StdGen -> [Int]
         randomList n = take n . unfoldr (Just . random)
         rs = randomList 10 gen
-        ranString = concatMap (\i -> showHex i "") rs
+        ranString = concatMap (\i -> showHex (abs i) "") rs
         header = "-HT" ++ haskellTorrentVersion ++ "-"
