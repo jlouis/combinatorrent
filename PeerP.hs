@@ -110,7 +110,7 @@ peerP pMgrC fsC logC nPieces h = do
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
       sync $ transmit pMgrC $ Connect tid putC
-      sync $ transmit outBound $ BitField (constructBitField nPieces [1..nPieces])
+      sync $ transmit outBound $ BitField (constructBitField [0..nPieces-1])
       lp MkState { inCh = inBound,
                                 outCh = outBound,
                                 logCh = logC,
@@ -161,17 +161,20 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . B.unpack
             let dBit n = if testBit w n
                            then Just (n+soFar)
                            else Nothing
-            in fmap dBit [1..8]
+            in fmap dBit [0..7]
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
-constructBitField :: Integer -> [PieceNum] -> B.ByteString
-constructBitField sz pieces = B.pack . build $ map (`elem` pieces) [1..sz+pad]
-    where pad = 8 - (sz `mod` 8)
+constructBitField :: [PieceNum] -> B.ByteString
+constructBitField pieces = B.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
+    where sz = fromIntegral (length pieces)
+          pad = 8 - (sz `mod` 8)
           build [] = []
           build l  = let (first, rest) = splitAt 8 l
-                     in bytify first : build rest
-          bytify bl = foldl bitSetter 0 $ zip [1..] bl
+                     in if length first /= 8
+                          then error "Wrong bitfield"
+                          else bytify first : build rest
+          bytify bl = foldl bitSetter 0 $ zip [7,6..] bl
           bitSetter :: Word8 -> (Integer, Bool) -> Word8
           bitSetter w (_pos, False) = w
           bitSetter w (pos, True)  = setBit w (fromInteger pos)
