@@ -114,7 +114,7 @@ receiveHeader h ih =
                protoString <- getString protocolHeaderSize
                when (protoString /= protocolHeader) $ fail "Wrong protocol header"
                caps <- getWord64be
-               ihR   <- getString 20
+               ihR   <- getLazyByteString 20
                when (ihR /= ih) $ fail "Wrong InfoHash"
                pid <- getLazyByteString 20
                return (decodeCapabilities caps, pid)
@@ -130,7 +130,7 @@ initiateHandshake :: Handle -> PeerId -> InfoHash -> IO (Either String ([Capabil
 initiateHandshake handle peerid infohash = do B.hPut handle msg
                                               receiveHeader handle infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
-                                          putString infohash,
+                                          fromLazyByteString infohash,
                                           putString peerid]
 
 -- TESTS

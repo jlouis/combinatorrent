@@ -59,11 +59,11 @@ encodeBS :: BCode -> B.ByteString
 encodeBS = B.pack . map (fromIntegral . ord) . encode
 
 -- | Return the hash of the info-dict in a torrent file
-hashInfoDict :: BCode -> Maybe String
+hashInfoDict :: BCode -> Maybe B.ByteString
 hashInfoDict bc =
     do ih <- info bc
        let encoded = encodeBS ih
-       return $ showDigest $ sha1 encoded
+       return $ bytestringDigest $ sha1 encoded
 
 parseInt :: GenParser Char st BCode
 parseInt = do

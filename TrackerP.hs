@@ -40,7 +40,8 @@ where
 
 import Control.Concurrent.CML
 
-import Data.Char (ord)
+import qualified Data.ByteString.Lazy as B
+import Data.Char (ord, chr)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX
@@ -223,7 +224,7 @@ buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
-          headers = [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
+          headers = [("info_hash", rfc1738Encode $ unpackInfoHash s),
                      ("peer_id",   rfc1738Encode $ peerId s),
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
@@ -231,6 +232,8 @@ buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
                      ("port", show $ prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
+          unpackInfoHash = dec . B.unpack . infoHash . torrentInfo
+          dec = map (chr . fromIntegral)
           prt :: Integer
           prt = case localPort s of
                   PortNumber pnum -> fromIntegral pnum

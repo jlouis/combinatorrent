@@ -52,7 +52,7 @@ import BCode
 
 -- | The type of Infohashes as used in torrents. These are identifiers
 --   of torrents
-type InfoHash = String
+type InfoHash = B.ByteString
 
 -- | The peerId is the ID of a client. It is used to identify clients
 --   from each other
