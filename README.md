@@ -23,6 +23,11 @@ partially acts like a bug tracker at the moment in addition to being a
 wish-list.
 
     * Sprinkle the Peer code with debug messaging.
+    * Change the sender Queue into having two queues, one for short
+      messages and one for long messages.
+    * hFlush on the sender queue in the sender process, naively
+    * hFlush on the sender queue in the sender process, intelligently
+      (when we can naively)
     * Optimize reading of blocks by moving it to the sender Process in
       The Peer Process
     * Make the system into a seeding client
@@ -56,7 +61,7 @@ Odd bugs
 Here is one we need to figure out. My guess is signedness somewhere
 when doing conversions. The solution is to use the right types I guess
 
-    jlouis@illithid:~/Projects/haskell-torrent$ ./Main testfile.txt.torrent 
+    jlouis@illithid:~/Projects/haskell-torrent$ ./Main testfile.txt.torrent
     Created channels
     Started logger
     Created various data
