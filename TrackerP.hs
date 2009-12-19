@@ -113,7 +113,7 @@ start ti pid port logC sc cic msgC pc =
     do tm <- getPOSIXTime
        spawn $ lp State { torrentInfo = ti,
                             peerId = pid,
-                            state = Stopped,
+                            state = Started,
                             localPort = port,
                             logCh = logC,
                             statusC = sc,
@@ -224,7 +224,7 @@ buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]
           headers = [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
-                     ("peer_id", rfc1738Encode $ peerId s),
+                     ("peer_id",   rfc1738Encode $ peerId s),
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
                      ("left", show $ StatusP.left ss),
