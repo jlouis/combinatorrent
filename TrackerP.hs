@@ -115,16 +115,16 @@ start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
 start ti pid port logC sc cic msgC pc =
     do tm <- getPOSIXTime
        spawn $ lp State { torrentInfo = ti,
-                            peerId = pid,
-                            state = Started,
-                            localPort = port,
-                            logCh = logC,
-                            statusC = sc,
-                            completeIncompleteC = cic,
-                            nextContactTime = tm,
-                            nextTick = 0,
-                            trackerMsgC = msgC,
-                            peerChan = pc }
+                          peerId = pid,
+                          state = Started,
+                          localPort = port,
+                          logCh = logC,
+                          statusC = sc,
+                          completeIncompleteC = cic,
+                          nextContactTime = tm,
+                          nextTick = 0,
+                          trackerMsgC = msgC,
+                          peerChan = pc }
        -- Install a timer which triggers in 5 seconds
        TimerP.register 2 (TrackerTick 0) msgC
        logMsg logC "Timer in 2 seconds"
@@ -153,6 +153,9 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseError err) ->
                          do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ err)
+                            timerUpdate s failTimerInterval failTimerInterval
+                     Right (ResponseDecodeError err) ->
+                         do ConsoleP.logMsg (logCh s) ("Response Decode error: " ++ err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
