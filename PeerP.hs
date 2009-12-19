@@ -149,7 +149,7 @@ peerP pMgrC fsC logC h = do
                                               Cancel _ _ _ -> return s -- Silently ignore these
                                               Port _ -> return s -- No DHT Yet, silently ignore
                                   Nothing -> do logMsg (logCh s) "Unknown message"
-                                                undefined-- TODO: Kill off gracefully
+                                                undefined -- TODO: Kill off gracefully
                            )
 
 createPeerPieces :: B.ByteString -> [PieceNum]
