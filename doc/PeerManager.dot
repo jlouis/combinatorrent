@@ -10,8 +10,18 @@ digraph {
 	label = "PeerManager FlowChart";
 
 
+	// External communication
+	{ rank=same;
+	  peer [label="Peer", shape=ellipse,color=deepskyblue4];
+	  loop [label="Loop/Sync"];
+        }
+
+	peer -> grab [style=dotted,color=deepskyblue4];
+	trackb -> peer [style=dotted,color=deepskyblue4];
+	peer -> blockc [style=dotted,color=deepskyblue4];
+
 	node [shape=box];
-	loop [label="Loop/Sync"];
+
 	grab [label="Grab N blocks"];
 	findp [label="Find Piece"];
 	addb [label="Add blocks"];
@@ -24,7 +34,7 @@ digraph {
 	markc  [label="Mark Piece\ncomplete"];
 	putbackp [label="Putback Piece"];
 
-	loop -> blockc [style=dashed];
+	loop -> blockc;
 	blockc -> storeb;
 	storeb -> pieced;
 	pieced -> loop [label="No"];
@@ -34,7 +44,7 @@ digraph {
 	checkp -> putbackp [label="Fail"];
 	putbackp -> loop;
 
-	loop -> grab [style=dashed];
+	loop -> grab;
 	grab -> findp [label="Eligible Pieces"];
 	findp -> addb;
 	findp -> trackb [label="Exhausted"];
