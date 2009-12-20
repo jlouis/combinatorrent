@@ -31,8 +31,11 @@ module Torrent (InfoHash,
                 AnnounceURL,
                 TorrentInfo(..),
                 PieceNum,
+                PieceSize,
                 MissingMap,
                 PieceInfo(..),
+                BlockSize,
+                defaultBlockSize,
                 haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
@@ -67,7 +70,10 @@ data TorrentInfo = TorrentInfo {
       pieceCount :: Integer, -- Number of pieces in torrent
       announceURL :: AnnounceURL } deriving Show
 
+-- PIECES
+----------------------------------------------------------------------
 type PieceNum = Integer
+type PieceSize = Int
 
 data PieceInfo = PieceInfo {
       offset :: Integer,
@@ -75,6 +81,14 @@ data PieceInfo = PieceInfo {
       digest :: B.ByteString } deriving (Eq, Show)
 
 type MissingMap = M.Map Integer Bool
+
+-- BLOCKS
+----------------------------------------------------------------------
+type BlockSize = Int
+
+defaultBlockSize :: Int
+defaultBlockSize = 16384 -- Bytes
+
 
 -- | Default port to communicate on
 haskellTorrentPort :: PortID
