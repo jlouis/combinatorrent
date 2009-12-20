@@ -71,14 +71,12 @@ decodeMsg =
          3 -> return NotInterested
          4 -> Have     <$> gw32
          5 -> BitField <$> getRemainingLazyByteString
-         6 -> Request  <$> gw32 <*> (Block <$> gw32' <*> gw32')
-         7 -> Piece    <$> gw32 <*> gw32' <*> getRemainingLazyByteString
-         8 -> Cancel   <$> gw32 <*> (Block <$> gw32' <*> gw32')
+         6 -> Request  <$> gw32 <*> (Block <$> gw32 <*> gw32)
+         7 -> Piece    <$> gw32 <*> gw32 <*> getRemainingLazyByteString
+         8 -> Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32)
          9 -> Port     <$> (fromIntegral <$> getWord16be)
          _ -> fail "Incorrect message parse"
   where gw32 = fromIntegral <$> getWord32be
-        gw32' = fromIntegral <$> getWord32be
-
 
 -- | encode a message for transmit on a socket
 encode :: Message -> B.ByteString
