@@ -18,7 +18,6 @@ import Torrent
 
 type BitField = B.ByteString
 
-type PieceOffset = Int
 type PieceLength = Int
 data Message = KeepAlive
              | Choke
@@ -28,7 +27,7 @@ data Message = KeepAlive
              | Have PieceNum
              | BitField BitField
              | Request PieceNum Block
-             | Piece PieceNum PieceOffset B.ByteString
+             | Piece PieceNum Int B.ByteString
              | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
@@ -51,14 +50,14 @@ encodeMsg Choke           = singleton 0
 encodeMsg Unchoke         = singleton 1
 encodeMsg Interested      = singleton 2
 encodeMsg NotInterested   = singleton 3
-encodeMsg (Have pn)       = mconcat [singleton 4, putWord32be . fromInteger $ pn]
+encodeMsg (Have pn)       = mconcat [singleton 4, putWord32be . fromIntegral $ pn]
 encodeMsg (BitField bf)   = mconcat [singleton 5, fromLazyByteString bf]
-encodeMsg (Request pn (Block os sz)) = mconcat [singleton 6, putWord32be . fromInteger $ pn,
+encodeMsg (Request pn (Block os sz)) = mconcat [singleton 6, putWord32be . fromIntegral $ pn,
                                                 putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
-encodeMsg (Piece pn os c) = mconcat [singleton 7, putWord32be . fromInteger $ pn,
+encodeMsg (Piece pn os c) = mconcat [singleton 7, putWord32be . fromIntegral $ pn,
                                      putWord32be . fromIntegral $ os,
                                      fromLazyByteString c]
-encodeMsg (Cancel pn (Block os sz))  = mconcat [singleton 8, putWord32be . fromInteger $ pn,
+encodeMsg (Cancel pn (Block os sz))  = mconcat [singleton 8, putWord32be . fromIntegral $ pn,
                                                 putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
 encodeMsg (Port p)        = mconcat [singleton 9, putWord16be . fromInteger $ p]
 

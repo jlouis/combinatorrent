@@ -100,7 +100,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        peerPieces :: [PieceNum]}
 
 -- TODO: The PeerP should always attempt to move the BitField first
-peerP :: MgrChannel -> FSPChannel -> LogChannel -> Integer -> Handle -> IO ()
+peerP :: MgrChannel -> FSPChannel -> LogChannel -> Int -> Handle -> IO ()
 peerP pMgrC fsC logC nPieces h = do
     outBound <- sendP logC h
     inBound  <- receiverP logC h
@@ -184,7 +184,7 @@ showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
 
 connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
-        -> MgrChannel -> Integer
+        -> MgrChannel -> Int
         -> IO ()
 connect host port pid ih fsC logC mgrC nPieces = spawn connector >> return ()
   where connector =

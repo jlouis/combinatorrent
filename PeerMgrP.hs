@@ -22,7 +22,7 @@ data State = MkState { peerCh :: Channel [Peer],
                        fsCh :: FSPChannel,
                        logCh :: LogChannel }
 
-start :: Channel [Peer] -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> Integer -> IO ()
+start :: Channel [Peer] -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> Int -> IO ()
 start ch pid ih fsC logC nPieces =
     do mgrC <- channel
        spawn $ lp (MkState ch [] mgrC M.empty pid ih fsC logC )

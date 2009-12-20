@@ -67,13 +67,13 @@ type AnnounceURL = String
 
 -- | Internal type for a torrent. It identifies a torrent in various places of the system.
 data TorrentInfo = TorrentInfo {
-      infoHash :: InfoHash,
-      pieceCount :: Integer, -- Number of pieces in torrent
+      infoHash    :: InfoHash,
+      pieceCount  :: Int, -- Number of pieces in torrent
       announceURL :: AnnounceURL } deriving Show
 
 -- PIECES
 ----------------------------------------------------------------------
-type PieceNum = Integer
+type PieceNum = Int
 type PieceSize = Int
 
 data PieceInfo = PieceInfo {
@@ -81,7 +81,7 @@ data PieceInfo = PieceInfo {
       len :: Integer,
       digest :: B.ByteString } deriving (Eq, Show)
 
-type MissingMap = M.Map Integer Bool
+type MissingMap = M.Map PieceNum Bool
 
 -- BLOCKS
 ----------------------------------------------------------------------

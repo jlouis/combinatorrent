@@ -178,8 +178,8 @@ infoPieces b = do t <- searchInfo "pieces" b
                         | otherwise = block : sha1Split rest
                             where (block, rest) = B.splitAt 20 r
 
-numberPieces :: BCode -> Maybe Integer
-numberPieces = fmap (fromIntegral . length) . infoPieces
+numberPieces :: BCode -> Maybe Int
+numberPieces = fmap length . infoPieces
 
 pp :: BCode -> Doc
 pp bc =

@@ -100,7 +100,7 @@ checkFile :: Handle -> PieceMap -> IO MissingMap
 checkFile handle pm = do l <- mapM checkP pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
-          checkP :: (Integer, PieceInfo) -> IO (Integer, Bool)
+          checkP :: (PieceNum, PieceInfo) -> IO (PieceNum, Bool)
           checkP (pn, pInfo) = do b <- checkPiece handle pInfo
                                   return (pn, b)
 
