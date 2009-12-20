@@ -39,22 +39,21 @@ import qualified Data.ByteString.Lazy as B
 import ConsoleP
 import Torrent
 import qualified FS
-import WireProtocol
 
 data FSPMsg = ReadPiece PieceNum
-            | ReadBlock PieceNum PieceOffset PieceLength
+            | ReadBlock PieceNum Block
 
 type FSPChannel = Channel (FSPMsg, Channel B.ByteString)
 
 data State = State {
-      writeC :: Channel (PieceNum, B.ByteString),
+      writeC :: Channel (PieceNum, Block, B.ByteString),
       rpcC :: FSPChannel,
       fileHandle :: Handle,
       pieceMap :: FS.PieceMap}
 
 
 
-start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, B.ByteString),
+start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, Block, B.ByteString),
                                                     Channel (FSPMsg, Channel B.ByteString))
 start handle logC pm =
     do wc  <- channel
@@ -64,8 +63,8 @@ start handle logC pm =
   where lp s = do s' <- sync $ choose [writeEvent s, readEvent s]
                   lp s'
         writeEvent s = wrap (receive (writeC s) (const True))
-                         (\(pn, bs) ->
-                           do FS.writePiece pn (fileHandle s) (pieceMap s) bs
+                         (\(pn, blk, bs) ->
+                           do FS.writeBlock (fileHandle s) pn blk (pieceMap s) bs
                               return s)
         readEvent s  = wrap (receive (rpcC s) (const True))
                          (\(msg, c) ->
@@ -73,12 +72,12 @@ start handle logC pm =
                                          ReadPiece pn -> do
                                                   logMsg logC $ "Reading piece #" ++ show pn
                                                   FS.readPiece pn (fileHandle s) (pieceMap s)
-                                         ReadBlock pn os sz -> do
+                                         ReadBlock pn blk -> do
                                                   logMsg logC $ "Reading block #" ++ show pn
-                                                                  ++ "(" ++ show os ++ ", " ++ show sz ++ ")"
-                                                  FS.readBlock pn os sz (fileHandle s) (pieceMap s)
+                                                                  ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
+                                                  FS.readBlock pn blk (fileHandle s) (pieceMap s)
                                  sync $ transmit c bs
                                  return s)
 
-readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> PieceOffset -> PieceLength -> IO ()
-readBlock fspc c pn os sz = sync $ transmit fspc (ReadBlock pn os sz, c)
+readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> Block -> IO ()
+readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)

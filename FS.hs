@@ -30,7 +30,7 @@ module FS (PieceInfo(..),
            PieceMap,
            readPiece,
            readBlock,
-           writePiece,
+           writeBlock,
            mkPieceMap,
            checkFile,
            openAndCheckFile,
@@ -46,7 +46,6 @@ import System.IO
 
 import BCode
 import Torrent
-import WireProtocol
 
 type PieceMap = M.Map PieceNum PieceInfo
 
@@ -65,12 +64,13 @@ readPiece pn handle mp =
           then return bs
           else fail "FS: Wrong number of bytes read"
 
-readBlock :: PieceNum -> PieceOffset -> PieceLength -> Handle -> PieceMap -> IO B.ByteString
-readBlock pn os sz handle mp =
+readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
+readBlock pn blk handle mp =
     do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo + fromIntegral os)
-       B.hGet handle (fromInteger sz)
+       hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
+       B.hGet handle (blockSize blk)
 
+{-
 writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
 writePiece pn handle mp bs =
     do pInfo <- pInfoLookup pn mp
@@ -79,20 +79,30 @@ writePiece pn handle mp bs =
          else do hSeek handle AbsoluteSeek (offset pInfo)
                  B.hPut handle bs -- Will always get the right size due to SHA the digest
                  return $ Right ()
+-}
+
+writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO (Either String ())
+writeBlock = undefined
+
+-- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
+--   the piece described by @inf@ is correct inside the file pointed to by @h@.
+checkPiece :: Handle -> PieceInfo -> IO Bool
+checkPiece h inf = do
+  hSeek h AbsoluteSeek (offset inf)
+  bs <- B.hGet h (fromInteger . len $ inf)
+  return $ (bytestringDigest . sha1) bs == digest inf
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
 --   in the file as a missing map. We could alternatively choose a list of pieces missing rather
 --   then creating the data structure here. This is perhaps better in the long run.
 checkFile :: Handle -> PieceMap -> IO MissingMap
-checkFile handle pm = do l <- mapM checkPiece pieces
+checkFile handle pm = do l <- mapM checkP pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
-          checkPiece :: (Integer, PieceInfo) -> IO (Integer, Bool)
-          checkPiece (pn, pInfo) =
-              do hSeek handle AbsoluteSeek (offset pInfo) -- We assume this seek is good.
-                 bs <- B.hGet handle (fromInteger . len $ pInfo)
-                 return (pn, (bytestringDigest . sha1) bs == digest pInfo)
+          checkP :: (Integer, PieceInfo) -> IO (Integer, Bool)
+          checkP (pn, pInfo) = do b <- checkPiece handle pInfo
+                                  return (pn, b)
 
 -- | Extract the PieceMap from a bcoded structure
 --   Needs some more defense in the long run.

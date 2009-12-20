@@ -1,6 +1,7 @@
 module PieceMgrP
 where
 
+import Data.List
 
 import ConsoleP
 import Torrent
@@ -10,11 +11,6 @@ start = undefined
 
 
 ----------------------------------------------------------------------
-
-
-data Block = Block { blockOffset :: Int, -- ^ offset of this block within the piece
-                     blockSize   :: Int  -- ^ size of this block within the piece
-                   }
 
 data PieceDB = PieceDB { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
                        , inProgressPiece  :: [(PieceNum, [Block])] -- ^ Pieces in progress of being downloaded
@@ -40,3 +36,13 @@ grabBlocks = undefined
 --   peer as his share of blocks are to be added back for downloading.
 putBlock :: [(PieceNum, [Block])] -> PieceDB -> PieceDB
 putBlock = undefined
+
+
+-- | Mark a Piece as done
+pieceDone :: PieceNum -> PieceDB -> PieceDB
+pieceDone pn db = db { donePiece = pn : (donePiece db),
+                       inProgressPiece = ipp }
+  where ipp = deleteBy eq (pn, []) (inProgressPiece db)
+        eq (x, _) (y, _) = x == y
+
+

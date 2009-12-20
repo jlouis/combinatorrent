@@ -18,8 +18,8 @@ import Torrent
 
 type BitField = B.ByteString
 
-type PieceOffset = Integer
-type PieceLength = Integer
+type PieceOffset = Int
+type PieceLength = Int
 data Message = KeepAlive
              | Choke
              | Unchoke
@@ -27,9 +27,9 @@ data Message = KeepAlive
              | NotInterested
              | Have PieceNum
              | BitField BitField
-             | Request PieceNum PieceOffset PieceLength
+             | Request PieceNum Block
              | Piece PieceNum PieceOffset B.ByteString
-             | Cancel PieceNum PieceOffset PieceLength
+             | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
 
@@ -44,10 +44,6 @@ extensionBasis = 0
 extensionFast :: Word64
 extensionFast = 4
 
-putPieceInfo :: PieceOffset -> PieceLength -> Builder
-putPieceInfo os sz = mconcat [pw os, pw sz]
-  where pw = putWord32be . fromInteger
-
 -- Seriously consider HCodecs as a dependency
 encodeMsg :: Message -> Builder
 encodeMsg KeepAlive       = empty
@@ -57,13 +53,13 @@ encodeMsg Interested      = singleton 2
 encodeMsg NotInterested   = singleton 3
 encodeMsg (Have pn)       = mconcat [singleton 4, putWord32be . fromInteger $ pn]
 encodeMsg (BitField bf)   = mconcat [singleton 5, fromLazyByteString bf]
-encodeMsg (Request pn os sz) = mconcat [singleton 6, putWord32be . fromInteger $ pn,
-                                        putPieceInfo os sz]
+encodeMsg (Request pn (Block os sz)) = mconcat [singleton 6, putWord32be . fromInteger $ pn,
+                                                putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
 encodeMsg (Piece pn os c) = mconcat [singleton 7, putWord32be . fromInteger $ pn,
-                                     putWord32be . fromInteger $ os,
+                                     putWord32be . fromIntegral $ os,
                                      fromLazyByteString c]
-encodeMsg (Cancel pn os sz)  = mconcat [singleton 8, putWord32be . fromInteger $ pn,
-                                        putPieceInfo os sz]
+encodeMsg (Cancel pn (Block os sz))  = mconcat [singleton 8, putWord32be . fromInteger $ pn,
+                                                putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
 encodeMsg (Port p)        = mconcat [singleton 9, putWord16be . fromInteger $ p]
 
 decodeMsg :: Parser Message
@@ -76,12 +72,13 @@ decodeMsg =
          3 -> return NotInterested
          4 -> Have     <$> gw32
          5 -> BitField <$> getRemainingLazyByteString
-         6 -> Request  <$> gw32 <*> gw32 <*> gw32
-         7 -> Piece    <$> gw32 <*> gw32 <*> getRemainingLazyByteString
-         8 -> Cancel   <$> gw32 <*> gw32 <*> gw32
+         6 -> Request  <$> gw32 <*> (Block <$> gw32' <*> gw32')
+         7 -> Piece    <$> gw32 <*> gw32' <*> getRemainingLazyByteString
+         8 -> Cancel   <$> gw32 <*> (Block <$> gw32' <*> gw32')
          9 -> Port     <$> (fromIntegral <$> getWord16be)
          _ -> fail "Incorrect message parse"
   where gw32 = fromIntegral <$> getWord32be
+        gw32' = fromIntegral <$> getWord32be
 
 
 -- | encode a message for transmit on a socket

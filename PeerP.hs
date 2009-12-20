@@ -141,14 +141,14 @@ peerP pMgrC fsC logC nPieces h = do
                                                   case peerPieces s of
                                                     [] -> return s { peerPieces = createPeerPieces bf }
                                                     _  -> undefined -- TODO: Kill off gracefully
-                                              Request pn os sz ->
+                                              Request pn blk ->
                                                    do c <- channel
-                                                      readBlock (fsCh s) c pn os sz -- Push this down in the Send Process
+                                                      readBlock (fsCh s) c pn blk -- Push this down in the Send Process
                                                       bs <- sync $ receive c (const True)
-                                                      sync $ transmit (outCh s) (Piece pn os bs)
+                                                      sync $ transmit (outCh s) (Piece pn (blockOffset blk) bs)
                                                       return s
                                               Piece _ _ _ -> return s -- Silently ignore these
-                                              Cancel _ _ _ -> return s -- Silently ignore these
+                                              Cancel _ _ -> return s -- Silently ignore these
                                               Port _ -> return s -- No DHT Yet, silently ignore
                                   Nothing -> do logMsg (logCh s) "Unknown message"
                                                 undefined -- TODO: Kill off gracefully
