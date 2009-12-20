@@ -1,6 +1,6 @@
 .PHONY: all
 
-all: processes.pdf timer.pdf
+all: processes.pdf timer.pdf PeerManager.pdf
 
 %.pdf: %.dot
 	dot -Tpdf $<  > $@

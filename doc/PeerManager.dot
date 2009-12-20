@@ -1,0 +1,59 @@
+digraph {
+	node [fontname="URW Gothic L",fontsize=10];
+	edge [fontname="URW Gothic L",fontsize=8];
+
+	labeljust = l;
+	labelloc = t;
+
+	fontsize = 24;
+	fontname="URW Gothic L";
+	label = "PeerManager FlowChart";
+
+
+	node [shape=box];
+	loop [label="Loop/Sync"];
+	grab [label="Grab N blocks"];
+	findp [label="Find Piece"];
+	addb [label="Add blocks"];
+	trackb [label="Track Grabs"];
+
+	blockc [label="Block Completed"];
+	storeb [label="Store Block"];
+	pieced [label="Piece Done?", shape=diamond];
+	checkp [label="Check Piece", shape=diamond];
+	markc  [label="Mark Piece\ncomplete"];
+	putbackp [label="Putback Piece"];
+
+	loop -> blockc [style=dashed];
+	blockc -> storeb;
+	storeb -> pieced;
+	pieced -> loop [label="No"];
+	pieced -> checkp [label="Yes"];
+	checkp -> markc [label="Ok"];
+	markc -> loop;
+	checkp -> putbackp [label="Fail"];
+	putbackp -> loop;
+
+	loop -> grab [style=dashed];
+	grab -> findp [label="Eligible Pieces"];
+	findp -> addb;
+	findp -> trackb [label="Exhausted"];
+	addb -> findp [label="More blocks\nneeded"];
+	addb -> trackb [label="Enough"];
+	trackb -> loop;
+
+	subgraph cluster_piece_state {
+		 fontsize = 16;
+		 label = "Piece States";
+
+		 node [shape=ellipse];
+		 pending [label="PENDING"];
+		 in_progress [label="IN PROGRESS\n(BPending, BDone, n/k)"];
+		 done [label="DONE"];
+
+		 pending -> in_progress;
+		 in_progress -> pending [label="Fail"];
+		 in_progress -> done [label="Ok"];
+
+	}
+}
