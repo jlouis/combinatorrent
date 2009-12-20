@@ -91,7 +91,7 @@ data Block = Block { blockOffset :: Int        -- ^ offset of this block within 
                    , blockSize   :: BlockSize  -- ^ size of this block within the piece
                    } deriving (Eq, Show)
 
-defaultBlockSize :: Int
+defaultBlockSize :: BlockSize
 defaultBlockSize = 16384 -- Bytes
 
 
