@@ -30,7 +30,6 @@ wish-list.
       above part.
     * Optimize reading of blocks by moving it to the sender Process in
       The Peer Process
-    * Make the system into a seeding client
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Make it possible to Poison OMBox'es. Currently we leak due to them.
@@ -53,7 +52,8 @@ wish-list.
       dies. Handle this problem gracefully.
     * Cleanup the BCode module, while keeping the interface somewhat
       stable. The code is an utter mess as it stands right now.
-
+    * Make a cabal file for the project.
+    * Make the client into an eligible leecher.
 
 Odd bugs
 --------
