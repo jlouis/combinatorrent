@@ -6,17 +6,43 @@ import Data.List
 import ConsoleP
 import Torrent
 
-start :: LogChannel -> IO ()
-start = undefined
+----------------------------------------------------------------------
 
+-- | The Piece Database tracks the current state of the Torrent with respect to pieces.
+--   In the database, we book-keep what pieces are missing, what are done and what are
+--   currently in the process of being downloaded. The crucial moment is when we think
+--   we have a full piece: we check it against its SHA1 and if it is good, we can mark
+--   that piece as done.
+--
+--   Better implementations for selecting among the pending Pieces is probably crucial
+--   to an effective client, but we keep it simple for now.
+data PieceDB = PieceDB
+    { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
+    , donePiece    :: [PieceNum] -- ^ Pieces that are done
+    , inProgress   :: [InProgressPiece] -- ^ Pieces in progress
+    }
+
+-- | The InProgressPiece data type describes pieces in progress of being downloaded.
+--   we keep track of blocks which are pending as well as blocks which are done. We
+--   also keep track of a count of the blocks. When a block is done, we cons it unto
+--   @ipHaveBlocks@. When @ipHave == ipDone@, we check the piece for correctness. The
+--   field @ipHaveBlocks@ could in principle be omitted, but for now it is kept since
+--   we can use it for asserting implementation correctness. We note that both the
+--   check operations are then O(1) and probably fairly fast.
+data InProgressPiece = InProgressPiece
+    { ipPiece :: PieceNum -- ^ PieceNum which is in Progress
+    , ipHave  :: Int -- ^ Number of blocks we have
+    , ipDone  :: Int -- ^ Number of blocks done
+    , ipHaveBlocks :: [Block] -- ^ The blocks we have
+    , ipPendingBlocks :: [Block] -- ^ Blocks still pending
+    } deriving Show
 
 ----------------------------------------------------------------------
 
-data PieceDB = PieceDB
-    { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
-    , inProgressPiece  :: [(PieceNum, [Block])] -- ^ Pieces in progress of being downloaded
-    , donePiece :: [PieceNum] -- ^ Pieces that are done
-    }
+start :: LogChannel -> IO ()
+start = undefined
+
+----------------------------------------------------------------------
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
@@ -43,15 +69,7 @@ putBlock = undefined
 --   will answer this question for the case where the piece is of size @sz@. As a precondition we consider @blks@
 --   to be sorted by offset
 completePiece :: Int -> Int -> [Block] -> Bool
-completePiece blks = undefined
+completePiece = undefined
 -- Blocks are considered sorted.
 --   We can thus just walk through the blocks and sum them, finally checking if the sum reaches the goal.
-
--- | Mark a Piece as done
-pieceDone :: PieceNum -> PieceDB -> PieceDB
-pieceDone pn db = db { donePiece = pn : (donePiece db),
-                       inProgressPiece = ipp }
-  where ipp = deleteBy eq (pn, []) (inProgressPiece db)
-        eq (x, _) (y, _) = x == y
-
 
