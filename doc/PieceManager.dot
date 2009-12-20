@@ -7,7 +7,7 @@ digraph {
 
 	fontsize = 24;
 	fontname="URW Gothic L";
-	label = "PeerManager FlowChart";
+	label = "Piece Manager FlowChart";
 
 
 	// External communication
