@@ -16,6 +16,11 @@ digraph {
 	  loop [label="Loop/Sync"];
         }
 
+	fs [label="FS", shape=ellipse,color=deepskyblue4];
+	fs -> checkp [style=dotted,color=deepskyblue4];
+	checkp -> fs [style=dotted,color=deepskyblue4];
+
+	// Internal state changes
 	peer -> grab [style=dotted,color=deepskyblue4];
 	trackb -> peer [style=dotted,color=deepskyblue4];
 	peer -> blockc [style=dotted,color=deepskyblue4];
