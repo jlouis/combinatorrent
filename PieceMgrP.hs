@@ -39,6 +39,13 @@ grabBlocks = undefined
 putBlock :: [(PieceNum, [Block])] -> PieceDB -> PieceDB
 putBlock = undefined
 
+-- | Predicate function. Is the block list a complete blocklist at the moment? The call @completePiece sz blks@
+--   will answer this question for the case where the piece is of size @sz@. As a precondition we consider @blks@
+--   to be sorted by offset
+completePiece :: Int -> Int -> [Block] -> Bool
+completePiece blks = undefined
+-- Blocks are considered sorted.
+--   We can thus just walk through the blocks and sum them, finally checking if the sum reaches the goal.
 
 -- | Mark a Piece as done
 pieceDone :: PieceNum -> PieceDB -> PieceDB
