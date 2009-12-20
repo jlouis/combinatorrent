@@ -1,7 +1,9 @@
 *.hi
 *.o
 Main
+/gen-doc
 /doc/processes.pdf
 /doc/timer.pdf
 /TAGS
 /tags
+/doc/processes.png

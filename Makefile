@@ -10,5 +10,8 @@ etags:
 ctags:
 	hasktags --ctags *.hs
 
+haddock:
+	haddock -o gen-doc -h *.hs
+
 clean:
 	rm *.hi *.o
