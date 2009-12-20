@@ -12,16 +12,18 @@ start = undefined
 
 ----------------------------------------------------------------------
 
-data PieceDB = PieceDB { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
-                       , inProgressPiece  :: [(PieceNum, [Block])] -- ^ Pieces in progress of being downloaded
-                       , donePiece :: [PieceNum] -- ^ Pieces that are done
-                       }
+data PieceDB = PieceDB
+    { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
+    , inProgressPiece  :: [(PieceNum, [Block])] -- ^ Pieces in progress of being downloaded
+    , donePiece :: [PieceNum] -- ^ Pieces that are done
+    }
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
-  where build leftBytes os accum | leftBytes >= blockSz = build (leftBytes - blockSz)
-                                                                    (os + blockSz)
-                                                                    $ (Block os blockSz) : accum
+  where build leftBytes os accum | leftBytes >= blockSz =
+                                     build (leftBytes - blockSz)
+                                           (os + blockSz)
+                                           $ (Block os blockSz) : accum
                                  | otherwise = reverse $ Block os leftBytes : accum
 
 
