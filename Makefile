@@ -11,6 +11,7 @@ ctags:
 	hasktags --ctags *.hs
 
 haddock:
+	mkdir -p gen-doc
 	haddock -o gen-doc -h *.hs
 
 clean:
