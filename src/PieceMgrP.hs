@@ -37,12 +37,41 @@ data InProgressPiece = InProgressPiece
     , ipPendingBlocks :: [Block] -- ^ Blocks still pending
     } deriving Show
 
+-- INTERFACE
 ----------------------------------------------------------------------
 
-start :: LogChannel -> IO ()
-start = undefined
+data PieceMgrMsg = GrabBlocks Int [PieceNum] -- ^ Ask for grabbing some blocks
+                 | StoreBlock PieceNum Block B.ByteString
+
+start :: LogChannel -> Channel PieceMgrMsg -> FSPChannel -> PieceDB -> IO ()
+start logC mgrC fspC = lp mgrC db
+  where lp db = do
+          msg <- sync $ receive mgrC (const True)
+          case msg of
+            GrabBlocks _ _ -> lp db
+            StoreBlock pn blk d ->
+                do FSP.storeBlock fspC pn blk d
+                   let (done, db') = updateProgress db pn blk
+                   if done
+                      then do pieceOk <- FSP.checkPiece fspC pn
+                              let db'' =  if pieceOk
+                                            then completePiece db' pn
+                                            else putBackPiece db' pn
+                              lp db''
+                      else lp db'
+
+
 
 ----------------------------------------------------------------------
+
+completePiece :: PieceDB -> PieceNum -> PieceDB
+completePiece = undefined
+
+putBackPiece :: PieceDB -> PieceNum -> PieceDB
+putBackPiece = undefined
+
+updateProgress :: PieceDB -> PieceNum -> Block -> (Bool, PieceDB)
+updateProgress = undefined
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
@@ -64,12 +93,4 @@ grabBlocks = undefined
 --   peer as his share of blocks are to be added back for downloading.
 putBlock :: [(PieceNum, [Block])] -> PieceDB -> PieceDB
 putBlock = undefined
-
--- | Predicate function. Is the block list a complete blocklist at the moment? The call @completePiece sz blks@
---   will answer this question for the case where the piece is of size @sz@. As a precondition we consider @blks@
---   to be sorted by offset
-completePiece :: Int -> Int -> [Block] -> Bool
-completePiece = undefined
--- Blocks are considered sorted.
---   We can thus just walk through the blocks and sum them, finally checking if the sum reaches the goal.
 

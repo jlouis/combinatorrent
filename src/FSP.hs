@@ -52,6 +52,8 @@ data State = State {
       pieceMap :: FS.PieceMap}
 
 
+-- INTERFACE
+----------------------------------------------------------------------
 
 start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, Block, B.ByteString),
                                                     Channel (FSPMsg, Channel B.ByteString))
@@ -81,3 +83,11 @@ start handle logC pm =
 
 readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> Block -> IO ()
 readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)
+
+storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
+storeBlock = undefined
+
+checkPiece :: FSPChannel -> PieceNum -> IO Bool
+checkPiece = undefined
+
+----------------------------------------------------------------------
