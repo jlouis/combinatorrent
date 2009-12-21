@@ -40,15 +40,20 @@ data InProgressPiece = InProgressPiece
 -- INTERFACE
 ----------------------------------------------------------------------
 
-data PieceMgrMsg = GrabBlocks Int [PieceNum] -- ^ Ask for grabbing some blocks
+data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
+                   -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
+                   -- ^ Ask for storing a block on the file system
 
 start :: LogChannel -> Channel PieceMgrMsg -> FSPChannel -> PieceDB -> IO ()
 start logC mgrC fspC = lp mgrC db
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
-            GrabBlocks _ _ -> lp db
+            GrabBlocks n eligible c ->
+                do let (blocks, db') = grabBlocks n eligible db
+                   sync $ transmit c blocks
+                   lp db'
             StoreBlock pn blk d ->
                 do FSP.storeBlock fspC pn blk d
                    let (done, db') = updateProgress db pn blk
