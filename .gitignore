@@ -1,6 +1,7 @@
 *.hi
 *.o
 Main
+/dist
 /gen-doc
 /doc/processes.pdf
 /doc/timer.pdf

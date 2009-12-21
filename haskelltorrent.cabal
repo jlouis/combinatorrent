@@ -1,0 +1,31 @@
+name: HaskellTorrent
+version: 0.0
+cabal-version: >= 1.2
+
+license: BSD3
+license-file: LICENSE
+copyright: (c) 2009 Jesper Louis Andersen
+author: Jesper Louis Andersen
+maintainer: jesper.louis.andersen@gmail.com
+stability: experimental
+synopsis: A Haskell Bittorrent client
+build-type: Simple
+
+executable HaskellTorrent
+  hs-source-dirs: src
+  main-is: Main.hs
+  build-depends:
+    base,
+    pretty,
+    parsec,
+    containers,
+    bytestring,
+    SHA,
+    random,
+    network,
+    HCodecs,
+    cml,
+    HTTP,
+    time
+
+
