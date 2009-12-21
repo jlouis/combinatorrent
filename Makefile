@@ -1,18 +1,12 @@
-all:
-	ghc -Wall --make -threaded *.hs
+local-install:
+	cabal install --prefix=$$HOME --user
 
 hlint:
 	hlint *.hs
 
 etags:
-	hasktags --etags *.hs
+	hasktags --etags src/*.hs
 
 ctags:
-	hasktags --ctags *.hs
+	hasktags --ctags src/*.hs
 
-haddock:
-	mkdir -p gen-doc
-	haddock -o gen-doc -h *.hs
-
-clean:
-	rm *.hi *.o
