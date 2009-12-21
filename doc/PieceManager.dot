@@ -18,6 +18,7 @@ digraph {
 
 	fs [label="FS", shape=ellipse,color=deepskyblue4];
 	fs -> checkp [style=dotted,color=deepskyblue4];
+	storeb -> fs [style=dotted,color=deepskyblue4];
 	checkp -> fs [style=dotted,color=deepskyblue4];
 
 	// Internal state changes
