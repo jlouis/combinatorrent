@@ -28,4 +28,10 @@ executable HaskellTorrent
     HTTP,
     time
 
+source-repository head
+  type: git
+  location: git://github.com/jlouis/haskell-torrent.git
+  branch: master
+
+
 
