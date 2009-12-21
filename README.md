@@ -52,7 +52,10 @@ wish-list.
       dies. Handle this problem gracefully.
     * Cleanup the BCode module, while keeping the interface somewhat
       stable. The code is an utter mess as it stands right now.
-    * Make a cabal file for the project.
+    * Improve the cabal file for the project, check with GHC 6.12.1,
+      provide correct versions of needed packages.
+    * Implement the PieceManager code; the documentation explains what it
+      must do.
     * Make the client into an eligible leecher.
 
 Odd bugs
