@@ -94,8 +94,3 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 grabBlocks :: Int -> [PieceNum] -> PieceDB -> ([(PieceNum, [Block])], PieceDB)
 grabBlocks = undefined
 
--- | Put back a set of blocks into the piece database. This call is used whenever we loose a
---   peer as his share of blocks are to be added back for downloading.
-putBlock :: [(PieceNum, [Block])] -> PieceDB -> PieceDB
-putBlock = undefined
-
