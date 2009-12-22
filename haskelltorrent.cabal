@@ -15,7 +15,8 @@ executable HaskellTorrent
   hs-source-dirs: src
   main-is: Main.hs
   build-depends:
-    base,
+    base >= 3.0,
+    base <= 5.0,
     pretty,
     parsec,
     containers,
@@ -23,7 +24,6 @@ executable HaskellTorrent
     SHA,
     random,
     network,
-    HCodecs,
     cml,
     HTTP,
     time

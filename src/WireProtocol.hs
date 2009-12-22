@@ -43,6 +43,7 @@ extensionBasis = 0
 extensionFast :: Word64
 extensionFast = 4
 
+
 -- Seriously consider HCodecs as a dependency
 encodeMsg :: Message -> Builder
 encodeMsg KeepAlive       = empty
@@ -50,16 +51,40 @@ encodeMsg Choke           = singleton 0
 encodeMsg Unchoke         = singleton 1
 encodeMsg Interested      = singleton 2
 encodeMsg NotInterested   = singleton 3
-encodeMsg (Have pn)       = mconcat [singleton 4, putWord32be . fromIntegral $ pn]
-encodeMsg (BitField bf)   = mconcat [singleton 5, fromLazyByteString bf]
-encodeMsg (Request pn (Block os sz)) = mconcat [singleton 6, putWord32be . fromIntegral $ pn,
-                                                putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
-encodeMsg (Piece pn os c) = mconcat [singleton 7, putWord32be . fromIntegral $ pn,
-                                     putWord32be . fromIntegral $ os,
-                                     fromLazyByteString c]
-encodeMsg (Cancel pn (Block os sz))  = mconcat [singleton 8, putWord32be . fromIntegral $ pn,
-                                                putWord32be . fromIntegral $ os, putWord32be . fromIntegral $ sz]
-encodeMsg (Port p)        = mconcat [singleton 9, putWord16be . fromInteger $ p]
+encodeMsg (Have pn)       =
+    mconcat [singleton 4,
+             putW32be pn
+            ]
+encodeMsg (BitField bf)   =
+    mconcat [singleton 5,
+             fromLazyByteString bf
+            ]
+encodeMsg (Request pn (Block os sz)) =
+    mconcat [singleton 6,
+             putW32be pn,
+             putW32be os,
+             putW32be sz
+            ]
+encodeMsg (Piece pn os c) =
+    mconcat [singleton 7,
+             putW32be pn,
+             putW32be os,
+             fromLazyByteString c
+            ]
+encodeMsg (Cancel pn (Block os sz))  =
+    mconcat [singleton 8,
+             putW32be pn,
+             putW32be os,
+             putW32be sz
+            ]
+encodeMsg (Port p)        =
+    mconcat [singleton 9,
+             putW32be p
+            ]
+
+-- Helper function to make code above clearer
+putW32be :: Integral a => a -> Builder
+putW32be = putWord32be . fromIntegral
 
 decodeMsg :: Parser Message
 decodeMsg =
@@ -80,8 +105,7 @@ decodeMsg =
 
 -- | encode a message for transmit on a socket
 encode :: Message -> B.ByteString
-encode m = toLazyByteString $ mconcat [putWord32be . fromIntegral $ sz,
-                                       bld]
+encode m = toLazyByteString $ mconcat [putW32be sz, bld]
   where bld = encodeMsg m
         sz = B.length $ toLazyByteString bld -- Suboptimal, but works :)
 
@@ -95,11 +119,13 @@ protocolHandshake = toLazyByteString $ mconcat [putWord8 $ fromIntegral sz,
         sz = length protocolHeader
 
 -- | Receive the header parts from the other end
-receiveHeader :: Handle -> Int -> InfoHash -> IO (Either String ([Capabilities],
-                                                                   B.ByteString))
-receiveHeader h sz ih =
-    do handshake <- B.hGet h sz
-       return $ parseHeader handshake
+receiveHeader :: Handle
+              -> Int
+              -> InfoHash
+              -> IO (Either String ([Capabilities], B.ByteString))
+receiveHeader h sz ih = parseHeader `fmap` B.hGet h sz
+    -- do handshake <- B.hGet h sz
+    --    return $ parseHeader handshake
   where protocolHeaderSize = length protocolHeader
         parseHeader = runParser parser
         parser =
