@@ -6,6 +6,7 @@ import Control.Concurrent.CML
 import qualified Data.ByteString.Lazy as B
 import Data.List
 import qualified Data.Map as M
+import Data.Maybe
 import qualified Data.Set as S
 
 import ConsoleP
@@ -36,8 +37,7 @@ data PieceDB = PieceDB
 --   we can use it for asserting implementation correctness. We note that both the
 --   check operations are then O(1) and probably fairly fast.
 data InProgressPiece = InProgressPiece
-    { ipHave  :: Int -- ^ Number of blocks we have
-    , ipDone  :: Int -- ^ Number of blocks done
+    { ipDone  :: Int -- ^ Number of blocks when piece is done
     , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
     , ipPendingBlocks :: [Block] -- ^ Blocks still pending
     } deriving Show
@@ -63,7 +63,8 @@ start logC mgrC fspC db = lp db
                 do FSP.storeBlock fspC pn blk d
                    let (done, db') = updateProgress db pn blk
                    if done
-                      then do pieceOk <- FSP.checkPiece fspC pn
+                      then do assertPieceComplete db pn logC
+                              pieceOk <- FSP.checkPiece fspC pn
                               let db'' =  if pieceOk
                                             then completePiece db' pn
                                             else putBackPiece db' pn
@@ -74,19 +75,48 @@ start logC mgrC fspC db = lp db
 
 ----------------------------------------------------------------------
 
+-- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
+--   and return the updated Piece Database.
 completePiece :: PieceDB -> PieceNum -> PieceDB
-completePiece = undefined
+completePiece db pn =
+    db { inProgress = M.delete pn (inProgress db),
+         donePiece  = pn : donePiece db }
 
+-- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
+--   and put it back into the download queue again. Returns the new database.
 putBackPiece :: PieceDB -> PieceNum -> PieceDB
-putBackPiece = undefined
+putBackPiece db pn =
+    db { inProgress = M.delete pn (inProgress db),
+         pendingPiece = pn : pendingPiece db }
 
+
+assertPieceComplete :: PieceDB -> PieceNum -> LogChannel -> IO ()
+assertPieceComplete db pn logC = do
+    let ipp = fromJust $ M.lookup pn (inProgress db)
+    if assertComplete ipp
+      then return ()
+      else do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
+              return ()
+  where assertComplete ip = False -- TODO: Write me
+
+
+-- | Update the progress on a Piece. When we get a block from the piece, we will
+--   track this in the Piece Database. This function returns a pair @(complete, nDb)@
+--   where @complete@ is @True@ if the piece is percieved to be complete and @False@
+--   otherwise. @nDb@ is the updated Piece Database
 updateProgress :: PieceDB -> PieceNum -> Block -> (Bool, PieceDB)
 updateProgress db pn blk =
-    case M.lookup pn (inProgress db) of
-      -- If the piece is not in progress, we simply ignore the update-request
-      --  this may be wrong in the long run however
-      Nothing -> (False, db)
-      Just pg -> undefined
+    case M.lookup pn ipdb of
+      Nothing -> (False, db) -- Ignore, this might be wrong
+      Just pg ->
+          let blkSet = ipHaveBlocks pg
+          in if blk `S.member` blkSet
+               then (False, db) -- Stray block download. Will happen without FAST extension
+               else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
+  where checkComplete pg = (ipHave pg == ipDone pg, db { inProgress =
+                                                             M.adjust (const pg) pn ipdb})
+        ipHave pg = S.size (ipHaveBlocks pg)
+        ipdb = inProgress db
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
