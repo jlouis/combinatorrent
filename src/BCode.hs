@@ -96,12 +96,18 @@ toBS = B.pack . map toW8
 fromBS :: B.ByteString -> String
 fromBS = map fromW8 . B.unpack
 
+wrap :: Char -> Char -> B.ByteString -> B.ByteString
+wrap b e = B.cons (toW8 b) . flip B.snoc (toW8 e)
+
 encode :: BCode -> B.ByteString
-encode (BInt i) = toBS $ "i" ++ show i ++ "e"
+-- encode (BInt i) = toBS $ "i" ++ show i ++ "e"
+encode (BInt i) = wrap 'i' 'e' . toBS . show $ i
 encode (BString s) = toBS (show (B.length s)) `B.append` B.cons (toW8 ':') s
--- encode (BArray arr) =  cons (toW8 'l') $ concatMap encode arr ++ "e"
+encode (BArray arr) =  B.cons (toW8 'l') $ (B.concat . map encode $ arr) `B.append` toBS "e"
 -- encode (BDict mp) = "d" ++ concatMap encPair (M.toList mp) ++ "e"
---     where encPair (k, v) = encode (BString k) ++ encode v
+encode (BDict mp) = wrap 'd' 'e' dict
+    where encPair (k, v) = encode (BString k) `B.append` encode v
+          dict = B.concat . map encPair . M.toList $ mp
 
 -- encodeBS :: BCode -> B.ByteString
 -- encodeBS = B.pack . map (fromIntegral . ord) . encode
