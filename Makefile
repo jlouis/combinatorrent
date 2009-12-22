@@ -1,3 +1,6 @@
+build:
+	runghc Setup.lhs build
+
 local-install:
 	cabal install --prefix=$$HOME --user
 
