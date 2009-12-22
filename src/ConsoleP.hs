@@ -34,7 +34,13 @@ where
 
 import Control.Concurrent.CML
 
-type LogChannel = Channel String
+data LogPriority = Low
+                 | Default
+                 | High
+                 | Fatal
+                 deriving Show
+
+type LogChannel = Channel (LogPriority,String)
 
 data Cmd = Quit -- Quit the program
          deriving (Eq, Show)
@@ -43,11 +49,15 @@ type CmdChannel = Channel Cmd
 
 -- | Log a message to a channel
 logMsg :: LogChannel -> String -> IO ()
-logMsg c = sync . transmit c
+logMsg c str = sync . transmit c $ (Default,str)
+
+-- | Log a message to a channel with a priority
+logMsg' :: LogChannel -> LogPriority -> String -> IO ()
+logMsg' c pri str = sync . transmit c $ (pri,str)
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> IO (Channel String)
+start :: Channel () -> IO (Channel (LogPriority,String))
 start waitCh = do c <- channel
                   cmdCh <- readerP c
                   spawn (logger cmdCh c)
@@ -56,7 +66,7 @@ start waitCh = do c <- channel
                                                quitEvent cmdCh]
                                 logger cmdCh logCh
         logEvent logCh = wrap (receive logCh (const True))
-                           putStrLn
+                           print
         quitEvent ch = wrap (receive ch (==Quit))
                      (\_ -> sync $ transmit waitCh ())
 
@@ -71,5 +81,5 @@ readerP logCh = do cmdCh <- channel
   where lp cmdCh = do c <- getLine
                       case c of
                         "quit" -> sync $ transmit cmdCh Quit
-                        cmd      -> do logMsg logCh $ "Unrecognized command: " ++ show cmd
-                                       lp cmdCh
+                        cmd    -> do logMsg' logCh Low $ "Unrecognized command: " ++ show cmd
+                                     lp cmdCh

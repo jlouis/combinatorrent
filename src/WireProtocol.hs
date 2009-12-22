@@ -99,7 +99,7 @@ decodeMsg =
          6 -> Request  <$> gw32 <*> (Block <$> gw32 <*> gw32)
          7 -> Piece    <$> gw32 <*> gw32 <*> getRemainingLazyByteString
          8 -> Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32)
-         9 -> Port     <$> (fromIntegral <$> getWord16be)
+         9 -> Port . fromIntegral <$> getWord16be
          _ -> fail "Incorrect message parse"
   where gw32 = fromIntegral <$> getWord32be
 

@@ -22,5 +22,5 @@ push (Queue front back) = Queue front . (: back)
 pop :: Queue a -> Maybe (a, Queue a)
 pop (Queue []       [])   = Nothing
 pop (Queue (e : es) back) = Just (e, Queue es back)
-pop (Queue [] back)       = pop (Queue (reverse back) [])
+pop (Queue []       back) = pop (Queue (reverse back) [])
 
