@@ -99,11 +99,19 @@ module Data.ByteString.Parser (
     , varLenBe
     , getVarLenLe
     , varLenLe
+    
+    -- ** Helper functions
+    , char
+    , many
+    , many1
+    , digit
+    , count
   ) where
 
 import Control.Monad hiding (join)
-import Control.Applicative
+import Control.Applicative hiding (many)
 import Data.Maybe (isNothing)
+import Data.Char (ord)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -589,3 +597,30 @@ getVarLenLe = do
 
 varLenLe :: Word64 -> Parser Word64
 varLenLe a = expect (a ==) getVarLenLe
+
+---------------------------------------------------------
+-- Helper functions
+---------------------------------------------------------
+
+-- anyByte :: Parser Word8
+-- anyByte = word8
+
+char :: Char -> Parser Word8
+char = word8 . fromIntegral . ord
+
+many :: Parser a -> Parser [a]
+many p = many1 p `mplus` return []
+
+many1 :: Parser a -> Parser [a]
+many1 p = do
+            x <- p
+            xs <- many p
+            return (x:xs)
+
+digit :: Parser Word8
+digit = choice . map char $ ['0'..'9']
+-- digit = undefined
+
+count :: Int -> Parser a -> Parser [a]
+count n p | n <= 0 = mzero
+count n p = (:) <$> p <*> count (n-1) p

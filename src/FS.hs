@@ -133,7 +133,7 @@ openAndCheckFile bc =
     do h <- openBinaryFile fpath ReadWriteMode
        missingMap <- checkFile h pieceMap
        return (h, missingMap, pieceMap)
-  where Just fpath = BCode.infoName bc
+  where Just fpath = BCode.fromBS `fmap` BCode.infoName bc
         Just pieceMap = mkPieceMap bc
 
 
