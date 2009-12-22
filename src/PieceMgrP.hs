@@ -1,9 +1,15 @@
 module PieceMgrP
 where
 
+import Control.Concurrent.CML
+
+import qualified Data.ByteString.Lazy as B
 import Data.List
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 import ConsoleP
+import FSP
 import Torrent
 
 ----------------------------------------------------------------------
@@ -19,7 +25,7 @@ import Torrent
 data PieceDB = PieceDB
     { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
     , donePiece    :: [PieceNum] -- ^ Pieces that are done
-    , inProgress   :: [InProgressPiece] -- ^ Pieces in progress
+    , inProgress   :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
     }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -30,10 +36,9 @@ data PieceDB = PieceDB
 --   we can use it for asserting implementation correctness. We note that both the
 --   check operations are then O(1) and probably fairly fast.
 data InProgressPiece = InProgressPiece
-    { ipPiece :: PieceNum -- ^ PieceNum which is in Progress
-    , ipHave  :: Int -- ^ Number of blocks we have
+    { ipHave  :: Int -- ^ Number of blocks we have
     , ipDone  :: Int -- ^ Number of blocks done
-    , ipHaveBlocks :: [Block] -- ^ The blocks we have
+    , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
     , ipPendingBlocks :: [Block] -- ^ Blocks still pending
     } deriving Show
 
@@ -46,7 +51,7 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                    -- ^ Ask for storing a block on the file system
 
 start :: LogChannel -> Channel PieceMgrMsg -> FSPChannel -> PieceDB -> IO ()
-start logC mgrC fspC = lp mgrC db
+start logC mgrC fspC db = lp db
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
@@ -76,7 +81,12 @@ putBackPiece :: PieceDB -> PieceNum -> PieceDB
 putBackPiece = undefined
 
 updateProgress :: PieceDB -> PieceNum -> Block -> (Bool, PieceDB)
-updateProgress = undefined
+updateProgress db pn blk =
+    case M.lookup pn (inProgress db) of
+      -- If the piece is not in progress, we simply ignore the update-request
+      --  this may be wrong in the long run however
+      Nothing -> (False, db)
+      Just pg -> undefined
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []

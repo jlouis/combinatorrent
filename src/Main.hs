@@ -17,6 +17,7 @@ import qualified ConsoleP
 import FS
 import qualified FSP
 import qualified PeerMgrP
+import qualified PieceMgrP()
 import qualified StatusP
 import qualified TimerP()
 import Torrent
