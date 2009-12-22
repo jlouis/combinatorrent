@@ -44,3 +44,6 @@ wish-list.
     * Implement the PieceManager code; the documentation explains what it
       must do.
     * Make the client into an eligible leecher.
+    * Consider David Himmelstrups work in the packages bencode, torrent
+      In the long run it would be beneficial. Short term, there is less need
+      for the integration.
