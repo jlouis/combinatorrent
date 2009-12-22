@@ -38,6 +38,7 @@ data PieceDB = PieceDB
 --   check operations are then O(1) and probably fairly fast.
 data InProgressPiece = InProgressPiece
     { ipDone  :: Int -- ^ Number of blocks when piece is done
+    , ipSize  :: Int -- ^ Size of the Piece we are downloading
     , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
     , ipPendingBlocks :: [Block] -- ^ Blocks still pending
     } deriving Show
@@ -89,7 +90,8 @@ putBackPiece db pn =
     db { inProgress = M.delete pn (inProgress db),
          pendingPiece = pn : pendingPiece db }
 
-
+-- | Assert that a Piece is Complete. Can be omitted when we know it works
+--   and we want a faster client.
 assertPieceComplete :: PieceDB -> PieceNum -> LogChannel -> IO ()
 assertPieceComplete db pn logC = do
     let ipp = fromJust $ M.lookup pn (inProgress db)
@@ -97,8 +99,14 @@ assertPieceComplete db pn logC = do
       then return ()
       else do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
               return ()
-  where assertComplete ip = False -- TODO: Write me
-
+  where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
+        -- Check a single block under assumptions of a cursor at offs
+        checkBlock (offs, left, state) blk = (offs + blockSize blk,
+                                              left - blockSize blk,
+                                              state && offs == blockOffset blk)
+        checkContents os l blks = case foldl checkBlock (os, l, True) blks of
+                                    (_, 0, True) -> True
+                                    _            -> False
 
 -- | Update the progress on a Piece. When we get a block from the piece, we will
 --   track this in the Piece Database. This function returns a pair @(complete, nDb)@
