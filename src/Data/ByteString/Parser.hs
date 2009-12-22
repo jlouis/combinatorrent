@@ -605,22 +605,26 @@ varLenLe a = expect (a ==) getVarLenLe
 -- anyByte :: Parser Word8
 -- anyByte = word8
 
+-- | Convenience function to let you parse the equivalent Word8 for a given Char
 char :: Char -> Parser Word8
 char = word8 . fromIntegral . ord
 
+-- | Find zero or more elements matching a given parser
 many :: Parser a -> Parser [a]
 many p = many1 p `mplus` return []
 
+-- | Find one or more elements matching a given parser
 many1 :: Parser a -> Parser [a]
 many1 p = do
             x <- p
             xs <- many p
             return (x:xs)
 
+-- | matches on any equivalent Word8 correcponding to @['0'..'9']@
 digit :: Parser Word8
 digit = choice . map char $ ['0'..'9']
--- digit = undefined
 
+-- | Attempts to match the parser @p@ @n@ times
 count :: Int -> Parser a -> Parser [a]
 count n p | n <= 0 = mzero
 count n p = (:) <$> p <*> count (n-1) p
