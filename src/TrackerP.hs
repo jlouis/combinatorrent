@@ -92,9 +92,9 @@ data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
                                     incompleteR :: Integer,
                                     timeoutInterval :: Integer,
                                     timeoutMinInterval :: Integer }
-                     | ResponseDecodeError String
-                     | ResponseWarning String
-                     | ResponseError String
+                     | ResponseDecodeError B.ByteString
+                     | ResponseWarning B.ByteString
+                     | ResponseError B.ByteString
 
 -- | Internal state of the tracker CHP process
 data State = State {
@@ -149,13 +149,13 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                      Left err -> do ConsoleP.logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseWarning wrn) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Warning: " ++ wrn)
+                         do ConsoleP.logMsg (logCh s) ("Tracker Warning: " ++ fromBS wrn)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ err)
+                         do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseDecodeError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Response Decode error: " ++ err)
+                         do ConsoleP.logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
@@ -187,7 +187,7 @@ processResultDict d =
       Nothing -> case BCode.trackerWarning d of
                    Just warn -> ResponseWarning warn
                    Nothing -> case decodeOk of
-                                Nothing -> ResponseDecodeError "Could not decode response properly"
+                                Nothing -> ResponseDecodeError . toBS $ "Could not decode response properly"
                                 Just rok -> rok
   where decodeOk =
             ResponseOk <$> (decodeIps <$> BCode.trackerPeers d)
@@ -196,13 +196,17 @@ processResultDict d =
                        <*> BCode.trackerInterval d
                        <*> BCode.trackerMinInterval d
 
+
+decodeIps :: B.ByteString -> [PeerMgrP.Peer]
+decodeIps str = decodeIps' (fromBS str)
+
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
-decodeIps :: String -> [PeerMgrP.Peer]
-decodeIps [] = []
-decodeIps (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeIps rest
+decodeIps' :: String -> [PeerMgrP.Peer]
+decodeIps' [] = []
+decodeIps' (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeIps' rest
   where ip = concat $ intersperse "." $ map (show . ord) [b1, b2, b3, b4]
         port = PortNumber $ fromIntegral $ ord p1 * 256 + ord p2
-decodeIps _ = undefined -- Quench all other cases
+decodeIps' _ = undefined -- Quench all other cases
 
 trackerRequest :: LogChannel -> URI -> IO (Either String TrackerResponse)
 trackerRequest logC uri =
@@ -212,7 +216,7 @@ trackerRequest logC uri =
          Right r ->
              case rspCode r of
                (2,_,_) ->
-                   case BCode.decode (rspBody r) of
+                   case BCode.decode . toBS . rspBody $ r of
                      Left pe -> return $ Left (show pe)
                      Right bc -> do logMsg logC $ "Response: " ++ BCode.prettyPrint bc
                                     return $ Right $ processResultDict bc
@@ -228,7 +232,7 @@ trackerRequest logC uri =
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestUrl :: State -> StatusP.State -> String
-buildRequestUrl s ss = concat [announceURL $ torrentInfo s, "?", concat hlist]
+buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
           headers :: [(String, String)]

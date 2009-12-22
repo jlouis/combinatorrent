@@ -30,7 +30,7 @@ run :: [String] -> IO ()
 run args =
     case args of
         []       -> putStrLn "*** Usage: haskellTorrent <file.torrent>"
-        (name:_) -> download n
+        (name:_) -> download name
 
 download :: String -> IO ()
 download name = do

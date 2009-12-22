@@ -53,6 +53,7 @@ module BCode (
               trackerPeers,
               trackerWarning,
               trackerError,
+              toBS,
               fromBS )
 
 where
