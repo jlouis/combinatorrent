@@ -29,7 +29,8 @@
 --   for what happens inside the system.
 module ConsoleP (LogChannel,
                  start,
-                 logMsg)
+                 logMsg,
+                 logFatal)
 where
 
 import Control.Concurrent.CML
@@ -53,6 +54,10 @@ type CmdChannel = Channel Cmd
 -- | Log a message to a channel
 logMsg :: LogChannel -> String -> IO ()
 logMsg c str = sync . transmit c $ Mes Default str
+
+-- | Log a fatal message on a channel, TODO: use logMsg' for this
+logFatal :: LogChannel -> String -> IO ()
+logFatal c str = sync . transmit c $ Mes Fatal str
 
 -- | Log a message to a channel with a priority
 logMsg' :: LogChannel -> LogPriority -> String -> IO ()
