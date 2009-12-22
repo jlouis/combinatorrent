@@ -89,7 +89,7 @@ type BlockSize = Int
 
 data Block = Block { blockOffset :: Int        -- ^ offset of this block within the piece
                    , blockSize   :: BlockSize  -- ^ size of this block within the piece
-                   } deriving (Eq, Show)
+                   } deriving (Eq, Ord, Show)
 
 defaultBlockSize :: BlockSize
 defaultBlockSize = 16384 -- Bytes
