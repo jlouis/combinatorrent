@@ -63,7 +63,7 @@ type InfoHash = B.ByteString
 type PeerId   = String
 
 -- | The internal type of Announce URLs
-type AnnounceURL = String
+type AnnounceURL = B.ByteString
 
 -- | Internal type for a torrent. It identifies a torrent in various places of the system.
 data TorrentInfo = TorrentInfo {

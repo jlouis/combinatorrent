@@ -5,9 +5,12 @@ import Control.Concurrent.CML
 import Control.Monad
 
 import Data.Maybe
+import qualified Data.ByteString.Lazy as B
+
 
 import System.Environment
 import System.Random
+
 
 import qualified BCode
 import qualified ConsoleP
@@ -27,26 +30,28 @@ run :: [String] -> IO ()
 run args =
     case args of
         []       -> putStrLn "*** Usage: haskellTorrent <file.torrent>"
-        (name:_) -> download n
+        (name:_) -> download name
 
 download :: String -> IO ()
 download name = do
-    torrent <- readFile name
+    torrent <- B.readFile name
     let bcoded = BCode.decode torrent
     case bcoded of
       Left pe -> print pe
       Right bc ->
         do (h, missingMap, pieceMap) <- openAndCheckFile bc
            unless (canSeed missingMap) $ fail "We don't have the full file, we can't seed"
+           -- setup channels
            trackerC <- channel
            statusC  <- channel
-           waitCh <- channel
+           waitC    <- channel
            putStrLn "Created channels"
-           logC <- ConsoleP.start waitCh
+           -- create logger
+           logC <- ConsoleP.start waitC
            putStrLn "Started logger"
            -- The fst of the following is for writing data
            (_, fspC) <- FSP.start h logC pieceMap
-           ciC  <- channel
+           ciC <- channel
            pmC <- channel
            gen <- getStdGen
            let pid = mkPeerId gen
@@ -57,6 +62,6 @@ download name = do
            putStrLn "Started Status Process"
            TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
            putStrLn "Started Tracker Process"
-           sync $ receive waitCh (const True)
+           sync $ receive waitC (const True)
            TrackerP.poison trackerC
            return ()
