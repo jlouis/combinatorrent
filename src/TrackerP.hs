@@ -41,7 +41,8 @@ where
 import Control.Applicative
 import Control.Concurrent.CML
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Char (ord, chr)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
@@ -244,7 +245,7 @@ buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", conc
                      ("port", show $ prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
-          unpackInfoHash = dec . B.unpack . infoHash . torrentInfo
+          unpackInfoHash = dec . L.unpack . infoHash . torrentInfo
           dec = map (chr . fromIntegral)
           prt :: Integer
           prt = case localPort s of

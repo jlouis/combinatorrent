@@ -34,7 +34,7 @@ where
 import Control.Concurrent.CML
 import System.IO
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
 
 import ConsoleP
 import Torrent

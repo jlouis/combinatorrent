@@ -38,7 +38,8 @@ module FS (PieceInfo(..),
 where
 
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Digest.Pure.SHA
 import qualified Data.Map as M
 import Data.Maybe
@@ -89,7 +90,7 @@ writeBlock = undefined
 checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
-  bs <- B.hGet h (fromInteger . len $ inf)
+  bs <- L.hGet h (fromInteger . len $ inf)
   return $ (bytestringDigest . sha1) bs == digest inf
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
@@ -111,8 +112,8 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       return $ M.fromList $ zip [0..] $ extract pLen tLen 0 pieceData
-        extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
+                       return . M.fromList . zip [0..] . extract pLen tLen 0 . map L.fromChunks $ [pieceData]
+        extract :: Integer -> Integer -> Integer -> [L.ByteString] -> [PieceInfo]
         extract _  0  _  [] = []
         extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
                                                           len = tl,

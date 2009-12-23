@@ -43,7 +43,8 @@ module Torrent (InfoHash,
                 mkTorrentInfo)
 where
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.List
 import qualified Data.Map as M
 
@@ -56,7 +57,7 @@ import BCode
 
 -- | The type of Infohashes as used in torrents. These are identifiers
 --   of torrents
-type InfoHash = B.ByteString
+type InfoHash = L.ByteString
 
 -- | The peerId is the ID of a client. It is used to identify clients
 --   from each other
@@ -79,7 +80,7 @@ type PieceSize = Int
 data PieceInfo = PieceInfo {
       offset :: Integer,
       len :: Integer,
-      digest :: B.ByteString } deriving (Eq, Show)
+      digest :: L.ByteString } deriving (Eq, Show)
 
 type MissingMap = M.Map PieceNum Bool
 
