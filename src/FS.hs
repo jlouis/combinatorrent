@@ -83,7 +83,7 @@ writePiece pn handle mp bs =
 -}
 
 writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO (Either String ())
-writeBlock = undefined
+writeBlock = error "writeBlock: undefined function"
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
@@ -122,7 +122,8 @@ mkPieceMap bc = fetchData
                                        where inf = PieceInfo { offset = os,
                                                                len = pl,
                                                                digest = p }
-        extract _ _ _ _ = undefined -- Can never be hit (famous last words)
+        extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
+            --undefined -- Can never be hit (famous last words)
 
 canSeed :: MissingMap -> Bool
 canSeed mmp = M.fold (&&) True mmp
@@ -131,7 +132,9 @@ canSeed mmp = M.fold (&&) True mmp
 --   plus a missingMap for the file
 openAndCheckFile :: BCode -> IO (Handle, MissingMap, PieceMap)
 openAndCheckFile bc =
-    do h <- openBinaryFile fpath ReadWriteMode
+    do 
+       putStrLn . take 2000 . prettyPrint $ bc
+       h <- openBinaryFile fpath ReadWriteMode
        missingMap <- checkFile h pieceMap
        return (h, missingMap, pieceMap)
   where Just fpath = BCode.fromBS `fmap` BCode.infoName bc

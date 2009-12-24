@@ -201,8 +201,13 @@ getBArrayContents =
 getBDict :: Get BCode
 getBDict = do
     char 'd'
-    contents <- getBDictContents
+    contents <- many getPairs
+    char 'e'
     return . BDict . M.fromList $ contents
+    where getPairs = do
+            (BString s) <- getBString
+            x <- get
+            return (s,x)
 
 getBDictContents :: Get [(B.ByteString,BCode)]
 getBDictContents = do
@@ -224,25 +229,28 @@ getUntilE p =
             else (:) <$> p <*> getUntilE p
 
 getDigits :: Get String
-getDigits = manyG1 isDigit getCharG
+getDigits = many1 digit
+
+digit :: Get Char
+digit = do
+    x <- getCharG
+    if isDigit x
+        then return x
+        else fail $ "Expected digit, got: " ++ show x
+
+satisfy :: (Word8 -> Bool) -> Get Word8
+satisfy p = do
+    x <- getWord8
+    if p x then return x
+           else fail $ "Satisfy failed: " ++ show x
 
 -- Helper functions
+many :: Get a -> Get [a]
+many p = many1 p `mplus` return []
 
-manyG :: Serialize a => (a -> Bool) -> Get a -> Get [a]
-manyG b g = 
-    do
-        x <- lookAhead g
-        if b x
-            then (:) <$> g <*> manyG b g
-            else return []
+many1 :: Get a -> Get [a]
+many1 p = (:) <$> p <*> many p
 
-manyG1 :: Serialize a => (a -> Bool) -> Get a -> Get [a]
-manyG1 b p =
-    do
-        x <- p
-        if b x
-            then (x:) <$> manyG b p
-            else return [] 
 
 char :: Char -> Get ()
 char c = 

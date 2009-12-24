@@ -85,9 +85,9 @@ readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> Block -> IO ()
 readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)
 
 storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock = undefined
+storeBlock = error "storeBlock: undefined function"
 
 checkPiece :: FSPChannel -> PieceNum -> IO Bool
-checkPiece = undefined
+checkPiece = error "checkPiece: undefined function"
 
 ----------------------------------------------------------------------
