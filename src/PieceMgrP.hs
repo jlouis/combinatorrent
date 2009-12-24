@@ -70,13 +70,13 @@ start logC mgrC fspC = lp mgrC db
 ----------------------------------------------------------------------
 
 completePiece :: PieceDB -> PieceNum -> PieceDB
-completePiece = undefined
+completePiece = error "completePiece: undefined function"
 
 putBackPiece :: PieceDB -> PieceNum -> PieceDB
-putBackPiece = undefined
+putBackPiece = error "putBackPiece: undefined function"
 
 updateProgress :: PieceDB -> PieceNum -> Block -> (Bool, PieceDB)
-updateProgress = undefined
+updateProgress = error "updateProgress: undefined function"
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []

@@ -91,7 +91,7 @@ checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
   bs <- L.hGet h (fromInteger . len $ inf)
-  return $ (bytestringDigest . sha1) bs == digest inf
+  return $ (bytestringDigest . sha1) bs == L.fromChunks [digest inf]
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
@@ -112,15 +112,15 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       return . M.fromList . zip [0..] . extract pLen tLen 0 . map L.fromChunks $ [pieceData]
-        extract :: Integer -> Integer -> Integer -> [L.ByteString] -> [PieceInfo]
-        extract _  0  _  [] = []
-        extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
-                                                          len = tl,
-                                                          digest = p } : extract pl 0 (os + pl) ps
-                                  | otherwise = inf : extract pl (tl - pl) (os + pl) ps
-                                       where inf = PieceInfo { offset = os,
-                                                               len = pl,
+                       return . M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
+        extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
+        extract _    0     _    []       = []
+        extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,
+                                                          len = tlen,
+                                                          digest = p } : extract plen 0 (offst + plen) ps
+                                  | otherwise = inf : extract plen (tlen - plen) (offst + plen) ps
+                                       where inf = PieceInfo { offset = offst,
+                                                               len = plen,
                                                                digest = p }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
             --undefined -- Can never be hit (famous last words)
