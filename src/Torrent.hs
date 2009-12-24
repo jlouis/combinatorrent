@@ -32,6 +32,7 @@ module Torrent (InfoHash,
                 TorrentInfo(..),
                 PieceNum,
                 PieceSize,
+                PieceMap,
                 MissingMap,
                 PieceInfo(..),
                 BlockSize,
@@ -82,6 +83,7 @@ data PieceInfo = PieceInfo {
       digest :: B.ByteString -- ^ Digest of piece; taken from the .torret file
     } deriving (Eq, Show)
 
+type PieceMap = M.Map PieceNum PieceInfo
 type MissingMap = M.Map PieceNum Bool
 
 -- BLOCKS

@@ -27,7 +27,7 @@ data PieceDB = PieceDB
     { pendingPieces :: [PieceNum] -- ^ Pieces currently pending download
     , donePiece     :: [PieceNum] -- ^ Pieces that are done
     , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
-    , infoMap       :: M.Map PieceNum PieceInfo -- ^ Information about pieces
+    , infoMap       :: PieceMap   -- ^ Information about pieces
     }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.

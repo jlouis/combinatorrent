@@ -47,9 +47,6 @@ import System.IO
 import BCode
 import Torrent
 
-type PieceMap = M.Map PieceNum PieceInfo
-
-
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
 pInfoLookup pn mp = case M.lookup pn mp of
                       Nothing -> fail "FS: Error lookup in PieceMap"
