@@ -59,8 +59,8 @@ readPiece :: PieceNum -> Handle -> PieceMap -> IO B.ByteString
 readPiece pn handle mp =
     do pInfo <- pInfoLookup pn mp
        hSeek handle AbsoluteSeek (offset pInfo)
-       bs <- B.hGet handle (fromInteger . len $ pInfo)
-       if B.length bs == (fromInteger . len $ pInfo)
+       bs <- B.hGet handle (fromIntegral . len $ pInfo)
+       if B.length bs == (fromIntegral . len $ pInfo)
           then return bs
           else fail "FS: Wrong number of bytes read"
 
@@ -89,7 +89,7 @@ writeBlock = undefined
 checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
-  bs <- B.hGet h (fromInteger . len $ inf)
+  bs <- B.hGet h (fromIntegral . len $ inf)
   return $ (bytestringDigest . sha1) bs == digest inf
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
@@ -115,11 +115,11 @@ mkPieceMap bc = fetchData
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _  0  _  [] = []
         extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
-                                                          len = tl,
+                                                          len = (fromIntegral tl),
                                                           digest = p } : extract pl 0 (os + pl) ps
                                   | otherwise = inf : extract pl (tl - pl) (os + pl) ps
                                        where inf = PieceInfo { offset = os,
-                                                               len = pl,
+                                                               len = (fromIntegral pl),
                                                                digest = p }
         extract _ _ _ _ = undefined -- Can never be hit (famous last words)
 

@@ -77,9 +77,10 @@ type PieceNum = Int
 type PieceSize = Int
 
 data PieceInfo = PieceInfo {
-      offset :: Integer,
-      len :: Integer,
-      digest :: B.ByteString } deriving (Eq, Show)
+      offset :: Integer,     -- ^ Offset of the piece, might be greater than Int
+      len :: Int,            -- ^ Length of piece; usually a small value
+      digest :: B.ByteString -- ^ Digest of piece; taken from the .torret file
+    } deriving (Eq, Show)
 
 type MissingMap = M.Map PieceNum Bool
 
