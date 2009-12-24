@@ -24,9 +24,9 @@ import Torrent
 --   Better implementations for selecting among the pending Pieces is probably crucial
 --   to an effective client, but we keep it simple for now.
 data PieceDB = PieceDB
-    { pendingPiece :: [PieceNum] -- ^ Pieces currently pending download
-    , donePiece    :: [PieceNum] -- ^ Pieces that are done
-    , inProgress   :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
+    { pendingPieces :: [PieceNum] -- ^ Pieces currently pending download
+    , donePiece     :: [PieceNum] -- ^ Pieces that are done
+    , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
     }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -88,7 +88,7 @@ completePiece db pn =
 putBackPiece :: PieceDB -> PieceNum -> PieceDB
 putBackPiece db pn =
     db { inProgress = M.delete pn (inProgress db),
-         pendingPiece = pn : pendingPiece db }
+         pendingPieces = pn : pendingPieces db }
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.
@@ -140,5 +140,30 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
 grabBlocks :: Int -> [PieceNum] -> PieceDB -> ([(PieceNum, [Block])], PieceDB)
-grabBlocks = undefined
+grabBlocks k eligible db = tryGrabProgress k eligible db []
+  where
+    -- Grabbing blocks is a state machine implemented by tail calls
+    -- Try grabbing pieces from the pieces in progress first
+    tryGrabProgress 0 _  db captured = (captured, db)
+    tryGrabProgress n ps db captured =
+        case ps `intersect` (fmap fst $ M.toList (inProgress db)) of
+          []  -> tryGrabPending n ps db captured
+          (h:_) -> grabFromProgress n ps h db captured
+    -- The Piece @p@ was found, grab it
+    grabFromProgress n ps p db captured =
+        let ipp = fromJust $ M.lookup p (inProgress db)
+            (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
+            nIpp = ipp { ipPendingBlocks = rest }
+            nDb  = db { inProgress = M.insert p nIpp (inProgress db) }
+        in
+          tryGrabProgress (n - length grabbed) ps nDb ((p, grabbed) : captured)
+    -- Try grabbing pieces from the pending blocks
+    tryGrabPending n ps db captured =
+        case ps `intersect` (pendingPieces db) of
+          []    -> (captured, db) -- No (more) pieces to download, return
+          (h:_) ->
+              let blocks = undefined
+                  nDb = db { pendingPieces = (pendingPieces db) \\ [h],
+                             inProgress    = M.insert h blocks (inProgress db) }
+              in tryGrabProgress n ps nDb captured
 

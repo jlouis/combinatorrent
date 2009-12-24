@@ -29,8 +29,9 @@ digraph {
 	node [shape=box];
 
 	grab [label="Grab N blocks"];
-	findp [label="Find Piece"];
-	addb [label="Add blocks"];
+	grabProgress [label="Grab from\nin Progress"];
+	grabPending  [label="Grab from\nPending"];
+
 	trackb [label="Track Grabs"];
 
 	blockc [label="Block Completed"];
@@ -51,11 +52,13 @@ digraph {
 	putbackp -> loop;
 
 	loop -> grab;
-	grab -> findp [label="Eligible Pieces"];
-	findp -> addb;
-	findp -> trackb [label="Exhausted"];
-	addb -> findp [label="More blocks\nneeded"];
-	addb -> trackb [label="Enough"];
+
+	grab -> grabProgress;
+	grabProgress -> trackb [label="Enough\npieces"];
+	grabProgress -> grabPending [label="None progress\neligible"];
+	grabPending -> grabProgress [label="Found pending\nadd to progress"];
+	grabPending -> trackb [label="Exhausted"];
+
 	trackb -> loop;
 
 	subgraph cluster_piece_state {
