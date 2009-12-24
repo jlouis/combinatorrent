@@ -5,7 +5,8 @@ import Control.Applicative hiding (empty)
 import Control.Monad
 
 import Data.Monoid
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Builder
 import Data.ByteString.Parser
 import Data.Word
@@ -16,7 +17,7 @@ import Torrent
 
 ------------------------------------------------------------
 
-type BitField = B.ByteString
+type BitField = L.ByteString
 
 type PieceLength = Int
 data Message = KeepAlive
@@ -69,7 +70,7 @@ encodeMsg (Piece pn os c) =
     mconcat [singleton 7,
              putW32be pn,
              putW32be os,
-             fromLazyByteString c
+             fromByteString c
             ]
 encodeMsg (Cancel pn (Block os sz))  =
     mconcat [singleton 8,
@@ -97,21 +98,21 @@ decodeMsg =
          4 -> Have     <$> gw32
          5 -> BitField <$> getRemainingLazyByteString
          6 -> Request  <$> gw32 <*> (Block <$> gw32 <*> gw32)
-         7 -> Piece    <$> gw32 <*> gw32 <*> getRemainingLazyByteString
+         7 -> Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString . fromIntegral) --getRemainingLazyByteString)
          8 -> Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32)
          9 -> Port . fromIntegral <$> getWord16be
          _ -> fail "Incorrect message parse"
   where gw32 = fromIntegral <$> getWord32be
 
 -- | encode a message for transmit on a socket
-encode :: Message -> B.ByteString
+encode :: Message -> L.ByteString
 encode m = toLazyByteString $ mconcat [putW32be sz, bld]
   where bld = encodeMsg m
-        sz = B.length $ toLazyByteString bld -- Suboptimal, but works :)
+        sz = L.length $ toLazyByteString bld -- Suboptimal, but works :)
 
 
 -- | Protocol handshake code. This encodes the protocol handshake part
-protocolHandshake :: B.ByteString
+protocolHandshake :: L.ByteString
 protocolHandshake = toLazyByteString $ mconcat [putWord8 $ fromIntegral sz,
                                                 putString protocolHeader,
                                                 putWord64be caps]
@@ -122,9 +123,9 @@ protocolHandshake = toLazyByteString $ mconcat [putWord8 $ fromIntegral sz,
 receiveHeader :: Handle
               -> Int
               -> InfoHash
-              -> IO (Either String ([Capabilities], B.ByteString))
-receiveHeader h sz ih = parseHeader `fmap` B.hGet h sz
-    -- do handshake <- B.hGet h sz
+              -> IO (Either String ([Capabilities], L.ByteString))
+receiveHeader h sz ih = parseHeader `fmap` L.hGet h sz
+    -- do handshake <- L.hGet h sz
     --    return $ parseHeader handshake
   where protocolHeaderSize = length protocolHeader
         parseHeader = runParser parser
@@ -147,17 +148,17 @@ decodeCapabilities _ = []
 -- | Initiate a handshake on a socket
 initiateHandshake :: LogChannel ->
                      Handle -> PeerId -> InfoHash -> IO (Either String ([Capabilities],
-                                                                        B.ByteString))
+                                                                        L.ByteString))
 initiateHandshake logC handle peerid infohash = do
     logMsg logC "Sending off handshake message"
-    B.hPut handle msg
+    L.hPut handle msg
     hFlush handle
     logMsg logC "Receiving handshake from other end"
     receiveHeader handle sz infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
                                           fromLazyByteString infohash,
                                           putString peerid]
-        sz = fromIntegral (B.length msg)
+        sz = fromIntegral (L.length msg)
 
 -- TESTS
 testDecodeEncodeProp1 :: Message -> Bool

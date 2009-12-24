@@ -61,8 +61,7 @@ where
 
 import Control.Monad
 import Control.Applicative hiding (many)
-import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as B
 import Data.Char
 import Data.Word
 import Data.Int
@@ -74,9 +73,9 @@ import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ hiding (char)
 
 -- import Data.ByteString.Parser
-import Data.Serialize
-import Data.Serialize.Put
-import Data.Serialize.Get
+import Data.Binary
+import Data.Binary.Put
+import Data.Binary.Get
 
 
 
@@ -115,12 +114,12 @@ fromBS = map fromW8 . B.unpack
 --     where encPair (k, v) = encode (BString k) `B.append` encode v
 --           dict = B.concat . map encPair . M.toList $ mp
 
-instance Serialize BCode where
+instance Binary BCode where
     put (BInt i)     = wrap 'i' 'e' $ putShow i
     put (BString s)  = do
                          putShow (B.length s)
                          putWord8 (toW8 ':')
-                         putByteString s
+                         putLazyByteString s
     put (BArray arr) = wrap 'l' 'e' . mapM_ put $ arr
     put (BDict mp)   = wrap 'd' 'e' dict
                      where dict = mapM_ encPair . M.toList $ mp
@@ -164,7 +163,7 @@ getBString =
     do
         count <- getDigits
         char ':'
-        BString <$> getByteString (read count)
+        BString <$> getLazyByteString (read count)
 
 
 -- parseList :: Parser BCode
@@ -201,13 +200,8 @@ getBArrayContents =
 getBDict :: Get BCode
 getBDict = do
     char 'd'
-    contents <- many getPairs
-    char 'e'
+    contents <- getBDictContents
     return . BDict . M.fromList $ contents
-    where getPairs = do
-            (BString s) <- getBString
-            x <- get
-            return (s,x)
 
 getBDictContents :: Get [(B.ByteString,BCode)]
 getBDictContents = do
@@ -229,28 +223,25 @@ getUntilE p =
             else (:) <$> p <*> getUntilE p
 
 getDigits :: Get String
-getDigits = many1 digit
-
-digit :: Get Char
-digit = do
-    x <- getCharG
-    if isDigit x
-        then return x
-        else fail $ "Expected digit, got: " ++ show x
-
-satisfy :: (Word8 -> Bool) -> Get Word8
-satisfy p = do
-    x <- getWord8
-    if p x then return x
-           else fail $ "Satisfy failed: " ++ show x
+getDigits = manyG1 isDigit getCharG
 
 -- Helper functions
-many :: Get a -> Get [a]
-many p = many1 p `mplus` return []
 
-many1 :: Get a -> Get [a]
-many1 p = (:) <$> p <*> many p
+manyG :: Binary a => (a -> Bool) -> Get a -> Get [a]
+manyG b g = 
+    do
+        x <- lookAhead g
+        if b x
+            then (:) <$> g <*> manyG b g
+            else return []
 
+manyG1 :: Binary a => (a -> Bool) -> Get a -> Get [a]
+manyG1 b p =
+    do
+        x <- p
+        if b x
+            then (x:) <$> manyG b p
+            else return [] 
 
 char :: Char -> Get ()
 char c = 
@@ -276,11 +267,11 @@ putShow x = mapM_ put (show x)
 -- encodeBS = B.pack . map (fromIntegral . ord) . encode
 
 -- | Return the hash of the info-dict in a torrent file
-hashInfoDict :: BCode -> Maybe L.ByteString
+hashInfoDict :: BCode -> Maybe B.ByteString
 hashInfoDict bc =
     do ih <- info bc
        let encoded = encode ih
-       return . bytestringDigest . sha1 . L.fromChunks $ [encoded]
+       return $ bytestringDigest $ sha1 encoded
 
 
 

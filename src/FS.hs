@@ -38,7 +38,8 @@ module FS (PieceInfo(..),
 where
 
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Digest.Pure.SHA
 import qualified Data.Map as M
 import Data.Maybe
@@ -79,15 +80,15 @@ writePiece pn handle mp bs =
 -}
 
 writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO (Either String ())
-writeBlock = undefined
+writeBlock = error "writeBlock: undefined function"
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
 checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
-  bs <- B.hGet h (fromIntegral . len $ inf)
-  return $ (bytestringDigest . sha1) bs == digest inf
+  bs <- L.hGet h (fromIntegral . len $ inf)
+  return $ (bytestringDigest . sha1) bs == L.fromChunks [digest inf]
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
@@ -108,17 +109,20 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       return $ M.fromList $ zip [0..] $ extract pLen tLen 0 pieceData
+                       return . M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
-        extract _  0  _  [] = []
-        extract pl tl os (p : ps) | tl < pl = PieceInfo { offset = os,
-                                                          len = (fromIntegral tl),
-                                                          digest = p } : extract pl 0 (os + pl) ps
-                                  | otherwise = inf : extract pl (tl - pl) (os + pl) ps
-                                       where inf = PieceInfo { offset = os,
-                                                               len = (fromIntegral pl),
+        extract _    0     _    []       = []
+        extract plen tlen offst (p : ps) | tlen < plen =
+                   PieceInfo { offset = offst,
+                               len = fromIntegral tlen,
+                               digest = p } : extract plen 0 (offst + plen) ps
+                                         | otherwise =
+                                             inf : extract plen (tlen - plen) (offst + plen) ps
+                                       where inf = PieceInfo { offset = offst,
+                                                               len = fromIntegral plen,
                                                                digest = p }
-        extract _ _ _ _ = undefined -- Can never be hit (famous last words)
+        extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
+            --undefined -- Can never be hit (famous last words)
 
 canSeed :: MissingMap -> Bool
 canSeed mmp = M.fold (&&) True mmp
@@ -127,7 +131,9 @@ canSeed mmp = M.fold (&&) True mmp
 --   plus a missingMap for the file
 openAndCheckFile :: BCode -> IO (Handle, MissingMap, PieceMap)
 openAndCheckFile bc =
-    do h <- openBinaryFile fpath ReadWriteMode
+    do
+       putStrLn . take 2000 . prettyPrint $ bc
+       h <- openBinaryFile fpath ReadWriteMode
        missingMap <- checkFile h pieceMap
        return (h, missingMap, pieceMap)
   where Just fpath = BCode.fromBS `fmap` BCode.infoName bc

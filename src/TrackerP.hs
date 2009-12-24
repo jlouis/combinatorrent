@@ -41,7 +41,8 @@ where
 import Control.Applicative
 import Control.Concurrent.CML
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Char (ord, chr)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
@@ -204,9 +205,9 @@ decodeIps str = decodeIps' (fromBS str)
 decodeIps' :: String -> [PeerMgrP.Peer]
 decodeIps' [] = []
 decodeIps' (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeIps' rest
-  where ip = concat $ intersperse "." $ map (show . ord) [b1, b2, b3, b4]
-        port = PortNumber $ fromIntegral $ ord p1 * 256 + ord p2
-decodeIps' _ = undefined -- Quench all other cases
+  where ip = concat . intersperse "." . map (show . ord) $ [b1, b2, b3, b4]
+        port = PortNumber . fromIntegral $ ord p1 * 256 + ord p2
+decodeIps' xs = error $ "decodeIps': invalid IPs: " ++ xs -- Quench all other cases
 
 trackerRequest :: LogChannel -> URI -> IO (Either String TrackerResponse)
 trackerRequest logC uri =
@@ -244,7 +245,7 @@ buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", conc
                      ("port", show $ prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
-          unpackInfoHash = dec . B.unpack . infoHash . torrentInfo
+          unpackInfoHash = dec . L.unpack . infoHash . torrentInfo
           dec = map (chr . fromIntegral)
           prt :: Integer
           prt = case localPort s of

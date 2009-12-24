@@ -3,7 +3,7 @@ where
 
 import Control.Concurrent.CML
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe

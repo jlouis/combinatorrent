@@ -17,6 +17,7 @@ executable HaskellTorrent
   build-depends:
     base >= 3.0,
     base <= 5.0,
+    cereal,
     pretty,
     parsec,
     containers,

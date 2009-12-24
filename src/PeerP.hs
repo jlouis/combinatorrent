@@ -6,7 +6,8 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Bits
 import Data.ByteString.Parser hiding (isEmpty)
 import Data.Maybe
@@ -33,7 +34,7 @@ senderP logC handle ch = lp
                 case msg of
                   Nothing -> return ()
                   Just m  -> do let bs = encode m
-                                B.hPut handle bs
+                                L.hPut handle bs
                                 hFlush handle
                                 logMsg logC "Sent and flushed"
                                 lp
@@ -70,12 +71,12 @@ receiverP logC hndl = do ch <- channel
                          spawn $ lp ch
                          return ch
   where lp ch = do logMsg logC "Peer waiting for input"
-                   bs' <- B.hGet hndl 4
+                   bs' <- L.hGet hndl 4
                    l <- conv bs'
                    if l == 0
                       then lp ch
                       else do logMsg logC $ "Reading off " ++ show l ++ " bytes"
-                              bs <- B.hGet hndl (fromIntegral l)
+                              bs <- L.hGet hndl (fromIntegral l)
                               logMsg logC $ "Read: " ++ show bs
                               case runParser decodeMsg bs of
                                 Left _ -> do sync $ transmit ch Nothing
@@ -84,10 +85,10 @@ receiverP logC hndl = do ch <- channel
                                 Right msg -> do logMsg logC $ "Decoded as: " ++ show msg
                                                 sync $ transmit ch (Just msg)
                                                 lp ch
-        conv :: B.ByteString -> IO Word32
+        conv :: L.ByteString -> IO Word32
         conv bs = case runParser (getWord32be) bs of
                     Left _ -> do logMsg logC "Incorrent length in receiver, dying!"
-                                 undefined
+                                 error "receiverP: Incorrent length in receiver, dying!"
                     Right i -> return i
 
 data State = MkState { inCh :: Channel (Maybe Message),
@@ -154,8 +155,8 @@ peerP pMgrC fsC logC nPieces h = do
                                                 undefined -- TODO: Kill off gracefully
                            )
 
-createPeerPieces :: B.ByteString -> [PieceNum]
-createPeerPieces = map fromIntegral . concat . decodeBytes 0 . B.unpack
+createPeerPieces :: L.ByteString -> [PieceNum]
+createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]
         decodeByte soFar w =
             let dBit n = if testBit w n
@@ -165,8 +166,8 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . B.unpack
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
-constructBitField :: [PieceNum] -> B.ByteString
-constructBitField pieces = B.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
+constructBitField :: [PieceNum] -> L.ByteString
+constructBitField pieces = L.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
     where sz = fromIntegral (length pieces)
           pad = 8 - (sz `mod` 8)
           build [] = []

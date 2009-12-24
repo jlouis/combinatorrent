@@ -34,7 +34,7 @@ where
 import Control.Concurrent.CML
 import System.IO
 
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
 
 import ConsoleP
 import Torrent
@@ -86,9 +86,9 @@ readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)
 
 -- | Store a block in the file system.
 storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock = undefined
+storeBlock = error "storeBlock: undefined function"
 
 checkPiece :: FSPChannel -> PieceNum -> IO Bool
-checkPiece = undefined
+checkPiece = error "checkPiece: undefined function"
 
 ----------------------------------------------------------------------

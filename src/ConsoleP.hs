@@ -42,9 +42,9 @@ data LogPriority = Low
                  | Fatal
                  deriving Show
 
-data Message = Mes LogPriority String
+data LogMsg = Mes LogPriority String
 
-type LogChannel = Channel Message
+type LogChannel = Channel LogMsg
 
 data Cmd = Quit -- Quit the program
          deriving (Eq, Show)
@@ -65,7 +65,7 @@ logMsg' c pri str = sync . transmit c $ Mes pri str
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> IO (Channel Message)
+start :: Channel () -> IO (Channel LogMsg)
 start waitCh = do c <- channel
                   cmdCh <- readerP c
                   spawn (logger cmdCh c)
@@ -93,5 +93,5 @@ readerP logCh = do cmdCh <- channel
                                      lp cmdCh
 
 
-instance Show Message where
+instance Show LogMsg where
     show (Mes pri str) = show pri ++ ":\t" ++ str
