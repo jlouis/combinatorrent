@@ -120,7 +120,9 @@ updateProgress db pn blk =
       Just pg ->
           let blkSet = ipHaveBlocks pg
           in if blk `S.member` blkSet
-               then (False, db) -- Stray block download. Will happen without FAST extension
+               then (False, db) -- Stray block download.
+                                -- Will happen without FAST extension
+                                -- at times
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = (ipHave pg == ipDone pg, db { inProgress =
                                                              M.adjust (const pg) pn ipdb})

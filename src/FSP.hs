@@ -84,6 +84,7 @@ start handle logC pm =
 readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> Block -> IO ()
 readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)
 
+-- | Store a block in the file system.
 storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
 storeBlock = undefined
 
