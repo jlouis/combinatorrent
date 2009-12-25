@@ -37,6 +37,7 @@ module FS (PieceInfo(..),
            canSeed)
 where
 
+import Control.Monad
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -68,19 +69,16 @@ readBlock pn blk handle mp =
        hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
        B.hGet handle (blockSize blk)
 
-{-
-writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
-writePiece pn handle mp bs =
-    do pInfo <- pInfoLookup pn mp
-       if (bytestringDigest . sha1) bs /= digest pInfo
-         then return $ Left "PieceCheck Error"
-         else do hSeek handle AbsoluteSeek (offset pInfo)
-                 B.hPut handle bs -- Will always get the right size due to SHA the digest
-                 return $ Right ()
--}
-
-writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO (Either String ())
-writeBlock = error "writeBlock: undefined function"
+-- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
+--   to the file pointed to by handle at the correct position in the file. If the
+--   block is of a wrong length, the call will fail.
+writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
+writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
+                                   when lenFail $ fail "Writing block of wrong length"
+                                   B.hPut h blkData
+                                   return ()
+  where pos = offset (fromJust $ M.lookup n pm) + (fromIntegral $ blockOffset blk)
+        lenFail = B.length blkData == blockSize blk
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
@@ -124,6 +122,7 @@ mkPieceMap bc = fetchData
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
             --undefined -- Can never be hit (famous last words)
 
+-- | Predicate function. True if nothing is missing from the map.
 canSeed :: MissingMap -> Bool
 canSeed mmp = M.fold (&&) True mmp
 
