@@ -52,7 +52,7 @@ download name = do
            logC <- ConsoleP.start waitC
            putStrLn "Started logger"
            -- The fst of the following is for writing data
-           (_, fspC) <- FSP.start h logC pieceMap
+           fspC <- FSP.start h logC pieceMap
            ciC <- channel
            pmC <- channel
            gen <- getStdGen

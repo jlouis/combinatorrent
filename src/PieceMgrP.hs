@@ -67,9 +67,11 @@ start logC mgrC fspC db = lp db
                    if done
                       then do assertPieceComplete db pn logC
                               pieceOk <- FSP.checkPiece fspC pn
-                              let db'' =  if pieceOk
-                                            then completePiece db' pn
-                                            else putBackPiece db' pn
+                              let db'' = case pieceOk of
+                                           Nothing ->
+                                               error "PieceMgrP: Piece Nonexisting!"
+                                           Just True -> completePiece db' pn
+                                           Just False -> putBackPiece db' pn
                               lp db''
                       else lp db'
 

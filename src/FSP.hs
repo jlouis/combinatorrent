@@ -35,60 +35,68 @@ import Control.Concurrent.CML
 import System.IO
 
 import qualified Data.ByteString as B
+import qualified Data.Map as M
 
 import ConsoleP
 import Torrent
 import qualified FS
 
-data FSPMsg = ReadPiece PieceNum
-            | ReadBlock PieceNum Block
+data FSPMsg = CheckPiece PieceNum (Channel (Maybe Bool))
+            | WriteBlock PieceNum Block B.ByteString
+            | ReadBlock PieceNum Block (Channel B.ByteString)
 
-type FSPChannel = Channel (FSPMsg, Channel B.ByteString)
+type FSPChannel = Channel FSPMsg
 
 data State = State {
-      writeC :: Channel (PieceNum, Block, B.ByteString),
-      rpcC :: FSPChannel,
-      fileHandle :: Handle,
-      pieceMap :: FS.PieceMap}
+      fspCh :: FSPChannel, -- ^ Channel on which to receive messages
+      fileHandle :: Handle, -- ^ The file we are working on
+      pieceMap :: FS.PieceMap -- ^ Map of where the pieces reside
+    }
 
 
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, Block, B.ByteString),
-                                                    Channel (FSPMsg, Channel B.ByteString))
+start :: Handle -> LogChannel -> FS.PieceMap -> IO FSPChannel
 start handle logC pm =
-    do wc  <- channel
-       rpcc <- channel
-       spawn $ lp $ State wc rpcc handle pm
-       return (wc, rpcc)
-  where lp s = do s' <- sync $ choose [writeEvent s, readEvent s]
-                  lp s'
-        writeEvent s = wrap (receive (writeC s) (const True))
-                         (\(pn, blk, bs) ->
-                           do FS.writeBlock (fileHandle s) pn blk (pieceMap s) bs
-                              return s)
-        readEvent s  = wrap (receive (rpcC s) (const True))
-                         (\(msg, c) ->
-                              do bs <- case msg of
-                                         ReadPiece pn -> do
-                                                  logMsg logC $ "Reading piece #" ++ show pn
-                                                  FS.readPiece pn (fileHandle s) (pieceMap s)
-                                         ReadBlock pn blk -> do
-                                                  logMsg logC $ "Reading block #" ++ show pn
-                                                                  ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
-                                                  FS.readBlock pn blk (fileHandle s) (pieceMap s)
-                                 sync $ transmit c bs
-                                 return s)
+    do fspC <- channel
+       spawn $ lp $ State fspC handle pm
+       return fspC
+  where lp s = sync (msgEvent s) >>= lp
+        msgEvent s = wrap (receive (fspCh s) (const True))
+                       -- TODO: Coalesce common 'return s'
+                       (\m -> case m of
+                               CheckPiece n ch -> do
+                                   case M.lookup n (pieceMap s) of
+                                     Nothing -> do sync $ transmit ch Nothing
+                                                   return s
+                                     Just pi -> do r <- FS.checkPiece (fileHandle s) pi
+                                                   sync $ transmit ch (Just r)
+                                                   return s
+                               ReadBlock n blk ch -> do
+                                   logMsg logC $ "Reading block #" ++ show n
+                                     ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
+                                   -- TODO: Protection, either here or in the Peer code
+                                   bs <- FS.readBlock n blk (fileHandle s) (pieceMap s)
+                                   sync $ transmit ch bs
+                                   return s
+                               WriteBlock pn blk bs -> do
+                                   -- TODO: Protection, either here or in the Peer code
+                                   FS.writeBlock (fileHandle s) pn blk (pieceMap s) bs
+                                   return s)
 
 readBlock :: FSPChannel -> Channel B.ByteString -> PieceNum -> Block -> IO ()
-readBlock fspc c pn blk = sync $ transmit fspc (ReadBlock pn blk, c)
+readBlock fspc c pn blk = sync $ transmit fspc $ ReadBlock pn blk c
 
 -- | Store a block in the file system.
 storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock = error "storeBlock: undefined function"
+storeBlock fspC n blk bs = sync $ transmit fspC $ WriteBlock n blk bs
 
-checkPiece :: FSPChannel -> PieceNum -> IO Bool
-checkPiece = error "checkPiece: undefined function"
+checkPiece :: FSPChannel -> PieceNum -> IO (Maybe Bool)
+checkPiece fspC n = do
+    ch <- channel
+    sync . transmit fspC $ CheckPiece n ch
+    sync $ receive ch (const True)
+
 
 ----------------------------------------------------------------------
