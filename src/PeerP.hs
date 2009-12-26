@@ -141,7 +141,7 @@ peerP pMgrC fsC logC nPieces h = do
                                               BitField bf ->
                                                   case peerPieces s of
                                                     [] -> return s { peerPieces = createPeerPieces bf }
-                                                    _  -> undefined -- TODO: Kill off gracefully
+                                                    _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
                                                    do c <- channel
                                                       readBlock (fsCh s) c pn blk -- Push this down in the Send Process
