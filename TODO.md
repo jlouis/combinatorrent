@@ -1,7 +1,7 @@
 The TODO list
 =============
 
-(Perhaps change this into an emacs org-mode TODO file)
+(This is a Markdown file)
 
 The list of things that needs done. Feel free to take anything on the
 list if you want, but do coordinate so we don't do multiple work on
@@ -41,9 +41,8 @@ wish-list.
       stable. The code is an utter mess as it stands right now.
     * Improve the cabal file for the project, check with GHC 6.12.1,
       provide correct versions of needed packages.
-    * Implement the PieceManager code; the documentation explains what it
-      must do.
     * Make the client into an eligible leecher.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
+    * Implement the Leecher code in the PeerP.
