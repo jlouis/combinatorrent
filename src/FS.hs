@@ -33,6 +33,7 @@ module FS (PieceInfo(..),
            writeBlock,
            mkPieceMap,
            checkFile,
+           checkPiece,
            openAndCheckFile,
            canSeed)
 where
