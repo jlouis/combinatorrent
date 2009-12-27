@@ -6,11 +6,13 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
+
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Bits
 import Data.ByteString.Parser hiding (isEmpty)
 import Data.Maybe
+import Data.Set as S hiding (map)
 import Data.Word
 
 import Network
@@ -20,6 +22,7 @@ import System.IO
 import PeerTypes
 import ConsoleP
 import FSP
+import PieceMgrP
 import qualified OMBox
 import qualified Queue as Q
 import Torrent
@@ -107,18 +110,20 @@ receiverP logC hndl = do ch <- channel
 
 data State = MkState { inCh :: Channel (Maybe Message),
                        outCh :: Channel SendQueueMessage,
+                       pieceMgrCh :: PieceMgrChannel,
                        logCh :: LogChannel,
                        fsCh :: FSPChannel,
                        peerC :: PeerChannel,
                        weChoke :: Bool,
+                       blockQueue :: S.Set (PieceNum, Block),
                        peerChoke :: Bool,
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
 
 -- TODO: The PeerP should always attempt to move the BitField first
 -- TODO: Consider filling blocks after each loop...
-peerP :: MgrChannel -> FSPChannel -> LogChannel -> Int -> Handle -> IO ()
-peerP pMgrC fsC logC nPieces h = do
+peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> Handle -> IO ()
+peerP pMgrC pieceMgrC fsC logC nPieces h = do
     outBound <- sendP logC h
     inBound  <- receiverP logC h
     (putC, getC) <- OMBox.new
@@ -129,14 +134,16 @@ peerP pMgrC fsC logC nPieces h = do
       sync $ transmit pMgrC $ Connect tid putC
       sync $ transmit outBound $ SendQMsg $ BitField (constructBitField [0..nPieces-1])
       lp MkState { inCh = inBound,
-                                outCh = outBound,
-                                logCh = logC,
-                                peerC = getC,
-                                fsCh  = fsC,
-                                weChoke = True,
-                                peerChoke = True,
-                                peerInterested = False,
-                                peerPieces = [] }
+                   outCh = outBound,
+                   logCh = logC,
+                   peerC = getC,
+                   fsCh  = fsC,
+                   pieceMgrCh = pieceMgrC,
+                   blockQueue = S.empty,
+                   weChoke = True,
+                   peerChoke = True,
+                   peerInterested = False,
+                   peerPieces = [] }
     return ()
   where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
         peerMgrEvent s = wrap (receive (peerC s) (const True))
@@ -177,6 +184,20 @@ peerP pMgrC fsC logC nPieces h = do
                                   Nothing -> do logMsg (logCh s) "Unknown message"
                                                 undefined -- TODO: Kill off gracefully
                            )
+        fillBlocks s = case peerChoke s of
+                         True -> return s
+                         False -> checkWatermark s
+        checkWatermark s =
+            let sz = S.size (blockQueue s)
+            in if sz < loMark
+                 then do toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
+                         queuePieces s toQueue
+                 else return s -- Do nothing, we have plenty queued already
+        queuePieces s toQueue = do mapM_ (pushPiece $ outCh s) toQueue
+                                   return s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) }
+        pushPiece ch (pn, blk) = sync $ transmit ch $ SendQMsg $ Request pn blk
+        loMark = 10
+        hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
 createPeerPieces :: L.ByteString -> [PieceNum]
 createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
@@ -207,10 +228,10 @@ showPort :: PortID -> String
 showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
 
-connect :: HostName -> PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel
+connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMgrChannel -> FSPChannel -> LogChannel
         -> MgrChannel -> Int
         -> IO ()
-connect host port pid ih fsC logC mgrC nPieces = spawn connector >> return ()
+connect host port pid ih pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
   where connector =
          do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
@@ -223,7 +244,7 @@ connect host port pid ih fsC logC mgrC nPieces = spawn connector >> return ()
                              return ()
               Right (_caps, _rpid) ->
                   do logMsg logC "entering peerP loop code"
-                     peerP mgrC fsC logC nPieces h
+                     peerP mgrC pieceMgrC fsC logC nPieces h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 {-

@@ -51,14 +51,15 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
+type PieceMgrChannel = Channel PieceMgrMsg
 
-start :: LogChannel -> Channel PieceMgrMsg -> FSPChannel -> PieceDB -> IO ()
+start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
 start logC mgrC fspC db = lp db
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
             GrabBlocks n eligible c ->
-                do let (blocks, db') = grabBlocks n eligible db
+                do let (blocks, db') = grabBlocks' n eligible db
                    sync $ transmit c blocks
                    lp db'
             StoreBlock pn blk d ->
@@ -76,6 +77,12 @@ start logC mgrC fspC db = lp db
                       else lp db'
 
 
+grabBlocks :: PieceMgrChannel -> Int -> [PieceNum] -> IO [(PieceNum, Block)]
+grabBlocks pmC n pieceSet = do
+    c <- channel :: IO (Channel ([(PieceNum, [Block])]))
+    sync $ transmit pmC (GrabBlocks n pieceSet c)
+    blks <- sync $ receive c (const True)
+    return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
 
 ----------------------------------------------------------------------
 
@@ -140,12 +147,12 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
                                  | otherwise = reverse $ Block os leftBytes : accum
 
 
--- | The call @grabBlocks n eligible db@ tries to pick off up to @n@ pieces from
+-- | The call @grabBlocks' n eligible db@ tries to pick off up to @n@ pieces from
 --   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
-grabBlocks :: Int -> [PieceNum] -> PieceDB -> ([(PieceNum, [Block])], PieceDB)
-grabBlocks k eligible db = tryGrabProgress k eligible db []
+grabBlocks' :: Int -> [PieceNum] -> PieceDB -> ([(PieceNum, [Block])], PieceDB)
+grabBlocks' k eligible db = tryGrabProgress k eligible db []
   where
     -- Grabbing blocks is a state machine implemented by tail calls
     -- Try grabbing pieces from the pieces in progress first
