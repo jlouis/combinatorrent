@@ -159,7 +159,7 @@ peerP pMgrC pieceMgrC fsC logC nPieces h = do
                                   Just m -> case m of
                                               KeepAlive -> return s -- Do nothing here
                                               Choke     -> return s { peerChoke = True }
-                                              Unchoke   -> return s { peerChoke = False }
+                                              Unchoke   -> fillBlocks s { peerChoke = False }
                                               Interested -> return s { peerInterested = True }
                                               NotInterested -> return s { peerInterested = False }
                                               Have pn -> return  s { peerPieces = pn : peerPieces s}
