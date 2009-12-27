@@ -1,4 +1,5 @@
 -- | Simple Functional queues based on a double list. This usually achieves good amortized bounds
+--   TODO: Document me. I should be easy to document.
 module Queue (Queue,
               empty,
               isEmpty,
@@ -18,8 +19,8 @@ isEmpty :: Queue a -> Bool
 isEmpty (Queue [] []) = True
 isEmpty _             = False
 
-push :: Queue a -> a -> Queue a
-push (Queue front back) = Queue front . (: back)
+push :: a -> Queue a -> Queue a
+push e (Queue front back) = Queue front (e : back)
 
 
 pop :: Queue a -> Maybe (a, Queue a)
