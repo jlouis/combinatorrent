@@ -110,6 +110,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        logCh :: LogChannel,
                        fsCh :: FSPChannel,
                        peerC :: PeerChannel,
+                       weChoke :: Bool,
                        peerChoke :: Bool,
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
@@ -132,6 +133,7 @@ peerP pMgrC fsC logC nPieces h = do
                                 logCh = logC,
                                 peerC = getC,
                                 fsCh  = fsC,
+                                weChoke = True,
                                 peerChoke = True,
                                 peerInterested = False,
                                 peerPieces = [] }
@@ -140,9 +142,10 @@ peerP pMgrC fsC logC nPieces h = do
         peerMgrEvent s = wrap (receive (peerC s) (const True))
                            (\msg ->
                                 do case msg of
-                                     ChokePeer -> sync $ transmit (outCh s) SendOChoke
-                                     UnchokePeer -> sync $ transmit (outCh s) $ SendQMsg Unchoke
-                                   return s)
+                                     ChokePeer -> do sync $ transmit (outCh s) SendOChoke
+                                                     return s { weChoke = True }
+                                     UnchokePeer -> do sync $ transmit (outCh s) $ SendQMsg Unchoke
+                                                       return s { weChoke = False })
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
                                 case msg of
