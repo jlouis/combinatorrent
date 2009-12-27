@@ -1,0 +1,120 @@
+digraph {
+	node [fontname="URW Gothic L",fontsize=10];
+	edge [fontname="URW Gothic L",fontsize=8];
+
+	labeljust = l;
+	labelloc = t;
+
+	fontsize = 24;
+	fontname="URW Gothic L";
+	label = "Peer Process FlowChart";
+
+
+	// External communication
+	{ rank=same;
+	  inbound [label="Inbound", shape=ellipse,color=deepskyblue4];
+	  loop [label="Loop/Sync"];
+        }
+
+	outbound [label="Outbound", shape=ellipse,color=deepskyblue4];
+	pieceMgr [lable="Piece Mgr",shape=ellipse,color=deepskyblue4];
+
+	exit [label="Exit",color=red];
+
+	node [shape=box];
+
+	// Loop
+	caseMsg [label="Case msg"];
+
+	inbound -> caseMsg [style=dotted,color=deepskyblue4];
+	loop -> caseMsg;
+
+	{ rank=same;
+	  piece [label="PIECE"];
+	  have [label="HAVE"];
+	  cancel [label="CANCEL"];
+	  unchoke [label="UNCHOKE"];
+	  choke [label="CHOKE"];
+	  request [label="REQUEST"];
+        }
+
+	// Piece
+	pieceOk [label="Ok?"];
+	pieceStore [label="Store\nblock"];
+
+	piece -> pieceOk;
+	pieceOk -> exit [label="No"];
+	pieceOk -> pieceStore [label="Yes"];
+
+	pieceStore -> sizeCheck;
+
+	caseMsg -> piece;
+
+	// Have
+	haveOk [label="Ok?"];
+
+	caseMsg -> have;
+	have -> haveOk;
+	haveOk -> exit [label="No"];
+	haveOk -> sizeCheck [label="Yes"];
+
+	// Cancel
+	cancelForward [label="Forward"];
+
+	caseMsg -> cancel;
+	cancel -> cancelForward;
+	cancelForward -> loop;
+	cancelForward -> outbound [style="dotted",color=deepskyblue4];
+
+	// Unchoke
+	caseMsg -> unchoke;
+	unchoke -> sizeCheck;
+
+	// Choke
+	chokeForward [label="Forward"];
+	clearPieceQueue [label="Clear\nPiece Queue"];
+
+	caseMsg -> choke;
+	choke -> chokeForward;
+	chokeForward -> clearPieceQueue;
+	chokeForward -> outbound [style=dotted,color=deepskyblue4];
+	clearPieceQueue -> pieceMgr [style=dotted,color=deepskyblue4];
+	clearPieceQueue -> loop;
+
+	// Request
+	requestChoked [label="Choked?",shape=diamond];
+	requestIgnore [label="Ignore request"];
+	queueRequest  [label="Queue request"];
+
+	caseMsg -> request;
+	request -> requestChoked;
+	requestChoked -> requestIgnore [label="Yes"];
+	requestIgnore -> loop;
+
+	requestChoked -> queueRequest [label="No"];
+
+	queueRequest -> loop;
+	queueRequest -> outbound [style=dotted,color=deepskyblue4];
+
+
+
+	subgraph cluster_fill_blocks {
+		 fontsize = 16;
+		 style = "dotted";
+		 labelloc=b
+		 label = "Unchoke checked fill blocks";
+
+		 sizeCheck [label="Sz < Lo watermark"];
+		 grabBlocks [label="Grab up to\nHi-Sz blocks"];
+		 queueBlocks [label="Queue new blocks"];
+
+		 sizeCheck -> loop [label="No"];
+		 sizeCheck -> grabBlocks [label="Yes"];
+
+		 grabBlocks -> pieceMgr [style=dotted,color=deepskyblue4];
+		 pieceMgr -> grabBlocks [style=dotted,color=deepskyblue4];
+
+		 grabBlocks -> queueBlocks;
+		 queueBlocks -> loop;
+	}
+}
