@@ -39,8 +39,10 @@ senderP logC handle ch = lp
                                 logMsg logC "Sent and flushed"
                                 lp
 
-data SendQueueMessage = SendQCancel PieceNum Block
-                      | SendQMsg Message
+-- | Messages we can send to the Send Queue
+data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
+                      | SendQMsg Message           -- ^ We want to send the Message to the peer
+                      | SendOChoke                 -- ^ We want to choke the peer
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
@@ -56,7 +58,12 @@ sendQueueP logC inC outC = lp Q.empty
                         (\m -> case m of
                                  SendQMsg msg -> do logMsg logC "Queueing event for sending"
                                                     return $ Q.push q msg
-                                 SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q)
+                                 SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q
+                                 SendOChoke -> do nq <- return $ Q.filter filterAllPiece q
+                                                  return $ Q.push nq Choke)
+        filterAllPiece (Piece _ _ _) = True
+        filterAllPiece _             = False
+
         filterPiece n off m = case m of Piece n off _ -> False
                                         _             -> True
         sendEvent q =
@@ -133,7 +140,7 @@ peerP pMgrC fsC logC nPieces h = do
         peerMgrEvent s = wrap (receive (peerC s) (const True))
                            (\msg ->
                                 do case msg of
-                                     ChokePeer -> sync $ transmit (outCh s) $ SendQMsg Choke
+                                     ChokePeer -> sync $ transmit (outCh s) SendOChoke
                                      UnchokePeer -> sync $ transmit (outCh s) $ SendQMsg Unchoke
                                    return s)
         peerMsgEvent s = wrap (receive (inCh s) (const True))
