@@ -11,6 +11,7 @@ import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Parser hiding (isEmpty)
+import qualified Data.Map as M
 import Data.Maybe
 import Data.Set as S hiding (map)
 import Data.Word
@@ -164,7 +165,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                               Unchoke   -> fillBlocks s { peerChoke = False }
                                               Interested -> return s { peerInterested = True }
                                               NotInterested -> return s { peerInterested = False }
-                                              Have pn -> return  s { peerPieces = pn : peerPieces s}
+                                              Have pn ->
+                                                  if M.member pn (pieceMap s)
+                                                     then fillBlocks s { peerPieces = pn : peerPieces s }
+                                                     else error "Unknown piece" -- TODO: Handle error properly
                                               BitField bf ->
                                                   case peerPieces s of
                                                     [] -> return s { peerPieces = createPeerPieces bf }
