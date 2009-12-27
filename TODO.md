@@ -46,3 +46,6 @@ wish-list.
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
     * Implement the Leecher code in the PeerP.
+    * When we grab pieces from the Piece Manager, let it provide us with a
+      pruned set of pieces we can ask with later. This way, we only need to
+      consider pieces we already have once and we get a faster system.
