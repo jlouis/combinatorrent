@@ -21,7 +21,7 @@ import System.IO
 
 import PeerTypes
 import ConsoleP
-import FSP
+import FSP hiding (pieceMap)
 import PieceMgrP
 import qualified OMBox
 import qualified Queue as Q
@@ -115,6 +115,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        fsCh :: FSPChannel,
                        peerC :: PeerChannel,
                        weChoke :: Bool,
+                       pieceMap :: PieceMap,
                        blockQueue :: S.Set (PieceNum, Block),
                        peerChoke :: Bool,
                        peerInterested :: Bool,
@@ -122,8 +123,8 @@ data State = MkState { inCh :: Channel (Maybe Message),
 
 -- TODO: The PeerP should always attempt to move the BitField first
 -- TODO: Consider filling blocks after each loop...
-peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> Handle -> IO ()
-peerP pMgrC pieceMgrC fsC logC nPieces h = do
+peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle -> IO ()
+peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
     outBound <- sendP logC h
     inBound  <- receiverP logC h
     (putC, getC) <- OMBox.new
@@ -139,6 +140,7 @@ peerP pMgrC pieceMgrC fsC logC nPieces h = do
                    peerC = getC,
                    fsCh  = fsC,
                    pieceMgrCh = pieceMgrC,
+                   pieceMap = pm,
                    blockQueue = S.empty,
                    weChoke = True,
                    peerChoke = True,
@@ -228,10 +230,10 @@ showPort :: PortID -> String
 showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
 
-connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMgrChannel -> FSPChannel -> LogChannel
+connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel
         -> MgrChannel -> Int
         -> IO ()
-connect host port pid ih pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
+connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
   where connector =
          do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
@@ -244,7 +246,7 @@ connect host port pid ih pieceMgrC fsC logC mgrC nPieces = spawn connector >> re
                              return ()
               Right (_caps, _rpid) ->
                   do logMsg logC "entering peerP loop code"
-                     peerP mgrC pieceMgrC fsC logC nPieces h
+                     peerP mgrC pieceMgrC fsC pm logC nPieces h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 {-
