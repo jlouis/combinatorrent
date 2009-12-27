@@ -161,11 +161,15 @@ peerP pMgrC fsC logC nPieces h = do
                                                     [] -> return s { peerPieces = createPeerPieces bf }
                                                     _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
-                                                   do c <- channel
-                                                      readBlock (fsCh s) c pn blk -- Push this down in the Send Process
-                                                      bs <- sync $ receive c (const True)
-                                                      sync $ transmit (outCh s) $ SendQMsg (Piece pn (blockOffset blk) bs)
-                                                      return s
+                                                  case weChoke s of
+                                                    True -> return s -- Ignore, there might be stray packets
+                                                    False ->
+                                                        do c <- channel
+                                                           readBlock (fsCh s) c pn blk -- TODO: Pushdown in Send Process
+                                                           bs <- sync $ receive c (const True)
+                                                           sync $ transmit (outCh s) $
+                                                                SendQMsg (Piece pn (blockOffset blk) bs)
+                                                           return s
                                               Piece _ _ _ -> return s -- Silently ignore these
                                               Cancel n blk -> do sync $ transmit (outCh s) $ SendQCancel n blk
                                                                  return s
