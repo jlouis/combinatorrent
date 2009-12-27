@@ -17,7 +17,8 @@ digraph {
         }
 
 	outbound [label="Outbound", shape=ellipse,color=deepskyblue4];
-	pieceMgr [lable="Piece Mgr",shape=ellipse,color=deepskyblue4];
+	peerMgr  [label="Peer Manager",shape=ellipse,color=deepskyblue4];
+	pieceMgr [label="Piece Mgr",shape=ellipse,color=deepskyblue4];
 
 	exit [label="Exit",color=red];
 
@@ -25,9 +26,12 @@ digraph {
 
 	// Loop
 	caseMsg [label="Case msg"];
+	casePMMsg [label="Case msg"];
 
 	inbound -> caseMsg [style=dotted,color=deepskyblue4];
 	loop -> caseMsg;
+	peerMgr -> casePMMsg [style=dotted,color=deepskyblue4];
+	loop -> casePMMsg;
 
 	{ rank=same;
 	  piece [label="PIECE"];
@@ -36,7 +40,23 @@ digraph {
 	  unchoke [label="UNCHOKE"];
 	  choke [label="CHOKE"];
 	  request [label="REQUEST"];
+	  ochoke [label="OCHOKE"];
+	  ounchoke [label="OUNCHOKE"];
         }
+
+	// OUnchoke
+
+	casePMMsg -> ounchoke;
+	ounchoke -> outbound [style=dotted,color=deepskyblue4];
+	ounchoke -> loop;
+
+	// OChoke
+	chokePrune [label="Prune Queue of\nPIECE messages",style=dotted,shape=box,color=deepskyblue4];
+
+	casePMMsg -> ochoke;
+	ochoke -> chokePrune [style=dotted,color=deepskyblue4,arrowhead=none];
+	chokePrune -> outbound [style=dotted,color=deepskyblue4];
+	ochoke -> loop;
 
 	// Piece
 	pieceOk [label="Ok?"];
