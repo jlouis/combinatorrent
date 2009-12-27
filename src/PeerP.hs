@@ -21,7 +21,7 @@ import PeerTypes
 import ConsoleP
 import FSP
 import qualified OMBox
-import Queue
+import qualified Queue as Q
 import Torrent
 import WireProtocol
 
@@ -39,26 +39,33 @@ senderP logC handle ch = lp
                                 logMsg logC "Sent and flushed"
                                 lp
 
+data SendQueueMessage = SendQCancel PieceNum Block
+                      | SendQMsg Message
+
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
 --   TODO: Make it possible to stop again.
-sendQueueP :: LogChannel -> Channel Message -> Channel (Maybe Message) -> IO ()
-sendQueueP logC inC outC = lp empty
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel (Maybe Message) -> IO ()
+sendQueueP logC inC outC = lp Q.empty
   where lp eventQ =
-            do eq <- if isEmpty eventQ
+            do eq <- if Q.isEmpty eventQ
                        then sync $ queueEvent eventQ
                        else sync $ choose [queueEvent eventQ, sendEvent eventQ]
                lp eq
         queueEvent q = wrap (receive inC (const True))
-                        (\m -> do logMsg logC "Queueing event for sending"
-                                  return $ push q m)
+                        (\m -> case m of
+                                 SendQMsg msg -> do logMsg logC "Queueing event for sending"
+                                                    return $ Q.push q msg
+                                 SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q)
+        filterPiece n off m = case m of Piece n off _ -> False
+                                        _             -> True
         sendEvent q =
-            let Just (e, r) = pop q
+            let Just (e, r) = Q.pop q
             in wrap (transmit outC $ Just e)
                    (\() -> do logMsg logC "Sent event"
                               return r)
 
-sendP :: LogChannel -> Handle -> IO (Channel Message)
+sendP :: LogChannel -> Handle -> IO (Channel SendQueueMessage)
 sendP logC handle = do inC <- channel
                        outC <- channel
                        spawn $ senderP logC handle outC
@@ -92,7 +99,7 @@ receiverP logC hndl = do ch <- channel
                     Right i -> return i
 
 data State = MkState { inCh :: Channel (Maybe Message),
-                       outCh :: Channel Message,
+                       outCh :: Channel SendQueueMessage,
                        logCh :: LogChannel,
                        fsCh :: FSPChannel,
                        peerC :: PeerChannel,
@@ -101,6 +108,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        peerPieces :: [PieceNum]}
 
 -- TODO: The PeerP should always attempt to move the BitField first
+-- TODO: Consider filling blocks after each loop...
 peerP :: MgrChannel -> FSPChannel -> LogChannel -> Int -> Handle -> IO ()
 peerP pMgrC fsC logC nPieces h = do
     outBound <- sendP logC h
@@ -111,7 +119,7 @@ peerP pMgrC fsC logC nPieces h = do
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
       sync $ transmit pMgrC $ Connect tid putC
-      sync $ transmit outBound $ BitField (constructBitField [0..nPieces-1])
+      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField [0..nPieces-1])
       lp MkState { inCh = inBound,
                                 outCh = outBound,
                                 logCh = logC,
@@ -125,8 +133,8 @@ peerP pMgrC fsC logC nPieces h = do
         peerMgrEvent s = wrap (receive (peerC s) (const True))
                            (\msg ->
                                 do case msg of
-                                     ChokePeer -> sync $ transmit (outCh s) Choke
-                                     UnchokePeer -> sync $ transmit (outCh s) Unchoke
+                                     ChokePeer -> sync $ transmit (outCh s) $ SendQMsg Choke
+                                     UnchokePeer -> sync $ transmit (outCh s) $ SendQMsg Unchoke
                                    return s)
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
@@ -146,10 +154,11 @@ peerP pMgrC fsC logC nPieces h = do
                                                    do c <- channel
                                                       readBlock (fsCh s) c pn blk -- Push this down in the Send Process
                                                       bs <- sync $ receive c (const True)
-                                                      sync $ transmit (outCh s) (Piece pn (blockOffset blk) bs)
+                                                      sync $ transmit (outCh s) $ SendQMsg (Piece pn (blockOffset blk) bs)
                                                       return s
                                               Piece _ _ _ -> return s -- Silently ignore these
-                                              Cancel _ _ -> return s -- Silently ignore these
+                                              Cancel n blk -> do sync $ transmit (outCh s) $ SendQCancel n blk
+                                                                 return s
                                               Port _ -> return s -- No DHT Yet, silently ignore
                                   Nothing -> do logMsg (logCh s) "Unknown message"
                                                 undefined -- TODO: Kill off gracefully
