@@ -71,13 +71,10 @@ digraph {
 	unchoke -> sizeCheck;
 
 	// Choke
-	chokeForward [label="Forward"];
 	clearPieceQueue [label="Clear\nPiece Queue"];
 
 	caseMsg -> choke;
-	choke -> chokeForward;
-	chokeForward -> clearPieceQueue;
-	chokeForward -> outbound [style=dotted,color=deepskyblue4];
+	choke -> clearPieceQueue;
 	clearPieceQueue -> pieceMgr [style=dotted,color=deepskyblue4];
 	clearPieceQueue -> loop;
 
