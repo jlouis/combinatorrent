@@ -40,7 +40,8 @@ senderP logC handle ch = lp
   where lp = do msg <- sync $ receive ch (const True)
                 case msg of
                   Nothing -> return ()
-                  Just m  -> do let bs = encode m
+                  Just m  -> do logMsg logC $ "Sending: " ++ show m
+                                let bs = encode m
                                 L.hPut handle bs
                                 hFlush handle
                                 logMsg logC "Sent and flushed"
@@ -223,8 +224,11 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
         checkWatermark s =
             let sz = S.size (blockQueue s)
             in if sz < loMark
-                 then do toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
-                         queuePieces s toQueue
+                 then do
+                   logMsg logC $ "Filling..."
+                   toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
+                   logMsg logC $ "Got " ++ show (length toQueue) ++ " blocks"
+                   queuePieces s toQueue
                  else return s -- Do nothing, we have plenty queued already
         queuePieces s toQueue = do mapM_ (pushPiece $ outCh s) toQueue
                                    return s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) }
