@@ -18,7 +18,7 @@ import qualified ConsoleP
 import FS
 import qualified FSP
 import qualified PeerMgrP
-import qualified PieceMgrP()
+import qualified PieceMgrP (start, createPieceDb)
 import qualified StatusP
 import qualified TimerP()
 import Torrent
@@ -42,7 +42,6 @@ download name = do
       Left pe -> print pe
       Right bc ->
         do (h, missingMap, pieceMap) <- openAndCheckFile bc
-           unless (canSeed missingMap) $ fail "We don't have the full file, we can't seed"
            -- setup channels
            trackerC <- channel
            statusC  <- channel
@@ -61,6 +60,7 @@ download name = do
            let ti = fromJust $ mkTorrentInfo bc
            putStrLn $ "Created various data, pieceCount is " ++ show (pieceCount ti)
            PeerMgrP.start pmC pid (infoHash ti) pieceMap pieceMgrC fspC logC (pieceCount ti)
+           PieceMgrP.start logC pieceMgrC fspC (PieceMgrP.createPieceDb missingMap pieceMap)
            StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
            putStrLn "Started Status Process"
            TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
