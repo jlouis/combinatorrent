@@ -77,6 +77,7 @@ writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
 writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
                                    when lenFail $ fail "Writing block of wrong length"
                                    B.hPut h blkData
+                                   hFlush h
                                    return ()
   where pos = offset (fromJust $ M.lookup n pm) + (fromIntegral $ blockOffset blk)
         lenFail = B.length blkData /= blockSize blk
