@@ -151,7 +151,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
       -- in the meantime will be sent as one of the first "normal" messages to the peer.
       sync $ transmit pMgrC $ Connect tid putC
       pieces <- PieceMgrP.getPieceDone pieceMgrC
-      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField pieces)
+      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField nPieces pieces)
       lp MkState { inCh = inBound,
                    outCh = outBound,
                    logCh = logC,
@@ -250,10 +250,9 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
 --   BITFIELD message to a peer.
-constructBitField :: [PieceNum] -> L.ByteString
-constructBitField pieces = L.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
-    where sz = fromIntegral (length pieces)
-          pad = 8 - (sz `mod` 8)
+constructBitField :: Int -> [PieceNum] -> L.ByteString
+constructBitField sz pieces = L.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
+    where pad = 8 - (sz `mod` 8)
           build [] = []
           build l  = let (first, rest) = splitAt 8 l
                      in if length first /= 8
