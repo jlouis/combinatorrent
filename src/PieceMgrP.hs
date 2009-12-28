@@ -51,6 +51,8 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
+                 | PutbackBlocks [(PieceNum, Block)]
+                   -- ^ Put these blocks back for retrieval
 type PieceMgrChannel = Channel PieceMgrMsg
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
@@ -75,7 +77,12 @@ start logC mgrC fspC db = lp db
                                            Just False -> putBackPiece db' pn
                               lp db''
                       else lp db'
+            PutbackBlocks blks ->
+              lp $ foldl (\db (pn, blk) -> putbackBlock pn blk db) db blks
 
+
+putbackBlocks :: PieceMgrChannel -> [(PieceNum, Block)] -> IO ()
+putbackBlocks ch blks = sync $ transmit ch (PutbackBlocks blks)
 
 storeBlock :: PieceMgrChannel -> PieceNum -> Block -> B.ByteString -> IO ()
 storeBlock ch n blk bs = sync $ transmit ch (StoreBlock n blk bs)
@@ -102,6 +109,12 @@ putBackPiece :: PieceDB -> PieceNum -> PieceDB
 putBackPiece db pn =
     db { inProgress = M.delete pn (inProgress db),
          pendingPieces = pn : pendingPieces db }
+
+putbackBlock :: PieceNum -> Block -> PieceDB -> PieceDB
+putbackBlock pn blk db = db { inProgress = ndb }
+  where ndb = M.alter f pn (inProgress db)
+        f Nothing     = error "The 'impossible' happened, are you implementing endgame?" -- This might happen in endgame
+        f (Just ipp) = Just ipp { ipPendingBlocks = blk : ipPendingBlocks ipp }
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.

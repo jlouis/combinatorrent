@@ -161,10 +161,14 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                 case msg of
                                   Just m -> case m of
                                               KeepAlive -> return s -- Do nothing here
-                                              Choke     -> return s { peerChoke = True }
+                                              Choke     -> do PieceMgrP.putbackBlocks
+                                                                           (pieceMgrCh s)
+                                                                           (S.toList $ blockQueue s)
+                                                              return s { blockQueue = S.empty }
                                               Unchoke   -> fillBlocks s { peerChoke = False }
-                                              Interested -> return s { peerInterested = True }
-                                              NotInterested -> return s { peerInterested = False }
+                                              -- The next two is dependent in the PeerManager being more clever
+                                              Interested -> return s { peerInterested = True } -- TODO
+                                              NotInterested -> return s { peerInterested = False } -- TODO
                                               Have pn ->
                                                   if M.member pn (pieceMap s)
                                                      then fillBlocks s { peerPieces = pn : peerPieces s }
