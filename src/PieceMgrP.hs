@@ -53,6 +53,8 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
+                 | GetDone (Channel [PieceNum])
+
 type PieceMgrChannel = Channel PieceMgrMsg
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
@@ -79,7 +81,14 @@ start logC mgrC fspC db = lp db
                       else lp db'
             PutbackBlocks blks ->
               lp $ foldl (\db (pn, blk) -> putbackBlock pn blk db) db blks
+            GetDone c -> do sync $ transmit c (donePiece db)
+                            lp db
 
+getPieceDone :: PieceMgrChannel -> IO [PieceNum]
+getPieceDone ch = do
+  c <- channel
+  sync $ transmit ch $ GetDone c
+  sync $ receive c (const True)
 
 putbackBlocks :: PieceMgrChannel -> [(PieceNum, Block)] -> IO ()
 putbackBlocks ch blks = sync $ transmit ch (PutbackBlocks blks)

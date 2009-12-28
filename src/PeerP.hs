@@ -6,13 +6,16 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Monad
 
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Parser hiding (isEmpty)
 import qualified Data.Map as M
+import Data.List (sort)
 import Data.Maybe
+
 import Data.Set as S hiding (map)
 import Data.Word
 
@@ -133,8 +136,11 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
     spawn $ do
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
+      -- The Connect must happen before the bitfield is transferred. That way any piece getting done
+      -- in the meantime will be sent as one of the first "normal" messages to the peer.
       sync $ transmit pMgrC $ Connect tid putC
-      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField [0..nPieces-1])
+      pieces <- PieceMgrP.getPieceDone pieceMgrC
+      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField pieces)
       lp MkState { inCh = inBound,
                    outCh = outBound,
                    logCh = logC,
@@ -228,6 +234,8 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
+-- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
+--   BITFIELD message to a peer.
 constructBitField :: [PieceNum] -> L.ByteString
 constructBitField pieces = L.pack . build $ map (`elem` pieces) [0..sz-1 + pad]
     where sz = fromIntegral (length pieces)
