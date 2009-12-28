@@ -232,7 +232,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                  else return s -- Do nothing, we have plenty queued already
         queuePieces s toQueue = do mapM_ (pushPiece $ outCh s) toQueue
                                    return s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) }
-        pushPiece ch (pn, blk) = sync $ transmit ch $ SendQMsg $ Request pn blk
+        pushPiece ch (pn, blk) =
+            sync $ transmit ch $ SendQMsg $ Request pn blk
         loMark = 10
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
