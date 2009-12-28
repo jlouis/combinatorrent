@@ -175,12 +175,12 @@ updateProgress db pn blk =
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
-  where build leftBytes os accum | leftBytes >= blockSz =
+  where build 0         os accum = reverse accum
+        build leftBytes os accum | leftBytes >= blockSz =
                                      build (leftBytes - blockSz)
                                            (os + blockSz)
                                            $ (Block os blockSz) : accum
-                                 | otherwise = reverse $ Block os leftBytes : accum
-
+                                 | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
 
 -- | The call @grabBlocks' n eligible db@ tries to pick off up to @n@ pieces from
 --   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
