@@ -92,24 +92,33 @@ receiverP logC hndl = do ch <- channel
                          spawn $ lp ch
                          return ch
   where lp ch = do logMsg logC "Peer waiting for input"
-                   bs' <- L.hGet hndl 4
-                   l <- conv bs'
-                   if l == 0
-                      then lp ch
-                      else do logMsg logC $ "Reading off " ++ show l ++ " bytes"
-                              bs <- L.hGet hndl (fromIntegral l)
-                              logMsg logC $ "Read: " ++ show bs
-                              case runParser decodeMsg bs of
-                                Left _ -> do sync $ transmit ch Nothing
-                                             logMsg logC "Incorrect parse in receiver, dying!"
-                                             return () -- Die!
-                                Right msg -> do logMsg logC $ "Decoded as: " ++ show msg
-                                                sync $ transmit ch (Just msg)
-                                                lp ch
+                   readHeader ch
+        readHeader ch = do
+          feof <- hIsEOF hndl
+          if feof
+            then do logMsg logC $ "Handle is closed, dying!"
+                    return ()
+            else do bs' <- L.hGet hndl 4
+                    l <- conv bs'
+                    readMessage l ch
+        readMessage l ch = do
+          when (l == 0) (lp ch)
+          logMsg logC $ "Reading off " ++ show l ++ " bytes"
+          bs <- L.hGet hndl (fromIntegral l)
+          logMsg logC $ "Read: " ++ show bs
+          case runParser decodeMsg bs of
+            Left _ -> do sync $ transmit ch Nothing
+                         logMsg logC "Incorrect parse in receiver, dying!"
+                         return () -- Die!
+            Right msg -> do logMsg logC $ "Decoded as: " ++ show msg
+                            sync $ transmit ch (Just msg)
+                            lp ch
         conv :: L.ByteString -> IO Word32
-        conv bs = case runParser (getWord32be) bs of
-                    Left _ -> do logMsg logC "Incorrent length in receiver, dying!"
-                                 error "receiverP: Incorrent length in receiver, dying!"
+        conv bs = do
+          logMsg logC $ show $ L.length bs
+          case runParser (getWord32be) bs of
+                    Left err -> do logMsg logC $ "Incorrent parse in receiver, dying: " ++ show err
+                                   error "receiverP: Incorrent length in receiver, dying!"
                     Right i -> return i
 
 data State = MkState { inCh :: Channel (Maybe Message),
