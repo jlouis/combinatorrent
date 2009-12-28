@@ -85,6 +85,8 @@ data PieceInfo = PieceInfo {
     } deriving (Eq, Show)
 
 type PieceMap = M.Map PieceNum PieceInfo
+
+-- | The Missing map is a map which is true if we have the piece and false otherwise
 type MissingMap = M.Map PieceNum Bool
 
 -- BLOCKS

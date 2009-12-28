@@ -94,6 +94,7 @@ receiverP logC hndl = do ch <- channel
                          return ch
   where lp ch = do logMsg logC "Peer waiting for input"
                    readHeader ch
+        -- This checking could be done when we read 0 bytes and conversion fails.
         readHeader ch = do
           feof <- hIsEOF hndl
           if feof
