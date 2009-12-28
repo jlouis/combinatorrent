@@ -40,6 +40,7 @@ digraph {
 	  unchoke [label="UNCHOKE"];
 	  choke [label="CHOKE"];
 	  request [label="REQUEST"];
+	  bitfield [label="BITFIELD"];
 	  ochoke [label="OCHOKE"];
 	  ounchoke [label="OUNCHOKE"];
         }
@@ -57,6 +58,14 @@ digraph {
 	ochoke -> chokePrune [style=dotted,color=deepskyblue4,arrowhead=none];
 	chokePrune -> outbound [style=dotted,color=deepskyblue4];
 	ochoke -> loop;
+
+	// Bitfield
+	constructPieceSet [label="Construct Piece\nSet"];
+
+	caseMsg -> bitfield;
+	bitfield -> constructPieceSet;
+	constructPieceSet -> exit [label="Not\nInit"];
+	constructPieceSet -> sizeCheck;
 
 	// Piece
 	pieceOk [label="Ok?"];
