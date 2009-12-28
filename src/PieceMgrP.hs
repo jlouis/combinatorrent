@@ -63,7 +63,9 @@ start logC mgrC fspC db = (spawn $ lp db) >> return ()
           msg <- sync $ receive mgrC (const True)
           case msg of
             GrabBlocks n eligible c ->
-                do let (blocks, db') = grabBlocks' n eligible db
+                do logMsg logC $ "Grabbing blocks"
+                   let (blocks, db') = grabBlocks' n eligible db
+                   logMsg logC $ "Grabbed..."
                    sync $ transmit c blocks
                    lp db'
             StoreBlock pn blk d ->
