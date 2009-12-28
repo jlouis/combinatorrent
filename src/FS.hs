@@ -79,7 +79,7 @@ writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
                                    B.hPut h blkData
                                    return ()
   where pos = offset (fromJust $ M.lookup n pm) + (fromIntegral $ blockOffset blk)
-        lenFail = B.length blkData == blockSize blk
+        lenFail = B.length blkData /= blockSize blk
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
