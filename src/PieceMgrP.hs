@@ -213,15 +213,16 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
         case ps `intersect` (pendingPieces db) of
           []    -> (captured, db) -- No (more) pieces to download, return
           (h:_) ->
-              let blockList = createBlock n db
-                  ipp = InProgressPiece 0 (length blockList) S.empty blockList
+              let blockList = createBlock h db
+                  ipp = InProgressPiece 0 bSz S.empty blockList
+                  bSz = len $ fromJust $ M.lookup n (infoMap db)
                   nDb = db { pendingPieces = (pendingPieces db) \\ [h],
                              inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
-    createBlock n pdb = blockPiece
+    createBlock pn pdb = blockPiece
                           defaultBlockSize
                           (len
-                           (fromJust $ M.lookup n (infoMap pdb)))
+                           (fromJust $ M.lookup pn (infoMap pdb)))
 
 
