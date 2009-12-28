@@ -103,6 +103,14 @@ grabBlocks pmC n pieceSet = do
     blks <- sync $ receive c (const True)
     return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
 
+-- HELPERS
+----------------------------------------------------------------------
+
+createPieceDb :: MissingMap -> PieceMap -> PieceDB
+createPieceDb mmap pmap = PieceDB pending done M.empty pmap
+  where pending = M.keys $ M.filter (==True) mmap
+        done    = M.keys $ M.filter (==False) mmap
+
 ----------------------------------------------------------------------
 
 -- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
