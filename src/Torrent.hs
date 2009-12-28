@@ -33,7 +33,7 @@ module Torrent (InfoHash,
                 PieceNum,
                 PieceSize,
                 PieceMap,
-                MissingMap,
+                PiecesDoneMap,
                 PieceInfo(..),
                 BlockSize,
                 Block(..),
@@ -86,8 +86,8 @@ data PieceInfo = PieceInfo {
 
 type PieceMap = M.Map PieceNum PieceInfo
 
--- | The Missing map is a map which is true if we have the piece and false otherwise
-type MissingMap = M.Map PieceNum Bool
+-- | The PiecesDoneMap is a map which is true if we have the piece and false otherwise
+type PiecesDoneMap = M.Map PieceNum Bool
 
 -- BLOCKS
 ----------------------------------------------------------------------

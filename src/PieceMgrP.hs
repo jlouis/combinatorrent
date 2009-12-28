@@ -106,7 +106,7 @@ grabBlocks pmC n pieceSet = do
 -- HELPERS
 ----------------------------------------------------------------------
 
-createPieceDb :: MissingMap -> PieceMap -> PieceDB
+createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
 createPieceDb mmap pmap = PieceDB pending done M.empty pmap
   where pending = M.keys $ M.filter (==False) mmap
         done    = M.keys $ M.filter (==True) mmap

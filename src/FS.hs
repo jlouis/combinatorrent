@@ -93,7 +93,7 @@ checkPiece h inf = do
 --   the file and then check it against the digest. It will create a map of what we are missing
 --   in the file as a missing map. We could alternatively choose a list of pieces missing rather
 --   then creating the data structure here. This is perhaps better in the long run.
-checkFile :: Handle -> PieceMap -> IO MissingMap
+checkFile :: Handle -> PieceMap -> IO PiecesDoneMap
 checkFile handle pm = do l <- mapM checkP pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
@@ -124,12 +124,12 @@ mkPieceMap bc = fetchData
             --undefined -- Can never be hit (famous last words)
 
 -- | Predicate function. True if nothing is missing from the map.
-canSeed :: MissingMap -> Bool
+canSeed :: PiecesDoneMap -> Bool
 canSeed mmp = M.fold (&&) True mmp
 
 -- | Process a BCoded torrent file. Open the file in question, check it and return a handle
 --   plus a missingMap for the file
-openAndCheckFile :: BCode -> IO (Handle, MissingMap, PieceMap)
+openAndCheckFile :: BCode -> IO (Handle, PiecesDoneMap, PieceMap)
 openAndCheckFile bc =
     do
        h <- openBinaryFile fpath ReadWriteMode
