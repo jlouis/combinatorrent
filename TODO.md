@@ -49,4 +49,9 @@ wish-list.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
-    * Document in .dot what to do with the BITFIELD message.
+    * The StatusP process is always fed static data. Feed it the correct data
+      based on the current status: Are we a leecher or a seeder? And how much
+      data is there left to download before we have the full file?
+
+      (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
+       data)
