@@ -108,8 +108,8 @@ grabBlocks pmC n pieceSet = do
 
 createPieceDb :: MissingMap -> PieceMap -> PieceDB
 createPieceDb mmap pmap = PieceDB pending done M.empty pmap
-  where pending = M.keys $ M.filter (==True) mmap
-        done    = M.keys $ M.filter (==False) mmap
+  where pending = M.keys $ M.filter (==False) mmap
+        done    = M.keys $ M.filter (==True) mmap
 
 ----------------------------------------------------------------------
 
