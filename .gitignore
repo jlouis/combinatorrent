@@ -4,6 +4,7 @@ Main
 /dist
 /gen-doc
 /doc/*.pdf
+/doc/*.png
 /TAGS
 /tags
 /doc/processes.png
