@@ -207,9 +207,10 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
         case ps `intersect` (pendingPieces db) of
           []    -> (captured, db) -- No (more) pieces to download, return
           (h:_) ->
-              let blocks = undefined
+              let blockList = createBlock n db
+                  ipp = InProgressPiece 0 (length blockList) S.empty blockList
                   nDb = db { pendingPieces = (pendingPieces db) \\ [h],
-                             inProgress    = M.insert h blocks (inProgress db) }
+                             inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
     createBlock n pdb = blockPiece
