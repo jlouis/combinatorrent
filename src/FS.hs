@@ -112,17 +112,16 @@ mkPieceMap bc = fetchData
                        return . M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _    0     _    []       = []
-        extract plen tlen offst (p : ps) | tlen < plen =
+        extract plen left offst (p : ps) | left < plen =
                    PieceInfo { offset = offst,
-                               len = fromIntegral tlen,
+                               len = fromIntegral left,
                                digest = p } : extract plen 0 (offst + plen) ps
                                          | otherwise =
-                                             inf : extract plen (tlen - plen) (offst + plen) ps
+                                             inf : extract plen (left - plen) (offst + plen) ps
                                        where inf = PieceInfo { offset = offst,
                                                                len = fromIntegral plen,
                                                                digest = p }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
-            --undefined -- Can never be hit (famous last words)
 
 -- | Predicate function. True if nothing is missing from the map.
 canSeed :: PiecesDoneMap -> Bool
