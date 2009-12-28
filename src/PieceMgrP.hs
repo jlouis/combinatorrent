@@ -58,7 +58,7 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 type PieceMgrChannel = Channel PieceMgrMsg
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
-start logC mgrC fspC db = lp db
+start logC mgrC fspC db = (spawn $ lp db) >> return ()
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
