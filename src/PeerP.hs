@@ -176,7 +176,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                               BitField bf ->
                                                   case peerPieces s of
                                                     -- TODO: Don't trust the BitField
-                                                    [] -> return s { peerPieces = createPeerPieces bf }
+                                                    [] -> fillBlocks s { peerPieces = createPeerPieces bf }
                                                     _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
                                                   case weChoke s of
