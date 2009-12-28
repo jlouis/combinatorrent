@@ -171,6 +171,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                                      else error "Unknown piece" -- TODO: Handle error properly
                                               BitField bf ->
                                                   case peerPieces s of
+                                                    -- TODO: Don't trust the BitField
                                                     [] -> return s { peerPieces = createPeerPieces bf }
                                                     _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
@@ -183,7 +184,14 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                                            sync $ transmit (outCh s) $
                                                                 SendQMsg (Piece pn (blockOffset blk) bs)
                                                            return s
-                                              Piece _ _ _ -> return s -- Silently ignore these
+                                              Piece n os bs ->
+                                                  let sz = B.length bs
+                                                      blk = Block os sz
+                                                      e = (n, blk)
+                                                  in if S.member e (blockQueue s)
+                                                       then do PieceMgrP.storeBlock (pieceMgrCh s) n (Block os sz) bs
+                                                               fillBlocks s { blockQueue = S.delete e (blockQueue s) }
+                                                       else fillBlocks s -- Piece might be stray
                                               Cancel n blk -> do sync $ transmit (outCh s) $ SendQCancel n blk
                                                                  return s
                                               Port _ -> return s -- No DHT Yet, silently ignore

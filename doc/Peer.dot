@@ -60,13 +60,14 @@ digraph {
 
 	// Piece
 	pieceOk [label="Ok?"];
-	pieceStore [label="Store\nblock"];
+	pieceStore [label="Store block;\nUpdate Queue"];
 
 	piece -> pieceOk;
-	pieceOk -> exit [label="No"];
+	pieceOk -> loop [label="No"];
 	pieceOk -> pieceStore [label="Yes"];
 
 	pieceStore -> sizeCheck;
+	pieceStore -> pieceMgr [style=dotted,color=deepskyblue4];
 
 	caseMsg -> piece;
 

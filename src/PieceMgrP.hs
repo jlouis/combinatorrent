@@ -77,6 +77,9 @@ start logC mgrC fspC db = lp db
                       else lp db'
 
 
+storeBlock :: PieceMgrChannel -> PieceNum -> Block -> B.ByteString -> IO ()
+storeBlock ch n blk bs = sync $ transmit ch (StoreBlock n blk bs)
+
 grabBlocks :: PieceMgrChannel -> Int -> [PieceNum] -> IO [(PieceNum, Block)]
 grabBlocks pmC n pieceSet = do
     c <- channel :: IO (Channel ([(PieceNum, [Block])]))

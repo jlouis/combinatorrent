@@ -49,3 +49,4 @@ wish-list.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
+    * Document in .dot what to do with the BITFIELD message.
