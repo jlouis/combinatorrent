@@ -138,8 +138,7 @@ getBDict = BDict . M.fromList <$> getWrapped 'd' 'e' (many getPairs)
 getBString :: Get BCode
 getBString = do
     count <- getDigits
-    char ':'
-    BString <$> getByteString (read count)
+    BString <$> ( char ':' *> getByteString (read count))
 
 
 -- | Get one or more digit characters
