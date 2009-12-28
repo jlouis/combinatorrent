@@ -132,7 +132,6 @@ canSeed mmp = M.fold (&&) True mmp
 openAndCheckFile :: BCode -> IO (Handle, MissingMap, PieceMap)
 openAndCheckFile bc =
     do
-       putStrLn . take 2000 . prettyPrint $ bc
        h <- openBinaryFile fpath ReadWriteMode
        missingMap <- checkFile h pieceMap
        return (h, missingMap, pieceMap)
