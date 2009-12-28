@@ -107,13 +107,11 @@ receiverP logC hndl = do ch <- channel
           when (l == 0) (lp ch)
           logMsg logC $ "Reading off " ++ show l ++ " bytes"
           bs <- L.hGet hndl (fromIntegral l)
-          logMsg logC $ "Read: " ++ show bs
           case runParser decodeMsg bs of
             Left _ -> do sync $ transmit ch Nothing
                          logMsg logC "Incorrect parse in receiver, dying!"
                          return () -- Die!
-            Right msg -> do logMsg logC $ "Decoded as: " ++ show msg
-                            sync $ transmit ch (Just msg)
+            Right msg -> do sync $ transmit ch (Just msg)
                             lp ch
         conv :: L.ByteString -> IO Word32
         conv bs = do
