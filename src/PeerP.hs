@@ -152,6 +152,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
       sync $ transmit pMgrC $ Connect tid putC
       pieces <- PieceMgrP.getPieceDone pieceMgrC
       sync $ transmit outBound $ SendQMsg $ BitField (constructBitField nPieces pieces)
+      sync $ transmit outBound $ SendQMsg Interested
       lp MkState { inCh = inBound,
                    outCh = outBound,
                    logCh = logC,
@@ -226,7 +227,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
             let sz = S.size (blockQueue s)
             in if sz < loMark
                  then do
-                   logMsg logC $ "Filling..."
+                   logMsg logC $ "Filling with " ++ (show $ hiMark - sz) ++ " pieces..."
                    toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
                    logMsg logC $ "Got " ++ show (length toQueue) ++ " blocks"
                    queuePieces s toQueue
