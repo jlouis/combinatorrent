@@ -41,7 +41,7 @@ download name = do
     case bcoded of
       Left pe -> print pe
       Right bc ->
-        do (h, missingMap, pieceMap) <- openAndCheckFile bc
+        do (h, haveMap, pieceMap) <- openAndCheckFile bc
            -- setup channels
            trackerC <- channel
            statusC  <- channel
@@ -61,7 +61,7 @@ download name = do
            putStrLn $ "Created various data, pieceCount is " ++ show (pieceCount ti)
            PeerMgrP.start pmC pid (infoHash ti) pieceMap pieceMgrC fspC logC (pieceCount ti)
            putStrLn "Started Peer Manager"
-           PieceMgrP.start logC pieceMgrC fspC (PieceMgrP.createPieceDb missingMap pieceMap)
+           PieceMgrP.start logC pieceMgrC fspC (PieceMgrP.createPieceDb haveMap pieceMap)
            putStrLn "Started Piece Manager"
            StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
            putStrLn "Started Status Process"
