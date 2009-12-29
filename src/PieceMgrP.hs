@@ -1,6 +1,7 @@
 module PieceMgrP
 where
 
+import Control.Monad
 import Control.Concurrent.CML
 
 import qualified Data.ByteString as B
@@ -140,10 +141,9 @@ putbackBlock pn blk db = db { inProgress = ndb }
 assertPieceComplete :: PieceDB -> PieceNum -> LogChannel -> IO ()
 assertPieceComplete db pn logC = do
     let ipp = fromJust $ M.lookup pn (inProgress db)
-    if assertComplete ipp
-      then return ()
-      else do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
-              return ()
+    unless (assertComplete ipp) $
+      do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
+         return ()
   where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs
         checkBlock (offs, left, state) blk = (offs + blockSize blk,
