@@ -66,7 +66,7 @@ start handle logC pm =
         msgEvent s = wrap (receive (fspCh s) (const True))
                        -- TODO: Coalesce common 'return s'
                        (\m -> case m of
-                               CheckPiece n ch -> do
+                               CheckPiece n ch ->
                                    case M.lookup n (pieceMap s) of
                                      Nothing -> do sync $ transmit ch Nothing
                                                    return s

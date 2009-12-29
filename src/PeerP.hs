@@ -167,7 +167,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
   where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
         peerMgrEvent s = wrap (receive (peerC s) (const True))
                            (\msg ->
-                                do case msg of
+                                case msg of
                                      ChokePeer -> do sync $ transmit (outCh s) SendOChoke
                                                      return s { weChoke = True }
                                      UnchokePeer -> do sync $ transmit (outCh s) $ SendQMsg Unchoke
