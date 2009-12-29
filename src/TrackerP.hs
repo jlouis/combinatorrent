@@ -140,7 +140,7 @@ failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
-                   url <- return $ buildRequestUrl s upDownLeft
+                   let url = buildRequestUrl s upDownLeft
                    logMsg (logCh s) $ "Request URL: " ++ url
                    uri <- case parseURI url of
                             Nothing -> fail ("Argh, could not parse the URL")

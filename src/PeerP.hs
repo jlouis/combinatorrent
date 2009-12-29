@@ -67,7 +67,7 @@ sendQueueP logC inC outC = lp Q.empty
                                  SendQMsg msg -> do logMsg logC "Queueing event for sending"
                                                     return $ Q.push msg q
                                  SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q
-                                 SendOChoke -> do nq <- return $ Q.filter filterAllPiece q
+                                 SendOChoke -> do let nq = Q.filter filterAllPiece q
                                                   return $ Q.push Choke nq)
         filterAllPiece (Piece _ _ _) = True
         filterAllPiece _             = False
