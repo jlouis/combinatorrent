@@ -203,9 +203,9 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
             nIpp = ipp { ipPendingBlocks = rest }
             nDb  = db { inProgress = M.insert p nIpp (inProgress db) }
         in
+          -- This rather ugly piece of code should be substituted with something better
           if grabbed == []
              -- All pieces are taken, try the next one.
-             -- This rather ugly piece of code should be substituted with something better
              then tryGrabProgress n (ps \\ [p]) db captured
              else tryGrabProgress (n - length grabbed) ps nDb ((p, grabbed) : captured)
     -- Try grabbing pieces from the pending blocks
