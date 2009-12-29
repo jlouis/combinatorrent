@@ -67,7 +67,7 @@ readPiece pn handle mp =
 readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
 readBlock pn blk handle mp =
     do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
+       hSeek handle AbsoluteSeek (offset pInfo + fromIntegral (blockOffset blk))
        B.hGet handle (blockSize blk)
 
 -- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
@@ -79,7 +79,7 @@ writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
                                    B.hPut h blkData
                                    hFlush h
                                    return ()
-  where pos = offset (fromJust $ M.lookup n pm) + (fromIntegral $ blockOffset blk)
+  where pos = offset (fromJust $ M.lookup n pm) + fromIntegral (blockOffset blk)
         lenFail = B.length blkData /= blockSize blk
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if

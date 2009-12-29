@@ -388,9 +388,9 @@ pp bc =
     case bc of
       BInt i -> integer i
       BString s -> text (fromBS s)
-      BArray arr -> text "[" <+> (cat $ intersperse comma al) <+> text "]"
+      BArray arr -> text "[" <+> cat (intersperse comma al) <+> text "]"
           where al = map pp arr
-      BDict mp -> text "{" <+> (cat $ intersperse comma mpl) <+> text "}"
+      BDict mp -> text "{" <+> cat (intersperse comma mpl) <+> text "}"
           where mpl = map (\(s, bc') -> text (fromBS s) <+> text "->" <+> pp bc') $ M.toList mp
 
 prettyPrint :: BCode -> String

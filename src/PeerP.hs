@@ -98,7 +98,7 @@ receiverP logC hndl = do ch <- channel
         readHeader ch = do
           feof <- hIsEOF hndl
           if feof
-            then do logMsg logC $ "Handle is closed, dying!"
+            then do logMsg logC "Handle is closed, dying!"
                     return ()
             else do bs' <- L.hGet hndl 4
                     l <- conv bs'
@@ -225,7 +225,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
             let sz = S.size (blockQueue s)
             in if sz < loMark
                  then do
-                   logMsg logC $ "Filling with " ++ (show $ hiMark - sz) ++ " pieces..."
+                   logMsg logC $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
                    toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
                    logMsg logC $ "Got " ++ show (length toQueue) ++ " blocks"
                    queuePieces s toQueue
@@ -285,7 +285,7 @@ connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >>
             r <- initiateHandshake logC h pid ih
             logMsg logC "Handshake run"
             case r of
-              Left err -> do logMsg logC $ ("Peer handshake failure at host " ++ host
+              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
                                               ++ " with error " ++ err)
                              return ()
               Right (_caps, _rpid) ->

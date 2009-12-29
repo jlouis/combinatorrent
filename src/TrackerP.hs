@@ -242,7 +242,7 @@ buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", conc
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
                      ("left", show $ StatusP.left ss),
-                     ("port", show $ prt),
+                     ("port", show prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
           unpackInfoHash = dec . L.unpack . infoHash . torrentInfo

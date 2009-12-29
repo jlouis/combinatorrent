@@ -58,14 +58,14 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 type PieceMgrChannel = Channel PieceMgrMsg
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
-start logC mgrC fspC db = (spawn $ lp db) >> return ()
+start logC mgrC fspC db = spawn (lp db) >> return ()
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
             GrabBlocks n eligible c ->
-                do logMsg logC $ "Grabbing blocks"
+                do logMsg logC "Grabbing blocks"
                    let (blocks, db') = grabBlocks' n eligible db
-                   logMsg logC $ "Grabbed..."
+                   logMsg logC "Grabbed..."
                    sync $ transmit c blocks
                    lp db'
             StoreBlock pn blk d ->
@@ -193,7 +193,7 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
     -- Try grabbing pieces from the pieces in progress first
     tryGrabProgress 0 _  db captured = (captured, db)
     tryGrabProgress n ps db captured =
-        case ps `intersect` (fmap fst $ M.toList (inProgress db)) of
+        case ps `intersect` fmap fst (M.toList (inProgress db)) of
           []  -> tryGrabPending n ps db captured
           (h:_) -> grabFromProgress n ps h db captured
     -- The Piece @p@ was found, grab it

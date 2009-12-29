@@ -378,7 +378,7 @@ putVarLenLe w = varLenAux2 $ varLenAux1 w
   
 varLenAux1 :: Word64 -> [Word8]
 varLenAux1 0 = []
-varLenAux1 w = (fromIntegral $ w .&. 0x7F) : (varLenAux1 $ shiftR w 7)
+varLenAux1 w = (fromIntegral $ w .&. 0x7F) : varLenAux1 (shiftR w 7)
 
 varLenAux2 :: [Word8] -> Builder
 varLenAux2  [] = putWord8 0
