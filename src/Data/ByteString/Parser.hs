@@ -140,9 +140,9 @@ instance Functor Parser where
     
 instance Monad Parser where
     return a  = Parser (\s -> Right (a, s))
-    m >>= k   = Parser $ \s -> case (unParser m) s of
+    m >>= k   = Parser $ \s -> case unParser m s of
       Left e -> Left e
-      Right (a, s') -> (unParser (k a)) s'
+      Right (a, s') -> unParser (k a) s'
     fail  err  = Parser $ \(S _ _ bytes) -> 
         Left (err ++ ". Failed reading at byte position " ++ show bytes)
 instance MonadPlus Parser where
@@ -403,7 +403,7 @@ getWord16be :: Parser Word16
 getWord16be = do
     s <- readN 2 id
     return $! (fromIntegral (s `B.index` 0) `shiftL` 8) .|.
-              (fromIntegral (s `B.index` 1))
+               fromIntegral (s `B.index` 1)
 
 word16be :: Word16 -> Parser Word16
 word16be w = expect (w ==) getWord16be
@@ -413,7 +413,7 @@ getWord16le :: Parser Word16
 getWord16le = do
     s <- readN 2 id
     return $! (fromIntegral (s `B.index` 1) `shiftL` 8) .|.
-              (fromIntegral (s `B.index` 0) )
+               fromIntegral (s `B.index` 0)
 
 word16le :: Word16 -> Parser Word16
 word16le w = expect (w ==) getWord16le
@@ -424,7 +424,7 @@ getWord24be = do
     s <- readN 3 id
     return $! (fromIntegral (s `B.index` 0) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 1) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 2) )
+               fromIntegral (s `B.index` 2)
 
 word24be :: Word32 -> Parser Word32
 word24be w = expect (w ==) getWord24be
@@ -434,7 +434,7 @@ getWord24le = do
     s <- readN 3 id
     return $! (fromIntegral (s `B.index` 2) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 1) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 0) )
+               fromIntegral (s `B.index` 0)
 
 word24le :: Word32 -> Parser Word32
 word24le w = expect (w ==) getWord24le
@@ -446,7 +446,7 @@ getWord32be = do
     return $! (fromIntegral (s `B.index` 0) `shiftL` 24) .|.
               (fromIntegral (s `B.index` 1) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 2) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 3) )
+               fromIntegral (s `B.index` 3)
 
 word32be :: Word32 -> Parser Word32
 word32be w = expect (w ==) getWord32be
@@ -458,7 +458,7 @@ getWord32le = do
     return $! (fromIntegral (s `B.index` 3) `shiftL` 24) .|.
               (fromIntegral (s `B.index` 2) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 1) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 0) )
+               fromIntegral (s `B.index` 0)
 
 word32le :: Word32 -> Parser Word32
 word32le w = expect (w ==) getWord32le
@@ -475,7 +475,7 @@ getWord64be = do
               (fromIntegral (s `B.index` 4) `shiftL` 24) .|.
               (fromIntegral (s `B.index` 5) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 6) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 7) )
+               fromIntegral (s `B.index` 7)
 
 word64be :: Word64 -> Parser Word64
 word64be w = expect (w ==) getWord64be
@@ -491,7 +491,7 @@ getWord64le = do
               (fromIntegral (s `B.index` 3) `shiftL` 24) .|.
               (fromIntegral (s `B.index` 2) `shiftL` 16) .|.
               (fromIntegral (s `B.index` 1) `shiftL`  8) .|.
-              (fromIntegral (s `B.index` 0) )
+               fromIntegral (s `B.index` 0)
 
 word64le :: Word64 -> Parser Word64
 word64le w = expect (w ==) getWord64le
@@ -580,8 +580,8 @@ getVarLenBe = f 0
   f acc =  do
     w <- getWord8 >>= return . fromIntegral
     if testBit w 7
-      then f      $! (shiftL acc 7) .|. (clearBit w 7)
-      else return $! (shiftL acc 7) .|. w
+      then f      $! shiftL acc 7 .|. clearBit w 7
+      else return $! shiftL acc 7 .|. w
 
 varLenBe :: Word64 -> Parser Word64
 varLenBe a = expect (a ==) getVarLenBe
@@ -592,7 +592,7 @@ getVarLenLe = do
   if testBit w 7
     then do
       w' <- getVarLenLe
-      return $! (clearBit w 7) .|. (shiftL w' 7)
+      return $! clearBit w 7 .|. shiftL w' 7
     else return $! w
 
 varLenLe :: Word64 -> Parser Word64

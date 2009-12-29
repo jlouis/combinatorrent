@@ -242,12 +242,12 @@ writeNBufferBytes n f (Buffer fp o u l) = do
 putWord16be :: Word16 -> Builder
 putWord16be w = writeN 2 $ \p -> do
     poke p               (fromIntegral (shiftR w 8) :: Word8)
-    poke (p `plusPtr` 1) (fromIntegral (w)              :: Word8)
+    poke (p `plusPtr` 1) (fromIntegral w            :: Word8)
 
 -- | Write a Word16 in little endian format
 putWord16le :: Word16 -> Builder
 putWord16le w = writeN 2 $ \p -> do
-    poke p               (fromIntegral (w)              :: Word8)
+    poke p               (fromIntegral w            :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w 8) :: Word8)
 
 -- putWord16le w16 = writeN 2 (\p -> poke (castPtr p) w16)
@@ -256,13 +256,13 @@ putWord16le w = writeN 2 $ \p -> do
 putWord24be :: Word32 -> Builder
 putWord24be w = writeN 3 $ \p -> do
     poke p               (fromIntegral (shiftR w 16) :: Word8)
-    poke (p `plusPtr` 1) (fromIntegral (shiftR w 8) :: Word8)
-    poke (p `plusPtr` 2) (fromIntegral (w) :: Word8)
+    poke (p `plusPtr` 1) (fromIntegral (shiftR w 8)  :: Word8)
+    poke (p `plusPtr` 2) (fromIntegral w             :: Word8)
 
 -- | Write a 24 bit number in little endian format represented as Word32
 putWord24le :: Word32 -> Builder
 putWord24le w = writeN 3 $ \p -> do
-    poke p               (fromIntegral (w)           :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
 
@@ -272,7 +272,7 @@ putWord32be w = writeN 4 $ \p -> do
     poke p               (fromIntegral (shiftR w 24) :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w  8) :: Word8)
-    poke (p `plusPtr` 3) (fromIntegral (w)           :: Word8)
+    poke (p `plusPtr` 3) (fromIntegral w             :: Word8)
 
 --
 -- a data type to tag Put/Check. writes construct these which are then
@@ -282,7 +282,7 @@ putWord32be w = writeN 4 $ \p -> do
 -- | Write a Word32 in little endian format
 putWord32le :: Word32 -> Builder
 putWord32le w = writeN 4 $ \p -> do
-    poke p               (fromIntegral (w)               :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 3) (fromIntegral (shiftR w 24) :: Word8)
@@ -300,12 +300,12 @@ putWord64be w = writeN 8 $ \p -> do
     poke (p `plusPtr` 4) (fromIntegral (shiftR w 24) :: Word8)
     poke (p `plusPtr` 5) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 6) (fromIntegral (shiftR w  8) :: Word8)
-    poke (p `plusPtr` 7) (fromIntegral (w)               :: Word8)
+    poke (p `plusPtr` 7) (fromIntegral w             :: Word8)
 
 -- | Write a Word64 in little endian format
 putWord64le :: Word64 -> Builder
 putWord64le w = writeN 8 $ \p -> do
-    poke p               (fromIntegral (w)               :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 3) (fromIntegral (shiftR w 24) :: Word8)

@@ -116,7 +116,7 @@ receiverP logC hndl = do ch <- channel
         conv :: L.ByteString -> IO Word32
         conv bs = do
           logMsg logC $ show $ L.length bs
-          case runParser (getWord32be) bs of
+          case runParser getWord32be bs of
                     Left err -> do logMsg logC $ "Incorrent parse in receiver, dying: " ++ show err
                                    error "receiverP: Incorrent length in receiver, dying!"
                     Right i -> return i

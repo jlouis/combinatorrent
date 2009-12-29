@@ -34,7 +34,7 @@ start ch pid ih pm pieceMgrC fsC logC nPieces =
         trackerPeers s = wrap (receive (peerCh s) (const True))
                            (\ps ->
                                 do logMsg (logCh s) "Adding peers to queue"
-                                   return s { peersInQueue = ps ++ (peersInQueue s) })
+                                   return s { peersInQueue = ps ++ peersInQueue s })
         peerEvent s = wrap (receive (mgrCh s) (const True))
                         (\msg ->
                              case msg of

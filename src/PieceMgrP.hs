@@ -179,7 +179,7 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
         build leftBytes os accum | leftBytes >= blockSz =
                                      build (leftBytes - blockSz)
                                            (os + blockSz)
-                                           $ (Block os blockSz) : accum
+                                           $ Block os blockSz : accum
                                  | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
 
 -- | The call @grabBlocks' n eligible db@ tries to pick off up to @n@ pieces from
@@ -210,13 +210,13 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
              else tryGrabProgress (n - length grabbed) ps nDb ((p, grabbed) : captured)
     -- Try grabbing pieces from the pending blocks
     tryGrabPending n ps db captured =
-        case ps `intersect` (pendingPieces db) of
+        case ps `intersect` pendingPieces db of
           []    -> (captured, db) -- No (more) pieces to download, return
           (h:_) ->
               let blockList = createBlock h db
                   ipp = InProgressPiece 0 bSz S.empty blockList
                   bSz = len $ fromJust $ M.lookup n (infoMap db)
-                  nDb = db { pendingPieces = (pendingPieces db) \\ [h],
+                  nDb = db { pendingPieces = pendingPieces db \\ [h],
                              inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
