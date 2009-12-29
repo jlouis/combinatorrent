@@ -195,9 +195,9 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                                     [] -> fillBlocks s { peerPieces = createPeerPieces bf }
                                                     _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
-                                                  case weChoke s of
-                                                    True -> return s -- Ignore, there might be stray packets
-                                                    False ->
+                                                  if weChoke s
+                                                    then return s -- Ignore, there might be stray packets
+                                                    else
                                                         do c <- channel
                                                            readBlock (fsCh s) c pn blk -- TODO: Pushdown in Send Process
                                                            bs <- sync $ receive c (const True)
@@ -218,9 +218,9 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                   Nothing -> do logMsg (logCh s) "Unknown message"
                                                 undefined -- TODO: Kill off gracefully
                            )
-        fillBlocks s = case peerChoke s of
-                         True -> return s
-                         False -> checkWatermark s
+        fillBlocks s = if peerChoke s
+                         then return s
+                         else checkWatermark s
         checkWatermark s =
             let sz = S.size (blockQueue s)
             in if sz < loMark
