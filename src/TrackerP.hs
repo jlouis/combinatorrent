@@ -199,7 +199,7 @@ processResultDict d =
 
 
 decodeIps :: B.ByteString -> [PeerMgrP.Peer]
-decodeIps str = decodeIps' (fromBS str)
+decodeIps = decodeIps' . fromBS
 
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps' :: String -> [PeerMgrP.Peer]

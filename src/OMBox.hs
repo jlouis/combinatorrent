@@ -16,5 +16,5 @@ new = do putterC <- channel
         lp putCh getCh (Just v) =
             sync (choose [putEvent putCh, getEvent getCh v]) >>= lp putCh getCh
         putEvent c = wrap (receive c (const True))
-                      (\v -> return $ Just v)
+                      (return . Just)
         getEvent c v = wrap (transmit c v) (const $ return Nothing)

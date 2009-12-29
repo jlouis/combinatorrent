@@ -125,7 +125,7 @@ mkPieceMap bc = fetchData
 
 -- | Predicate function. True if nothing is missing from the map.
 canSeed :: PiecesDoneMap -> Bool
-canSeed mmp = M.fold (&&) True mmp
+canSeed = M.fold (&&) True
 
 -- | Process a BCoded torrent file. Open the file in question, check it and return a handle
 --   plus a haveMap for the file

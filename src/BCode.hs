@@ -269,7 +269,7 @@ wrap a b m = do
                 putWord8 (toW8 b)
 
 putShow :: Show a => a -> Put
-putShow x = mapM_ put (show x)
+putShow = mapM_ put . show
 
 -- encodeBS :: BCode -> B.ByteString
 -- encodeBS = B.pack . map (fromIntegral . ord) . encode

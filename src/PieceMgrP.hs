@@ -93,10 +93,10 @@ getPieceDone ch = do
   sync $ receive c (const True)
 
 putbackBlocks :: PieceMgrChannel -> [(PieceNum, Block)] -> IO ()
-putbackBlocks ch blks = sync $ transmit ch (PutbackBlocks blks)
+putbackBlocks ch = sync . transmit ch . PutbackBlocks
 
 storeBlock :: PieceMgrChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock ch n blk bs = sync $ transmit ch (StoreBlock n blk bs)
+storeBlock ch n blk = sync . transmit ch . StoreBlock n blk
 
 grabBlocks :: PieceMgrChannel -> Int -> [PieceNum] -> IO [(PieceNum, Block)]
 grabBlocks pmC n pieceSet = do
@@ -170,7 +170,7 @@ updateProgress db pn blk =
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = (ipHave pg == ipDone pg, db { inProgress =
                                                              M.adjust (const pg) pn ipdb})
-        ipHave pg = S.size (ipHaveBlocks pg)
+        ipHave = S.size . ipHaveBlocks
         ipdb = inProgress db
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
@@ -220,9 +220,7 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
                              inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
-    createBlock pn pdb = blockPiece
-                          defaultBlockSize
-                          (len
-                           (fromJust $ M.lookup pn (infoMap pdb)))
+    createBlock pn = blockPiece
+                      defaultBlockSize . len . fromJust . M.lookup pn . infoMap
 
 

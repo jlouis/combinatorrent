@@ -193,7 +193,7 @@ withSize f = Builder $ \ k buf@(Buffer _ _ _ l) ->
 
 -- | Map the resulting list of bytestrings.
 mapBuilder :: ([S.ByteString] -> [S.ByteString]) -> Builder
-mapBuilder f = Builder (f .)
+mapBuilder = Builder . (.)
 
 ------------------------------------------------------------------------
 
@@ -210,7 +210,7 @@ writeN n f = ensureFree n `append` unsafeLiftIO (writeNBuffer n f)
 
 writeNBuffer :: Int -> (Ptr Word8 -> IO ()) -> Buffer -> IO Buffer
 writeNBuffer n f (Buffer fp o u l) = do
-    withForeignPtr fp (\p -> f (p `plusPtr` (o+u)))
+    withForeignPtr fp (f . (`plusPtr` (o+u)))
     return (Buffer fp o (u+n) (l-n))
 
 newBuffer :: Int -> IO Buffer
@@ -228,7 +228,7 @@ writeNbytes n f = ensureFree n `append` unsafeLiftIO (writeNBufferBytes n f)
 
 writeNBufferBytes :: Storable a => Int -> (Ptr a -> IO ()) -> Buffer -> IO Buffer
 writeNBufferBytes n f (Buffer fp o u l) = do
-    withForeignPtr fp (\p -> f (p `plusPtr` (o+u)))
+    withForeignPtr fp (f . (`plusPtr` (o+u)))
     return (Buffer fp o (u+n) (l-n))
 
 ------------------------------------------------------------------------
@@ -371,7 +371,7 @@ putWord64host w = writeNbytes (sizeOf (undefined :: Word64)) (\p -> poke p w)
 ------------------------------------------------------------------------
 
 putVarLenBe :: Word64 -> Builder
-putVarLenBe w = varLenAux2 $ reverse $ varLenAux1 w
+putVarLenBe = varLenAux2 . reverse . varLenAux1
   
 putVarLenLe :: Word64 -> Builder
 putVarLenLe w = varLenAux2 $ varLenAux1 w

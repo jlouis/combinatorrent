@@ -381,7 +381,7 @@ readN n f = fmap f $ getBytes n
 getPtr :: Storable a => Int -> Parser a
 getPtr n = do
     (fp,o,_) <- readN n B.toForeignPtr
-    return . B.inlinePerformIO $ withForeignPtr fp $ \p -> peek (castPtr $ p `plusPtr` o)
+    return . B.inlinePerformIO $ withForeignPtr fp $ peek . castPtr . (`plusPtr` o)
 
 ------------------------------------------------------------------------
 
