@@ -350,23 +350,23 @@ putInt64be = putWord64be . fromIntegral
 -- different endian or word sized machines, without conversion.
 --
 putWordHost :: Word -> Builder
-putWordHost w = writeNbytes (sizeOf (undefined :: Word)) (\p -> poke p w)
+putWordHost w = writeNbytes (sizeOf (undefined :: Word)) (flip poke w)
 
 -- | Write a Word16 in native host order and host endianness.
 -- 2 bytes will be written, unaligned.
 putWord16host :: Word16 -> Builder
-putWord16host w16 = writeNbytes (sizeOf (undefined :: Word16)) (\p -> poke p w16)
+putWord16host w16 = writeNbytes (sizeOf (undefined :: Word16)) (flip poke w16)
 
 -- | Write a Word32 in native host order and host endianness.
 -- 4 bytes will be written, unaligned.
 putWord32host :: Word32 -> Builder
-putWord32host w32 = writeNbytes (sizeOf (undefined :: Word32)) (\p -> poke p w32)
+putWord32host w32 = writeNbytes (sizeOf (undefined :: Word32)) (flip poke w32)
 
 -- | Write a Word64 in native host order.
 -- On a 32 bit machine we write two host order Word32s, in big endian form.
 -- 8 bytes will be written, unaligned.
 putWord64host :: Word64 -> Builder
-putWord64host w = writeNbytes (sizeOf (undefined :: Word64)) (\p -> poke p w)
+putWord64host w = writeNbytes (sizeOf (undefined :: Word64)) (flip poke w)
 
 ------------------------------------------------------------------------
 
