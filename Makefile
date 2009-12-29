@@ -4,8 +4,11 @@ build:
 local-install:
 	cabal install --prefix=$$HOME --user
 
+haddock:
+	runghc Setup.lhs haddock --executables
+
 hlint:
-	hlint *.hs
+	hlint src/*.hs
 
 etags:
 	hasktags --etags src/*.hs
