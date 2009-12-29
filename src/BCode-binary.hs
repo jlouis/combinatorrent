@@ -247,9 +247,8 @@ char :: Char -> Get ()
 char c = 
     do
         x <- getWord8
-        if fromW8 x == c
-            then return ()
-            else fail ("Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\'']) 
+        unless (fromW8 x == c) $
+            fail ("Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\''])
 
 getCharG :: Get Char
 getCharG = fromW8 <$> getWord8

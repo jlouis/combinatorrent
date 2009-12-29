@@ -235,7 +235,7 @@ lookAheadE gea = do
 expect :: (Show a, Eq a) => (a -> Bool) -> Parser a -> Parser a
 expect f p = do
   v <- p
-  when (not $ f v) $ fail $ show v ++ " was not expected."   
+  unless (f v) $ fail $ show v ++ " was not expected."
   return v
 
 getString :: Int -> Parser String
