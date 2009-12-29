@@ -1,9 +1,12 @@
 .PHONY: all
 
-all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf
+all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf piecemanager.html
 
 %.pdf: %.dot
 	dot -Tpdf $<  > $@
+
+%.html: %.lhs
+	pandoc --smart --from=markdown+lhs --to=html+lhs $< > $@
 
 clean:
 	rm -f *.pdf
