@@ -497,43 +497,43 @@ word64le :: Word64 -> Parser Word64
 word64le w = expect (w ==) getWord64le
 ------------------------------------------------------------------------
 getInt8 :: Parser Int8
-getInt8 = getWord8 >>= return . fromIntegral
+getInt8 = fmap fromIntegral getWord8
 
 int8 :: Int8 -> Parser Int8
 int8 i = expect (i ==) getInt8
 
 getInt16le :: Parser Int16
-getInt16le = getWord16le >>= return . fromIntegral
+getInt16le = fmap fromIntegral getWord16le
 
 int16le :: Int16 -> Parser Int16
 int16le i = expect (i ==) getInt16le
 
 getInt16be :: Parser Int16
-getInt16be = getWord16be >>= return . fromIntegral
+getInt16be = fmap fromIntegral getWord16be
 
 int16be :: Int16 -> Parser Int16
 int16be i = expect (i ==) getInt16be
 
 getInt32le :: Parser Int32
-getInt32le = getWord32le >>= return . fromIntegral
+getInt32le = fmap fromIntegral getWord32le
 
 int32le :: Int32 -> Parser Int32
 int32le i = expect (i ==) getInt32le
 
 getInt32be :: Parser Int32
-getInt32be = getWord32be >>= return . fromIntegral
+getInt32be = fmap fromIntegral getWord32be
 
 int32be :: Int32 -> Parser Int32
 int32be i = expect (i ==) getInt32be
 
 getInt64le :: Parser Int64
-getInt64le = getWord64le >>= return . fromIntegral
+getInt64le = fmap fromIntegral getWord64le
 
 int64le :: Int64 -> Parser Int64
 int64le i = expect (i ==) getInt64le
 
 getInt64be :: Parser Int64
-getInt64be = getWord64be >>= return . fromIntegral
+getInt64be = fmap fromIntegral getWord64be
 
 int64be :: Int64 -> Parser Int64
 int64be i = expect (i ==) getInt64be
@@ -578,7 +578,7 @@ getVarLenBe = f 0
   where
   f :: Word64 -> Parser Word64
   f acc =  do
-    w <- getWord8 >>= return . fromIntegral
+    w <- fmap fromIntegral getWord8
     if testBit w 7
       then f      $! shiftL acc 7 .|. clearBit w 7
       else return $! shiftL acc 7 .|. w
@@ -588,7 +588,7 @@ varLenBe a = expect (a ==) getVarLenBe
 
 getVarLenLe :: Parser Word64
 getVarLenLe = do
-  w <- getWord8 >>= return . fromIntegral
+  w <- fmap fromIntegral getWord8
   if testBit w 7
     then do
       w' <- getVarLenLe
