@@ -67,7 +67,7 @@ sendQueueP logC inC outC = lp Q.empty
                                  SendQMsg msg -> do logMsg logC "Queueing event for sending"
                                                     return $ Q.push msg q
                                  SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q
-                                 SendOChoke -> do nq <- return $ Q.filter filterAllPiece q
+                                 SendOChoke -> do let nq = Q.filter filterAllPiece q
                                                   return $ Q.push Choke nq)
         filterAllPiece (Piece _ _ _) = True
         filterAllPiece _             = False
@@ -98,7 +98,7 @@ receiverP logC hndl = do ch <- channel
         readHeader ch = do
           feof <- hIsEOF hndl
           if feof
-            then do logMsg logC $ "Handle is closed, dying!"
+            then do logMsg logC "Handle is closed, dying!"
                     return ()
             else do bs' <- L.hGet hndl 4
                     l <- conv bs'
@@ -116,7 +116,7 @@ receiverP logC hndl = do ch <- channel
         conv :: L.ByteString -> IO Word32
         conv bs = do
           logMsg logC $ show $ L.length bs
-          case runParser (getWord32be) bs of
+          case runParser getWord32be bs of
                     Left err -> do logMsg logC $ "Incorrent parse in receiver, dying: " ++ show err
                                    error "receiverP: Incorrent length in receiver, dying!"
                     Right i -> return i
@@ -167,7 +167,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
   where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
         peerMgrEvent s = wrap (receive (peerC s) (const True))
                            (\msg ->
-                                do case msg of
+                                case msg of
                                      ChokePeer -> do sync $ transmit (outCh s) SendOChoke
                                                      return s { weChoke = True }
                                      UnchokePeer -> do sync $ transmit (outCh s) $ SendQMsg Unchoke
@@ -195,9 +195,9 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                                     [] -> fillBlocks s { peerPieces = createPeerPieces bf }
                                                     _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
                                               Request pn blk ->
-                                                  case weChoke s of
-                                                    True -> return s -- Ignore, there might be stray packets
-                                                    False ->
+                                                  if weChoke s
+                                                    then return s -- Ignore, there might be stray packets
+                                                    else
                                                         do c <- channel
                                                            readBlock (fsCh s) c pn blk -- TODO: Pushdown in Send Process
                                                            bs <- sync $ receive c (const True)
@@ -218,14 +218,14 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                                   Nothing -> do logMsg (logCh s) "Unknown message"
                                                 undefined -- TODO: Kill off gracefully
                            )
-        fillBlocks s = case peerChoke s of
-                         True -> return s
-                         False -> checkWatermark s
+        fillBlocks s = if peerChoke s
+                         then return s
+                         else checkWatermark s
         checkWatermark s =
             let sz = S.size (blockQueue s)
             in if sz < loMark
                  then do
-                   logMsg logC $ "Filling with " ++ (show $ hiMark - sz) ++ " pieces..."
+                   logMsg logC $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
                    toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
                    logMsg logC $ "Got " ++ show (length toQueue) ++ " blocks"
                    queuePieces s toQueue
@@ -285,7 +285,7 @@ connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >>
             r <- initiateHandshake logC h pid ih
             logMsg logC "Handshake run"
             case r of
-              Left err -> do logMsg logC $ ("Peer handshake failure at host " ++ host
+              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
                                               ++ " with error " ++ err)
                              return ()
               Right (_caps, _rpid) ->

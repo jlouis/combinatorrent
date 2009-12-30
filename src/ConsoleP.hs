@@ -53,15 +53,15 @@ type CmdChannel = Channel Cmd
 
 -- | Log a message to a channel
 logMsg :: LogChannel -> String -> IO ()
-logMsg c str = sync . transmit c $ Mes Default str
+logMsg c = sync . transmit c . Mes Default
 
 -- | Log a fatal message on a channel, TODO: use logMsg' for this
 logFatal :: LogChannel -> String -> IO ()
-logFatal c str = sync . transmit c $ Mes Fatal str
+logFatal c = sync . transmit c . Mes Fatal
 
 -- | Log a message to a channel with a priority
 logMsg' :: LogChannel -> LogPriority -> String -> IO ()
-logMsg' c pri str = sync . transmit c $ Mes pri str
+logMsg' c pri = sync . transmit c . Mes pri
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut

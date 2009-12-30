@@ -1,6 +1,7 @@
 module PieceMgrP
 where
 
+import Control.Monad
 import Control.Concurrent.CML
 
 import qualified Data.ByteString as B
@@ -58,14 +59,14 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 type PieceMgrChannel = Channel PieceMgrMsg
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
-start logC mgrC fspC db = (spawn $ lp db) >> return ()
+start logC mgrC fspC db = spawn (lp db) >> return ()
   where lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
             GrabBlocks n eligible c ->
-                do logMsg logC $ "Grabbing blocks"
+                do logMsg logC "Grabbing blocks"
                    let (blocks, db') = grabBlocks' n eligible db
-                   logMsg logC $ "Grabbed..."
+                   logMsg logC "Grabbed..."
                    sync $ transmit c blocks
                    lp db'
             StoreBlock pn blk d ->
@@ -93,10 +94,10 @@ getPieceDone ch = do
   sync $ receive c (const True)
 
 putbackBlocks :: PieceMgrChannel -> [(PieceNum, Block)] -> IO ()
-putbackBlocks ch blks = sync $ transmit ch (PutbackBlocks blks)
+putbackBlocks ch = sync . transmit ch . PutbackBlocks
 
 storeBlock :: PieceMgrChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock ch n blk bs = sync $ transmit ch (StoreBlock n blk bs)
+storeBlock ch n blk = sync . transmit ch . StoreBlock n blk
 
 grabBlocks :: PieceMgrChannel -> Int -> [PieceNum] -> IO [(PieceNum, Block)]
 grabBlocks pmC n pieceSet = do
@@ -140,10 +141,9 @@ putbackBlock pn blk db = db { inProgress = ndb }
 assertPieceComplete :: PieceDB -> PieceNum -> LogChannel -> IO ()
 assertPieceComplete db pn logC = do
     let ipp = fromJust $ M.lookup pn (inProgress db)
-    if assertComplete ipp
-      then return ()
-      else do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
-              return ()
+    unless (assertComplete ipp) $
+      do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
+         return ()
   where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs
         checkBlock (offs, left, state) blk = (offs + blockSize blk,
@@ -170,7 +170,7 @@ updateProgress db pn blk =
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = (ipHave pg == ipDone pg, db { inProgress =
                                                              M.adjust (const pg) pn ipdb})
-        ipHave pg = S.size (ipHaveBlocks pg)
+        ipHave = S.size . ipHaveBlocks
         ipdb = inProgress db
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
@@ -179,7 +179,7 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
         build leftBytes os accum | leftBytes >= blockSz =
                                      build (leftBytes - blockSz)
                                            (os + blockSz)
-                                           $ (Block os blockSz) : accum
+                                           $ Block os blockSz : accum
                                  | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
 
 -- | The call @grabBlocks' n eligible db@ tries to pick off up to @n@ pieces from
@@ -193,7 +193,7 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
     -- Try grabbing pieces from the pieces in progress first
     tryGrabProgress 0 _  db captured = (captured, db)
     tryGrabProgress n ps db captured =
-        case ps `intersect` (fmap fst $ M.toList (inProgress db)) of
+        case ps `intersect` fmap fst (M.toList (inProgress db)) of
           []  -> tryGrabPending n ps db captured
           (h:_) -> grabFromProgress n ps h db captured
     -- The Piece @p@ was found, grab it
@@ -210,19 +210,17 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
              else tryGrabProgress (n - length grabbed) ps nDb ((p, grabbed) : captured)
     -- Try grabbing pieces from the pending blocks
     tryGrabPending n ps db captured =
-        case ps `intersect` (pendingPieces db) of
+        case ps `intersect` pendingPieces db of
           []    -> (captured, db) -- No (more) pieces to download, return
           (h:_) ->
               let blockList = createBlock h db
                   ipp = InProgressPiece 0 bSz S.empty blockList
                   bSz = len $ fromJust $ M.lookup n (infoMap db)
-                  nDb = db { pendingPieces = (pendingPieces db) \\ [h],
+                  nDb = db { pendingPieces = pendingPieces db \\ [h],
                              inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
-    createBlock pn pdb = blockPiece
-                          defaultBlockSize
-                          (len
-                           (fromJust $ M.lookup pn (infoMap pdb)))
+    createBlock pn = blockPiece
+                      defaultBlockSize . len . fromJust . M.lookup pn . infoMap
 
 

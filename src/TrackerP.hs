@@ -140,10 +140,10 @@ failTimerInterval = 15 * 60  -- Arbitrarily chosen at 15 minutes
 
 pokeTracker :: State -> IO State
 pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
-                   url <- return $ buildRequestUrl s upDownLeft
+                   let url = buildRequestUrl s upDownLeft
                    logMsg (logCh s) $ "Request URL: " ++ url
                    uri <- case parseURI url of
-                            Nothing -> do fail ("Argh, could not parse the URL")
+                            Nothing -> fail "Argh, could not parse the URL"
                             Just u -> return u
                    resp <- trackerRequest (logCh s) uri
                    case resp of
@@ -199,7 +199,7 @@ processResultDict d =
 
 
 decodeIps :: B.ByteString -> [PeerMgrP.Peer]
-decodeIps str = decodeIps' (fromBS str)
+decodeIps = decodeIps' . fromBS
 
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps' :: String -> [PeerMgrP.Peer]
@@ -242,7 +242,7 @@ buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", conc
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
                      ("left", show $ StatusP.left ss),
-                     ("port", show $ prt),
+                     ("port", show prt),
                      ("compact", "1"),
                      ("event", show $ state s)]
           unpackInfoHash = dec . L.unpack . infoHash . torrentInfo

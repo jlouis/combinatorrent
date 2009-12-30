@@ -120,7 +120,7 @@ mkTorrentInfo bc =
 
 -- | Create a new PeerId for this client
 mkPeerId :: StdGen -> PeerId
-mkPeerId gen = header ++ (take (20 - length header) ranString)
+mkPeerId gen = header ++ take (20 - length header) ranString
   where randomList :: Int -> StdGen -> [Int]
         randomList n = take n . unfoldr (Just . random)
         rs = randomList 10 gen

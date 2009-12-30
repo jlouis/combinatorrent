@@ -67,7 +67,7 @@ readPiece pn handle mp =
 readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
 readBlock pn blk handle mp =
     do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
+       hSeek handle AbsoluteSeek (offset pInfo + fromIntegral (blockOffset blk))
        B.hGet handle (blockSize blk)
 
 -- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
@@ -79,7 +79,7 @@ writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
                                    B.hPut h blkData
                                    hFlush h
                                    return ()
-  where pos = offset (fromJust $ M.lookup n pm) + (fromIntegral $ blockOffset blk)
+  where pos = offset (fromJust $ M.lookup n pm) + fromIntegral (blockOffset blk)
         lenFail = B.length blkData /= blockSize blk
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
@@ -125,7 +125,7 @@ mkPieceMap bc = fetchData
 
 -- | Predicate function. True if nothing is missing from the map.
 canSeed :: PiecesDoneMap -> Bool
-canSeed mmp = M.fold (&&) True mmp
+canSeed = M.fold (&&) True
 
 -- | Process a BCoded torrent file. Open the file in question, check it and return a handle
 --   plus a haveMap for the file

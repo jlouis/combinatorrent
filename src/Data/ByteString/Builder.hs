@@ -193,7 +193,7 @@ withSize f = Builder $ \ k buf@(Buffer _ _ _ l) ->
 
 -- | Map the resulting list of bytestrings.
 mapBuilder :: ([S.ByteString] -> [S.ByteString]) -> Builder
-mapBuilder f = Builder (f .)
+mapBuilder = Builder . (.)
 
 ------------------------------------------------------------------------
 
@@ -210,7 +210,7 @@ writeN n f = ensureFree n `append` unsafeLiftIO (writeNBuffer n f)
 
 writeNBuffer :: Int -> (Ptr Word8 -> IO ()) -> Buffer -> IO Buffer
 writeNBuffer n f (Buffer fp o u l) = do
-    withForeignPtr fp (\p -> f (p `plusPtr` (o+u)))
+    withForeignPtr fp (f . (`plusPtr` (o+u)))
     return (Buffer fp o (u+n) (l-n))
 
 newBuffer :: Int -> IO Buffer
@@ -228,7 +228,7 @@ writeNbytes n f = ensureFree n `append` unsafeLiftIO (writeNBufferBytes n f)
 
 writeNBufferBytes :: Storable a => Int -> (Ptr a -> IO ()) -> Buffer -> IO Buffer
 writeNBufferBytes n f (Buffer fp o u l) = do
-    withForeignPtr fp (\p -> f (p `plusPtr` (o+u)))
+    withForeignPtr fp (f . (`plusPtr` (o+u)))
     return (Buffer fp o (u+n) (l-n))
 
 ------------------------------------------------------------------------
@@ -242,12 +242,12 @@ writeNBufferBytes n f (Buffer fp o u l) = do
 putWord16be :: Word16 -> Builder
 putWord16be w = writeN 2 $ \p -> do
     poke p               (fromIntegral (shiftR w 8) :: Word8)
-    poke (p `plusPtr` 1) (fromIntegral (w)              :: Word8)
+    poke (p `plusPtr` 1) (fromIntegral w            :: Word8)
 
 -- | Write a Word16 in little endian format
 putWord16le :: Word16 -> Builder
 putWord16le w = writeN 2 $ \p -> do
-    poke p               (fromIntegral (w)              :: Word8)
+    poke p               (fromIntegral w            :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w 8) :: Word8)
 
 -- putWord16le w16 = writeN 2 (\p -> poke (castPtr p) w16)
@@ -256,13 +256,13 @@ putWord16le w = writeN 2 $ \p -> do
 putWord24be :: Word32 -> Builder
 putWord24be w = writeN 3 $ \p -> do
     poke p               (fromIntegral (shiftR w 16) :: Word8)
-    poke (p `plusPtr` 1) (fromIntegral (shiftR w 8) :: Word8)
-    poke (p `plusPtr` 2) (fromIntegral (w) :: Word8)
+    poke (p `plusPtr` 1) (fromIntegral (shiftR w 8)  :: Word8)
+    poke (p `plusPtr` 2) (fromIntegral w             :: Word8)
 
 -- | Write a 24 bit number in little endian format represented as Word32
 putWord24le :: Word32 -> Builder
 putWord24le w = writeN 3 $ \p -> do
-    poke p               (fromIntegral (w)           :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
 
@@ -272,7 +272,7 @@ putWord32be w = writeN 4 $ \p -> do
     poke p               (fromIntegral (shiftR w 24) :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w  8) :: Word8)
-    poke (p `plusPtr` 3) (fromIntegral (w)           :: Word8)
+    poke (p `plusPtr` 3) (fromIntegral w             :: Word8)
 
 --
 -- a data type to tag Put/Check. writes construct these which are then
@@ -282,7 +282,7 @@ putWord32be w = writeN 4 $ \p -> do
 -- | Write a Word32 in little endian format
 putWord32le :: Word32 -> Builder
 putWord32le w = writeN 4 $ \p -> do
-    poke p               (fromIntegral (w)               :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 3) (fromIntegral (shiftR w 24) :: Word8)
@@ -300,12 +300,12 @@ putWord64be w = writeN 8 $ \p -> do
     poke (p `plusPtr` 4) (fromIntegral (shiftR w 24) :: Word8)
     poke (p `plusPtr` 5) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 6) (fromIntegral (shiftR w  8) :: Word8)
-    poke (p `plusPtr` 7) (fromIntegral (w)               :: Word8)
+    poke (p `plusPtr` 7) (fromIntegral w             :: Word8)
 
 -- | Write a Word64 in little endian format
 putWord64le :: Word64 -> Builder
 putWord64le w = writeN 8 $ \p -> do
-    poke p               (fromIntegral (w)               :: Word8)
+    poke p               (fromIntegral w             :: Word8)
     poke (p `plusPtr` 1) (fromIntegral (shiftR w  8) :: Word8)
     poke (p `plusPtr` 2) (fromIntegral (shiftR w 16) :: Word8)
     poke (p `plusPtr` 3) (fromIntegral (shiftR w 24) :: Word8)
@@ -350,35 +350,35 @@ putInt64be = putWord64be . fromIntegral
 -- different endian or word sized machines, without conversion.
 --
 putWordHost :: Word -> Builder
-putWordHost w = writeNbytes (sizeOf (undefined :: Word)) (\p -> poke p w)
+putWordHost = writeNbytes (sizeOf (undefined :: Word)) . flip poke
 
 -- | Write a Word16 in native host order and host endianness.
 -- 2 bytes will be written, unaligned.
 putWord16host :: Word16 -> Builder
-putWord16host w16 = writeNbytes (sizeOf (undefined :: Word16)) (\p -> poke p w16)
+putWord16host = writeNbytes (sizeOf (undefined :: Word16)) . flip poke
 
 -- | Write a Word32 in native host order and host endianness.
 -- 4 bytes will be written, unaligned.
 putWord32host :: Word32 -> Builder
-putWord32host w32 = writeNbytes (sizeOf (undefined :: Word32)) (\p -> poke p w32)
+putWord32host = writeNbytes (sizeOf (undefined :: Word32)) . flip poke
 
 -- | Write a Word64 in native host order.
 -- On a 32 bit machine we write two host order Word32s, in big endian form.
 -- 8 bytes will be written, unaligned.
 putWord64host :: Word64 -> Builder
-putWord64host w = writeNbytes (sizeOf (undefined :: Word64)) (\p -> poke p w)
+putWord64host = writeNbytes (sizeOf (undefined :: Word64)) . flip poke
 
 ------------------------------------------------------------------------
 
 putVarLenBe :: Word64 -> Builder
-putVarLenBe w = varLenAux2 $ reverse $ varLenAux1 w
+putVarLenBe = varLenAux2 . reverse . varLenAux1
   
 putVarLenLe :: Word64 -> Builder
-putVarLenLe w = varLenAux2 $ varLenAux1 w
+putVarLenLe = varLenAux2 . varLenAux1
   
 varLenAux1 :: Word64 -> [Word8]
 varLenAux1 0 = []
-varLenAux1 w = (fromIntegral $ w .&. 0x7F) : (varLenAux1 $ shiftR w 7)
+varLenAux1 w = fromIntegral (w .&. 0x7F) : varLenAux1 (shiftR w 7)
 
 varLenAux2 :: [Word8] -> Builder
 varLenAux2  [] = putWord8 0
