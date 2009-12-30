@@ -37,15 +37,15 @@ wish-list.
       add process names so we can see who is doing what.
     * If we get a wrong URI, the code currently deadlocks since the tracker
       dies. Handle this problem gracefully.
-    * Cleanup the BCode module, while keeping the interface somewhat
+    * (axman) Cleanup the BCode module, while keeping the interface somewhat
       stable. The code is an utter mess as it stands right now.
-    * Improve the cabal file for the project, check with GHC 6.12.1,
+    * (axman) Improve the cabal file for the project, check with GHC 6.12.1,
       provide correct versions of needed packages.
-    * Make the client into an eligible leecher.
+    * (jlouis) Make the client into an eligible leecher.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
-    * Implement the Leecher code in the PeerP.
+    * (thomaschrstnsn) Implement the Leecher code in the PeerP.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
@@ -55,3 +55,6 @@ wish-list.
 
       (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
        data)
+    * Send keepalives every two minutes as per the spec.
+    * Improve the Peer Manager to the point where it can manage choking/unchoking
+      of peers.
