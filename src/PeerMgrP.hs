@@ -30,11 +30,11 @@ start ch pid ih pm pieceMgrC fsC logC nPieces =
        spawn $ lp (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC logC )
        return ()
   where lp s = do logMsg logC "Looping PeerMgr"
-                  (sync $ choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
+                  sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
         trackerPeers s = wrap (receive (peerCh s) (const True))
                            (\ps ->
                                 do logMsg (logCh s) "Adding peers to queue"
-                                   return s { peersInQueue = ps ++ (peersInQueue s) })
+                                   return s { peersInQueue = ps ++ peersInQueue s })
         peerEvent s = wrap (receive (mgrCh s) (const True))
                         (\msg ->
                              case msg of

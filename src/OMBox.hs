@@ -12,9 +12,9 @@ new = do putterC <- channel
          getterC <- channel
          spawn $ lp putterC getterC Nothing
          return (putterC, getterC)
-  where lp putCh getCh Nothing = (sync $ putEvent putCh) >>= lp putCh getCh
+  where lp putCh getCh Nothing = sync (putEvent putCh) >>= lp putCh getCh
         lp putCh getCh (Just v) =
-            (sync $ choose [putEvent putCh, getEvent getCh v]) >>= lp putCh getCh
+            sync (choose [putEvent putCh, getEvent getCh v]) >>= lp putCh getCh
         putEvent c = wrap (receive c (const True))
-                      (\v -> return $ Just v)
+                      (return . Just)
         getEvent c v = wrap (transmit c v) (const $ return Nothing)

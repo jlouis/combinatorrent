@@ -66,7 +66,7 @@ start handle logC pm =
         msgEvent s = wrap (receive (fspCh s) (const True))
                        -- TODO: Coalesce common 'return s'
                        (\m -> case m of
-                               CheckPiece n ch -> do
+                               CheckPiece n ch ->
                                    case M.lookup n (pieceMap s) of
                                      Nothing -> do sync $ transmit ch Nothing
                                                    return s
@@ -90,7 +90,7 @@ readBlock fspc c pn blk = sync $ transmit fspc $ ReadBlock pn blk c
 
 -- | Store a block in the file system.
 storeBlock :: FSPChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock fspC n blk bs = sync $ transmit fspC $ WriteBlock n blk bs
+storeBlock fspC n blk = sync . transmit fspC . WriteBlock n blk
 
 checkPiece :: FSPChannel -> PieceNum -> IO (Maybe Bool)
 checkPiece fspC n = do
