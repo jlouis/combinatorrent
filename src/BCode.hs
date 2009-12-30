@@ -70,20 +70,18 @@ import Data.Digest.Pure.SHA
 import Data.List
 import Data.Maybe
 import qualified Data.Map as M
--- import Text.ParserCombinators.Parsec
 import Text.PrettyPrint.HughesPJ hiding (char)
 
--- import Data.ByteString.Parser
 import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
 
 
-
-data BCode = BInt Integer
-           | BString B.ByteString
-           | BArray [BCode]
-           | BDict (M.Map B.ByteString BCode)
+-- | BCode represents the structure of a bencoded file
+data BCode = BInt Integer                       -- ^ An integer
+           | BString B.ByteString               -- ^ A string of bytes
+           | BArray [BCode]                     -- ^ An array
+           | BDict (M.Map B.ByteString BCode)   -- ^ A key, value map
   deriving Show
 
 data Path = PString B.ByteString
@@ -101,136 +99,53 @@ toBS = B.pack . map toW8
 fromBS :: B.ByteString -> String
 fromBS = map fromW8 . B.unpack
 
--- wrap :: Char -> Char -> B.ByteString -> B.ByteString
--- wrap b e = B.cons (toW8 b) . flip B.snoc (toW8 e)
-
-
--- encode :: BCode -> B.ByteString
--- -- encode (BInt i) = toBS $ "i" ++ show i ++ "e"
--- encode (BInt i) = wrap 'i' 'e' . toBS . show $ i
--- encode (BString s) = toBS (show (B.length s)) `B.append` B.cons (toW8 ':') s
--- encode (BArray arr) =  B.cons (toW8 'l') $ (B.concat . map encode $ arr) `B.append` toBS "e"
--- -- encode (BDict mp) = "d" ++ concatMap encPair (M.toList mp) ++ "e"
--- encode (BDict mp) = wrap 'd' 'e' dict
---     where encPair (k, v) = encode (BString k) `B.append` encode v
---           dict = B.concat . map encPair . M.toList $ mp
 
 instance Serialize BCode where
     put (BInt i)     = wrap 'i' 'e' $ putShow i
-    put (BString s)  = do
-                         putShow (B.length s)
-                         putWord8 (toW8 ':')
-                         putByteString s
     put (BArray arr) = wrap 'l' 'e' . mapM_ put $ arr
     put (BDict mp)   = wrap 'd' 'e' dict
                      where dict = mapM_ encPair . M.toList $ mp
                            encPair (k, v) = put (BString k) >> put v
+    put (BString s)  = do
+                         putShow (B.length s)
+                         putWord8 (toW8 ':')
+                         putByteString s
     
-    get = do
-            x <- lookAhead getWord8
-            case x of
-                 n | fromW8 n == 'i'    -> getBInt
-                   | fromW8 n == 'l'    -> getBArray
-                   | fromW8 n == 'd'    -> getBDict
-                   | isDigit (fromW8 n) -> getBString
-                 n -> fail $ "Unexpected character: " ++ [fromW8 n]
+    get = getBInt <|> getBArray <|> getBDict <|> getBString
 
--- parseInt :: Parser BCode
--- parseInt = do
---   char 'i'
---   i <- many1 digit
---   char 'e'
---   return . BInt . read . map fromW8 $ i
+getWrapped :: Char -> Char -> Get a -> Get a
+getWrapped a b p = char a *> p <* char b
 
+-- | Parses a BInt
 getBInt :: Get BCode
-getBInt =
-    do
-        char 'i'
-        str <- getDigits
-        char 'e'
-        return . BInt . read $ str
+getBInt = BInt . read <$> getWrapped 'i' 'e' (getDigits)
 
 
--- parseString :: Parser BCode
--- parseString = do
---   n <- many1 digit
---   let i = read (map fromW8 n) :: Int64
---   char ':'
---   s <- getLazyByteString i
---   return $ BString s
-
-getBString :: Get BCode
-getBString =
-    do
-        count <- getDigits
-        char ':'
-        BString <$> getByteString (read count)
-
-
--- parseList :: Parser BCode
--- parseList = do
---   char 'l'
---   l <- many parseBCode
---   char 'e'
---   return $ BArray l
-        
+-- | Parses a BArray
 getBArray :: Get BCode
-getBArray = 
-    do
-        char 'l'
-        l <- getBArrayContents
-        return . BArray $ l
+getBArray = BArray <$> getWrapped 'l' 'e' (many get)
 
-getBArrayContents =
-    do
-        x <- lookAhead getCharG
-        if x == 'e'
-            then return []
-            else (:) <$> get <*> getBArrayContents
 
--- parseDict :: Parser BCode
--- parseDict = do char 'd'
---                l <- many parsePair
---                char 'e'
---                return . BDict . M.fromList $ l
---   where parsePair = do
---           (BString s) <- parseString
---           b <- parseBCode
---           return (s,b)
-        
+-- | Parses a BDict
 getBDict :: Get BCode
-getBDict = do
-    char 'd'
-    contents <- many getPairs
-    char 'e'
-    return . BDict . M.fromList $ contents
+getBDict = BDict . M.fromList <$> getWrapped 'd' 'e' (many getPairs)
     where getPairs = do
             (BString s) <- getBString
             x <- get
             return (s,x)
 
-getBDictContents :: Get [(B.ByteString,BCode)]
-getBDictContents = do
-    x <- lookAhead getCharG
-    if x == 'e'
-        then return []
-        else do
-                (BString s) <- getBString
-                x <- get
-                ((s,x):) <$> getBDictContents
+-- | Parses a BString
+getBString :: Get BCode
+getBString = do
+    count <- getDigits
+    BString <$> ( char ':' *> getByteString (read count))
 
 
-getUntilE :: Get a -> Get [a]
-getUntilE p =
-    do
-        x <- lookAhead getCharG
-        if x == 'e'
-            then return []
-            else (:) <$> p <*> getUntilE p
-
+-- | Get one or more digit characters
 getDigits :: Get String
 getDigits = many1 digit
 
+-- | Returns a character if it is a digit, fails otherwise. uses isDigit.
 digit :: Get Char
 digit = do
     x <- getCharG
@@ -238,41 +153,42 @@ digit = do
         then return x
         else fail $ "Expected digit, got: " ++ show x
 
-satisfy :: (Word8 -> Bool) -> Get Word8
-satisfy p = do
-    x <- getWord8
-    if p x then return x
-           else fail $ "Satisfy failed: " ++ show x
 
--- Helper functions
+-- * Put helper functions
+
+-- | Put an element, wrapped by two characters
+wrap :: Char -> Char -> Put -> Put
+wrap a b m = do
+    putWord8 (toW8 a)
+    m
+    putWord8 (toW8 b)
+
+-- | Put something as it is shown using @show@
+putShow :: Show a => a -> Put
+putShow x = mapM_ put (show x)
+
+-- * Get Helper functions
+
+-- | Parse zero or items using a given parser
 many :: Get a -> Get [a]
 many p = many1 p `mplus` return []
 
+-- | Parse one or more items using a given parser
 many1 :: Get a -> Get [a]
 many1 p = (:) <$> p <*> many p
 
-
+-- | Parse a given character
 char :: Char -> Get ()
 char c = 
     do
         x <- getWord8
         unless (fromW8 x == c) $
             fail ("Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\''])
-
+-- | Get a Char
 getCharG :: Get Char
 getCharG = fromW8 <$> getWord8
 
-wrap :: Char -> Char -> Put -> Put
-wrap a b m = do
-                putWord8 (toW8 a)
-                m
-                putWord8 (toW8 b)
-
-putShow :: Show a => a -> Put
-putShow = mapM_ put . show
-
--- encodeBS :: BCode -> B.ByteString
--- encodeBS = B.pack . map (fromIntegral . ord) . encode
+-- BCode helper functions
 
 -- | Return the hash of the info-dict in a torrent file
 hashInfoDict :: BCode -> Maybe L.ByteString
