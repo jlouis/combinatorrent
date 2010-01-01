@@ -58,3 +58,6 @@ wish-list.
     * Send keepalives every two minutes as per the spec.
     * Improve the Peer Manager to the point where it can manage choking/unchoking
       of peers.
+    * Improve the rate calculation code. Use a running average such that the rate
+      is fairly measured when we do rechoking ticks.
+    * Make git.md into a markdown document
