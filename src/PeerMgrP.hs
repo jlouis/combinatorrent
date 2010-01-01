@@ -68,23 +68,34 @@ start ch pid ih pm pieceMgrC fsC logC nPieces =
 
 type PeerPid = Int -- For now, should probably change
 
+
+-- | The PeerDB is the database we keep over peers. It maps all the information necessary to determine
+--   which peers are interesting to keep uploading to and which are slow. It also keeps track of how
+--   far we are in the process of wandering the optimistic unchoke chain.
+data PeerDB = PeerDB
+    { chokeRound :: Int       -- ^ Counted down by one from 2. If 0 then we should advance the peer chain.
+    , peerMap :: PeerMap      -- ^ Map of peers
+    , peerChain ::  [PeerPid] -- ^ The order in which peers are optimistically unchoked
+    }
+
+-- | The PeerInfo structure maps, for each peer pid, its accompanying informative data for the PeerDB
 data PeerInfo = PeerInfo
-      { chokingUs :: Bool
-      , interestedInUs :: Bool
+      { pChokingUs :: Bool
+      , pDownRate :: Double -- ^ The rate of the peer in question, bytes downloaded in last window
+      , pChannel :: PeerChannel -- ^ The channel on which to communicate with the peer
+      , pInterestedInUs :: Bool -- ^ Reflection from Peer DB
+      , pAreSeeding :: Bool -- ^ True if this peer is connected on a torrent we seed
+      , pIsASeeder :: Bool -- ^ True if the peer is a seeder
       }
 
 type PeerMap = M.Map PeerPid PeerInfo
 
-data RechokeData = RechokeData
-    { rdPeerPid :: PeerPid -- ^ The Pid of the peer
-    , rdDownRate :: Double -- ^ The rate of the peer in question, bytes downloaded in last window
-    , rdChannel :: PeerChannel -- ^ The channel on which to communicate with the peer
-    , rdInterestedInUs :: Bool -- ^ Reflection from Peer DB
-    }
+-- | Auxilliary data structure. Used in the rechoking process.
+type RechokeData = (PeerPid, PeerInfo)
 
 -- | Peers are sorted by their current download rate. We want to keep fast peers around.
 sortPeers :: [RechokeData] -> [RechokeData]
-sortPeers = sortBy (comparing rdDownRate)
+sortPeers = sortBy (comparing $ pDownRate . snd)
 
 -- | Advance the peer chain to the next peer eligible for optimistic
 --   unchoking. That is, skip peers which are not interested in our pieces
@@ -105,11 +116,11 @@ addPeerChain gen pid ls = (front ++ pid : back, gen')
 
 -- | Predicate. Is the peer interested in any of our pieces?
 isInterested :: PeerPid -> PeerMap -> Bool
-isInterested p = interestedInUs . fromJust . (M.lookup p)
+isInterested p = pInterestedInUs . fromJust . (M.lookup p)
 
 -- | Predicate. Is the peer choking us?
 isChokingUs :: PeerPid -> PeerMap -> Bool
-isChokingUs p = chokingUs . fromJust . (M.lookup p)
+isChokingUs p = pChokingUs . fromJust . (M.lookup p)
 
 -- | Calculate the amount of upload slots we have available. If the
 --   number of slots is explicitly given, use that. Otherwise we
@@ -132,6 +143,7 @@ calcUploadSlots rate Nothing | rate <= 0 = 7 -- This is just a guess
 --   number of seeder slots.
 --
 --   The function will move surplus slots around so all of them gets used.
+assignUploadSlots :: Int -> [RechokeData] -> [RechokeData] -> (Int, Int)
 assignUploadSlots slots downloaderPeers seederPeers =
     -- Shuffle surplus slots around so all gets used
     shuffleSeeders downloaderPeers seederPeers $ shuffleDownloaders
@@ -160,13 +172,15 @@ assignUploadSlots slots downloaderPeers seederPeers =
 -- | @selectPeers upRate d s@ selects peers from a list of downloader peers @d@ and a list of seeder
 --   peers @s@. The value of @upRate@ defines the upload rate for the client and is used in determining
 --   the rate of the slots.
-selectPeers uploadRate downPeers seedPeers = S.union (S.fromList $ take nDownSlots downPeers)
-                                                     (S.fromList $ take nUpSlots seedPeers)
+selectPeers :: Int -> [RechokeData] -> [RechokeData] -> S.Set PeerPid
+selectPeers uploadRate downPeers seedPeers = S.union downPids seedPids
     where
-      (nDownSlots, nUpSlots) = assignUploadSlots
+      (nDownSlots, nSeedSlots) = assignUploadSlots
                                  (calcUploadSlots uploadRate Nothing)
                                  downPeers
                                  seedPeers
+      downPids = S.fromList $ map fst $ take nDownSlots downPeers
+      seedPids = S.fromList $ map fst $ take nSeedSlots seedPeers
 
 -- | This function carries out the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> IO ()
@@ -175,18 +189,49 @@ performChokingUnchoking elected peers =
        optChoke defaultOptimisticSlots chokers
   where
     -- Partition the peers based on they were selected or not
-    (unchokers, chokers) = partition (\rd -> S.member (rdPeerPid rd) elected) peers
+    (unchokers, chokers) = partition (\rd -> S.member (fst rd) elected) peers
     -- Unchoke peer p
-    unchoke p = unchokePeer (rdChannel p)
+    unchoke (p, pi) = unchokePeer (pChannel pi)
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
     --  in us. The rest will either be unchoked if they are not interested (ensuring fast start
     --    should they become interested); or they will be choked to avoid TCP/IP congestion.
     optChoke _ [] = return ()
-    optChoke 0 (p : ps) = do
-      if rdInterestedInUs p
-        then chokePeer (rdChannel p)
-        else unchokePeer (rdChannel p)
-      optChoke 0 ps
-    optChoke k (p : ps) = if rdInterestedInUs p
-                          then unchokePeer (rdChannel p) >> optChoke (k-1) ps
-                          else unchokePeer (rdChannel p) >> optChoke k ps
+    optChoke 0 ((_, pi) : ps) = do if pInterestedInUs pi
+                                     then chokePeer (pChannel pi)
+                                     else unchokePeer (pChannel pi)
+                                   optChoke 0 ps
+    optChoke k ((_, pi) : ps) = if pInterestedInUs pi
+                                then unchokePeer (pChannel pi) >> optChoke (k-1) ps
+                                else unchokePeer (pChannel pi) >> optChoke k ps
+
+-- | Function to split peers into those where we are seeding and those were we are leeching.
+--   also prunes the list for peers which are not interesting.
+--   TODO: Snubbed peers
+splitSeedLeech :: [RechokeData] -> ([RechokeData], [RechokeData])
+splitSeedLeech ps = partition (pAreSeeding . snd) $ filter picker ps
+  where
+    picker (_, pi) = (not $ pIsASeeder pi) || pInterestedInUs pi
+
+
+buildRechokeData :: PeerDB -> [RechokeData]
+buildRechokeData db = map cPeer (peerChain db)
+  where cPeer pid = (pid, fromJust $ M.lookup pid (peerMap db))
+
+rechoke :: PeerDB -> Int -> IO ()
+rechoke db uploadRate = performChokingUnchoking electedPeers peers
+  where
+    peers = buildRechokeData db
+    (down, seed) = splitSeedLeech peers
+    electedPeers = selectPeers uploadRate down seed
+
+resetDb :: PeerDB -> PeerDB
+resetDb = undefined
+
+runRechokeRound :: PeerDB -> Int -> IO PeerDB
+runRechokeRound db uploadRate = do
+    db' <- return $ if chokeRound db == 0
+                    then db { peerChain = advancePeerChain (peerChain db) (peerMap db),
+                              chokeRound = 2 }
+                    else db { chokeRound = chokeRound db - 1 }
+    rechoke db' uploadRate
+    return $ resetDb db'
