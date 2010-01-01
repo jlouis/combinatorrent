@@ -179,9 +179,14 @@ performChokingUnchoking elected peers =
     -- Unchoke peer p
     unchoke p = unchokePeer (rdChannel p)
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
-    --  in us and choke the rest.
+    --  in us. The rest will either be unchoked if they are not interested (ensuring fast start
+    --    should they become interested); or they will be choked to avoid TCP/IP congestion.
     optChoke _ [] = return ()
-    optChoke 0 (p : ps) = chokePeer (rdChannel p) >> optChoke 0 ps
-    optChoke k (p : ps) = unchokePeer (rdChannel p) >> if rdInterestedInUs p
-                                                           then optChoke (k-1) ps
-                                                           else optChoke k ps -- This check may be irrelevant
+    optChoke 0 (p : ps) = do
+      if rdInterestedInUs p
+        then chokePeer (rdChannel p)
+        else unchokePeer (rdChannel p)
+      optChoke 0 ps
+    optChoke k (p : ps) = if rdInterestedInUs p
+                          then unchokePeer (rdChannel p) >> optChoke (k-1) ps
+                          else unchokePeer (rdChannel p) >> optChoke k ps
