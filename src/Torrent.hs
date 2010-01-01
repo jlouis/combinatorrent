@@ -39,7 +39,7 @@ module Torrent (InfoHash,
                 Block(..),
                 defaultBlockSize,
                 defaultOptimisticSlots,
-                haskellTorrentPort,
+                defaultPort,
                 haskellTorrentVersion,
                 mkPeerId,
                 mkTorrentInfo)
@@ -106,8 +106,8 @@ defaultOptimisticSlots :: Int
 defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
-haskellTorrentPort :: PortID
-haskellTorrentPort = PortNumber $ fromInteger 1579
+defaultPort :: PortID
+defaultPort = PortNumber $ fromInteger 1579
 
 -- | The current version of Haskell-Torrent. It should be be here.
 haskellTorrentVersion :: String
