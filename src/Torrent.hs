@@ -38,6 +38,7 @@ module Torrent (InfoHash,
                 BlockSize,
                 Block(..),
                 defaultBlockSize,
+                defaultOptimisticSlots,
                 haskellTorrentPort,
                 haskellTorrentVersion,
                 mkPeerId,
@@ -100,6 +101,9 @@ data Block = Block { blockOffset :: Int        -- ^ offset of this block within 
 defaultBlockSize :: BlockSize
 defaultBlockSize = 16384 -- Bytes
 
+-- | Default number of optimistic slots
+defaultOptimisticSlots :: Int
+defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
 haskellTorrentPort :: PortID
