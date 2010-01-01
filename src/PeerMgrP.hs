@@ -3,10 +3,14 @@ module PeerMgrP (Peer(..),
 where
 
 import qualified Data.Map as M
-import PeerP
+import Data.Maybe
+
 import Control.Concurrent
 import Control.Concurrent.CML
 
+import System.Random
+
+import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
 import ConsoleP hiding (start)
@@ -55,3 +59,86 @@ start ch pid ih pm pieceMgrC fsC logC nPieces =
           logMsg (logCh s) "Adding peer"
           PeerP.connect hn prt (peerId s) (infoHash s) pm (pieceMgrCh s) (fsCh s) (logCh s) (mgrCh s) nPieces
           logMsg (logCh s) "... Added"
+
+-- INTERNAL FUNCTIONS
+----------------------------------------------------------------------
+
+type PeerPid = Int -- For now, should probably change
+
+data PeerInfo = PeerInfo
+      { chokingUs :: Bool
+      , interestedInUs :: Bool
+      }
+
+type PeerMap = M.Map PeerPid PeerInfo
+
+-- | Advance the peer chain to the next peer eligible for optimistic
+--   unchoking. That is, skip peers which are not interested in our pieces
+--   and peers which are not choking us. The former we can't send any data to,
+--   so we can't get better speeds at them. The latter are already sending us data,
+--   so we know how good they are as peers.
+advancePeerChain :: [PeerPid] -> PeerMap -> [PeerPid]
+advancePeerChain [] mp = []
+advancePeerChain peers mp = back ++ front
+  where (front, back) = break (\p -> isInterested p mp && isChokingUs p mp) peers
+
+-- | Insert a Peer randomly into the Peer chain. Threads the random number generator
+--   through.
+addPeerChain :: StdGen -> PeerPid -> [PeerPid] -> ([PeerPid], StdGen)
+addPeerChain gen pid ls = (front ++ pid : back, gen')
+  where (front, back) = splitAt pt ls
+        (pt, gen') = randomR (0, length ls - 1) gen
+
+-- | Predicate. Is the peer interested in any of our pieces?
+isInterested :: PeerPid -> PeerMap -> Bool
+isInterested p = interestedInUs . fromJust . (M.lookup p)
+
+-- | Predicate. Is the peer choking us?
+isChokingUs :: PeerPid -> PeerMap -> Bool
+isChokingUs p = chokingUs . fromJust . (M.lookup p)
+
+-- | Calculate the amount of upload slots we have available. If the
+--   number of slots is explicitly given, use that. Otherwise we
+--   choose the slots based the current upload rate set. The faster
+--   the rate, the more slots we allow.
+calcUploadSlots :: Int -> Maybe Int -> Int
+calcUploadSlots _ (Just n) = n
+calcUploadSlots rate Nothing | rate <= 0 = 7 -- This is just a guess
+                             | rate <  9 = 2
+                             | rate < 15 = 3
+                             | rate < 42 = 4
+                             | otherwise = round . sqrt $ fromIntegral rate * 0.6
+
+-- | The call @assignUploadSlots c ds ss@ will assume that we have @c@
+--   slots for uploading at our disposal. The list @ds@ will be peers
+--   that we would like to upload to among the torrents we are
+--   currently downloading. The list @ss@ is the same thing but for
+--   torrents that we seed. The function returns a pair @(kd,ks)@
+--   where @kd@ is the number of downloader slots and @ks@ is the
+--   number of seeder slots.
+--
+--   The function will move surplus slots around so all of them gets used.
+assignUploadSlots slots downloaderPeers seederPeers =
+    -- Shuffle surplus slots around so all gets used
+    shuffleSeeders downloaderPeers seederPeers $ shuffleDownloaders
+                                                   downloaderPeers
+                                                   (downloaderSlots, seederSlots)
+  where
+    -- Calculate the slots available for the downloaders and seeders
+    downloaderSlots = max 1 $ round $ fromIntegral slots * 0.7
+    seederSlots     = max 1 $ round $ fromIntegral slots * 0.3
+
+    -- If there is a surplus of downloader slots, then assign them to
+    --  the seeder slots
+    shuffleDownloaders dPeers (dSlots, sSlots) =
+        case max 0 (dSlots - length dPeers) of
+          0 -> (dSlots, sSlots)
+          k -> (dSlots - k, sSlots + k)
+
+    -- If there is a surplus of seeder slots, then assign these to
+    --   the downloader slots. Limit the downloader slots to the number
+    --   of downloaders, however
+    shuffleSeeders dPeers sPeers (dSlots, sSlots) =
+        case max 0 (sSlots - length sPeers) of
+          0 -> (dSlots, sSlots)
+          k -> (min (dSlots + k) (length dPeers), sSlots - k)
