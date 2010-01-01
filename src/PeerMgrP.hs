@@ -2,8 +2,11 @@ module PeerMgrP (Peer(..),
                  start)
 where
 
+import Data.List
 import qualified Data.Map as M
 import Data.Maybe
+import Data.Ord
+import qualified Data.Set as S
 
 import Control.Concurrent
 import Control.Concurrent.CML
@@ -71,6 +74,17 @@ data PeerInfo = PeerInfo
       }
 
 type PeerMap = M.Map PeerPid PeerInfo
+
+data RechokeData = RechokeData
+    { rdPeerPid :: PeerPid -- ^ The Pid of the peer
+    , rdDownRate :: Double -- ^ The rate of the peer in question, bytes downloaded in last window
+    , rdChannel :: PeerChannel -- ^ The channel on which to communicate with the peer
+    , rdInterestedInUs :: Bool -- ^ Reflection from Peer DB
+    }
+
+-- | Peers are sorted by their current download rate. We want to keep fast peers around.
+sortPeers :: [RechokeData] -> [RechokeData]
+sortPeers = sortBy (comparing rdDownRate)
 
 -- | Advance the peer chain to the next peer eligible for optimistic
 --   unchoking. That is, skip peers which are not interested in our pieces
@@ -142,3 +156,32 @@ assignUploadSlots slots downloaderPeers seederPeers =
         case max 0 (sSlots - length sPeers) of
           0 -> (dSlots, sSlots)
           k -> (min (dSlots + k) (length dPeers), sSlots - k)
+
+-- | @selectPeers upRate d s@ selects peers from a list of downloader peers @d@ and a list of seeder
+--   peers @s@. The value of @upRate@ defines the upload rate for the client and is used in determining
+--   the rate of the slots.
+selectPeers uploadRate downPeers seedPeers = S.union (S.fromList $ take nDownSlots downPeers)
+                                                     (S.fromList $ take nUpSlots seedPeers)
+    where
+      (nDownSlots, nUpSlots) = assignUploadSlots
+                                 (calcUploadSlots uploadRate Nothing)
+                                 downPeers
+                                 seedPeers
+
+-- | This function carries out the choking and unchoking of peers in a round.
+performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> IO ()
+performChokingUnchoking elected peers =
+    do mapM_ unchoke unchokers
+       optChoke defaultOptimisticSlots chokers
+  where
+    -- Partition the peers based on they were selected or not
+    (unchokers, chokers) = partition (\rd -> S.member (rdPeerPid rd) elected) peers
+    -- Unchoke peer p
+    unchoke p = unchokePeer (rdChannel p)
+    -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
+    --  in us and choke the rest.
+    optChoke _ [] = return ()
+    optChoke 0 (p : ps) = chokePeer (rdChannel p) >> optChoke 0 ps
+    optChoke k (p : ps) = unchokePeer (rdChannel p) >> if rdInterestedInUs p
+                                                           then optChoke (k-1) ps
+                                                           else optChoke k ps -- This check may be irrelevant

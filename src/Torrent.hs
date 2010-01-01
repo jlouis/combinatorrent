@@ -38,7 +38,8 @@ module Torrent (InfoHash,
                 BlockSize,
                 Block(..),
                 defaultBlockSize,
-                haskellTorrentPort,
+                defaultOptimisticSlots,
+                defaultPort,
                 haskellTorrentVersion,
                 mkPeerId,
                 mkTorrentInfo)
@@ -100,10 +101,13 @@ data Block = Block { blockOffset :: Int        -- ^ offset of this block within 
 defaultBlockSize :: BlockSize
 defaultBlockSize = 16384 -- Bytes
 
+-- | Default number of optimistic slots
+defaultOptimisticSlots :: Int
+defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
-haskellTorrentPort :: PortID
-haskellTorrentPort = PortNumber $ fromInteger 1579
+defaultPort :: PortID
+defaultPort = PortNumber $ fromInteger 1579
 
 -- | The current version of Haskell-Torrent. It should be be here.
 haskellTorrentVersion :: String

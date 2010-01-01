@@ -65,7 +65,7 @@ download name = do
            putStrLn "Started Piece Manager"
            StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
            putStrLn "Started Status Process"
-           TrackerP.start ti pid haskellTorrentPort logC statusC ciC trackerC pmC
+           TrackerP.start ti pid defaultPort logC statusC ciC trackerC pmC
            putStrLn "Started Tracker Process"
            sync $ receive waitC (const True)
            TrackerP.poison trackerC

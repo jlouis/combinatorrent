@@ -1,6 +1,8 @@
 -- | Peer proceeses
 module PeerP (PeerMessage(..),
               connect,
+              unchokePeer,
+              chokePeer,
               constructBitField)
 where
 
@@ -32,7 +34,35 @@ import qualified Queue as Q
 import Torrent
 import WireProtocol
 
+-- INTERFACE
+----------------------------------------------------------------------
 
+chokePeer :: PeerChannel -> IO ()
+chokePeer ch = sync $ transmit ch ChokePeer
+
+unchokePeer :: PeerChannel -> IO ()
+unchokePeer ch = sync $ transmit ch UnchokePeer
+
+connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel
+        -> MgrChannel -> Int
+        -> IO ()
+connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
+  where connector =
+         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
+            h <- connectTo host port
+            logMsg logC "Connected, initiating handShake"
+            r <- initiateHandshake logC h pid ih
+            logMsg logC "Handshake run"
+            case r of
+              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
+                                              ++ " with error " ++ err)
+                             return ()
+              Right (_caps, _rpid) ->
+                  do logMsg logC "entering peerP loop code"
+                     peerP mgrC pieceMgrC fsC pm logC nPieces h
+
+-- INTERNAL FUNCTIONS
+----------------------------------------------------------------------
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: LogChannel -> Handle -> Channel (Maybe Message) -> IO ()
@@ -273,24 +303,6 @@ constructBitField sz pieces = L.pack . build $ m
 showPort :: PortID -> String
 showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
-
-connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel
-        -> MgrChannel -> Int
-        -> IO ()
-connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
-  where connector =
-         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
-            h <- connectTo host port
-            logMsg logC "Connected, initiating handShake"
-            r <- initiateHandshake logC h pid ih
-            logMsg logC "Handshake run"
-            case r of
-              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
-                                              ++ " with error " ++ err)
-                             return ()
-              Right (_caps, _rpid) ->
-                  do logMsg logC "entering peerP loop code"
-                     peerP mgrC pieceMgrC fsC pm logC nPieces h
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 {-
