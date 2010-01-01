@@ -19,6 +19,7 @@ import FS
 import qualified FSP
 import qualified PeerMgrP
 import qualified PieceMgrP (start, createPieceDb)
+import qualified ChokeMgrP ()
 import qualified StatusP
 import qualified TimerP()
 import Torrent
