@@ -5,8 +5,9 @@ Main
 /gen-doc
 /doc/*.pdf
 /doc/*.png
+/doc/*.html
 /TAGS
 /tags
 /doc/processes.png
-/doc/PeerManager.pdf
-/doc/PieceManager.pdf
+
+

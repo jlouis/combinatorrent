@@ -61,3 +61,5 @@ wish-list.
     * Improve the rate calculation code. Use a running average such that the rate
       is fairly measured when we do rechoking ticks.
     * Make git.md into a markdown document
+    * Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
+      which makes sense.
