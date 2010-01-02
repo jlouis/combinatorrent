@@ -41,20 +41,12 @@
 --         Another approach is to simply run each timer as a new process and
 --         then effectively use the underlying queue of the GHC system/OS for
 --         the problem.
-module TimerP (Tick(..),
-               register)
+module TimerP (register)
 
 where
 
 import Control.Concurrent
 import Control.Concurrent.CML
-
--- | A Tick is a single timer tick. It contains a version concept,
---   wherein an Integer defines what version we are currently waiting
---   for. The versioning allows silent cancel of future timer events
---   since a process can just ignore old ticks.
-data Tick = Tick Integer
-  deriving (Show, Eq)
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
