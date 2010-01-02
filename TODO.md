@@ -64,3 +64,7 @@ wish-list.
     * Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
       which makes sense.
     * Implement sending of rates from the Peer Processes. Needed for the choking code.
+    * For the histogram code, look at
+      [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
+      Hinze has a paper on that at [Hinze, R., A Simple Implementation
+      Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
