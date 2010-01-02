@@ -6,6 +6,7 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.Ord
 import qualified Data.Set as S
+import Data.Traversable as T
 
 import Control.Concurrent
 import Control.Concurrent.CML
@@ -16,13 +17,40 @@ import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
 import ConsoleP hiding (start)
-import FSP hiding (start)
+import FSP hiding (start, State)
 import Torrent hiding (infoHash)
+import TimerP
+
+-- DATA STRUCTURES
+----------------------------------------------------------------------
+
+data ChokeMgrMsg = Tick
+type ChokeMgrChannel = Channel ChokeMgrMsg
+
+data State = State
+    { logCh :: LogChannel
+    , mgrCh :: ChokeMgrChannel
+    , peerDB :: PeerDB
+    , uploadRate :: Int
+    }
 
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start = undefined
+start :: LogChannel -> ChokeMgrChannel -> Int -> IO ()
+start logC ch ur = do
+    spawn $ lp $ State logC ch initPdb ur
+    TimerP.register 10 Tick ch
+  where initPdb = PeerDB 2 M.empty []
+        lp s = (sync $ choose [timerEvent s]) >>= lp
+        timerEvent s = do wrap (receive (mgrCh s) (const True))
+                                   (\_ -> do logMsg logC "Ticked"
+                                             TimerP.register 10 Tick (mgrCh s)
+                                             update s >>= rechoke)
+        update s = do db' <- updateDb (peerDB s)
+                      return s { peerDB = db' }
+        rechoke s = do db' <- runRechokeRound (peerDB s) (uploadRate s)
+                       return s { peerDB = db' }
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
@@ -185,12 +213,12 @@ rechoke db uploadRate = performChokingUnchoking electedPeers peers
     (down, seed) = splitSeedLeech peers
     electedPeers = selectPeers uploadRate down seed
 
--- | Reset download Rate counts on all peers. Can be omitted when we implement
---   proper running average rate calculations.
-resetDb :: PeerDB -> PeerDB
-resetDb db = db { peerMap = nmp }
-  where nmp = fmap resetCount $ peerMap db
-        resetCount pi = pi { pDownRate = 0.0 }
+updateDb :: PeerDB -> IO PeerDB
+updateDb db = do nmp <- T.mapM gatherRate $ peerMap db
+                 return db { peerMap = nmp }
+    where
+      gatherRate pi = do PeerRate rt <- sync $ receive (pChannel pi) (const True)
+                         return pi { pDownRate = rt }
 
 runRechokeRound :: PeerDB -> Int -> IO PeerDB
 runRechokeRound db uploadRate = do
@@ -199,4 +227,4 @@ runRechokeRound db uploadRate = do
                               chokeRound = 2 }
                     else db { chokeRound = chokeRound db - 1 }
     rechoke db' uploadRate
-    return $ resetDb db'
+    return $ db'
