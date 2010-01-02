@@ -63,3 +63,4 @@ wish-list.
     * Make git.md into a markdown document
     * Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
       which makes sense.
+    * Implement sending of rates from the Peer Processes. Needed for the choking code.
