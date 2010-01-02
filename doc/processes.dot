@@ -2,8 +2,11 @@ digraph {
 
 	node [shape=box];
 	Tracker;
-	PeerMgr;
-	Peer [shape=tab];
+	Peer [shape=box3d];
+	{ rank = same;
+          PeerMgr;
+	  ChokeMgr;
+        }
 
 	OMBox [shape=Msquare];
 
@@ -20,23 +23,25 @@ digraph {
 	HTTP;
 	Socket;
 
-	edge [style=dotted];
+	edge [style=dotted,color=deepskyblue4];
 	Tracker -> HTTP;
 	HTTP    -> Tracker;
 	Peer -> Socket;
 	Listener-> Socket;
 
-	edge [style=solid];
+	edge [style=solid,color=black];
 
 	Tracker -> PeerMgr;
-	Tracker -> Timer [style=dashed];
+	Tracker -> Timer [style=dashed,color=darkgreen];
 	Tracker -> Status
 
 	Timer -> Tracker;
 
-	PeerMgr -> OMBox -> Peer;
-	PeerMgr -> Peer [style=dashed];
+	OMBox -> Peer;
+	PeerMgr -> Peer [style=dashed,color=darkgreen];
 	PeerMgr -> Status;
+	ChokeMgr -> OMBox;
+	PeerMgr -> ChokeMgr;
 
 	Peer -> PeerMgr;
 
@@ -57,5 +62,5 @@ digraph {
 	Status -> Tracker;
 	Status -> Main;
 
-	Listener -> Peer [style=dashed];
+	Listener -> Peer [style=dashed,color=darkgreen];
 }
