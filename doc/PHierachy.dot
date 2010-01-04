@@ -1,0 +1,45 @@
+digraph {
+	 label="Process Hierachy";
+
+	 node [shape=ellipse];
+	 S0;
+	 S1;
+	 S2;
+	 SPeer1;
+	 SPeer2;
+	 SPeer3;
+
+	 node [shape=box];
+	 Main; Timer; Console; FS; Tracker; Status; PeerMgr; ChokeMgr; PieceMgr;
+
+	 S0 -> Main;
+	 S0 -> S1;
+
+	 S1 -> Timer;
+	 S1 -> Console;
+	 S1 -> FS;
+	 S1 -> Tracker;
+	 S1 -> Status;
+	 S1 -> PeerMgr;
+	 S1 -> ChokeMgr;
+	 S1 -> PieceMgr;
+	 S1 -> S2
+
+	 S2 -> SPeer1;
+	 SPeer1 -> P1Receiver;
+	 SPeer1 -> P1SendQ;
+	 SPeer1 -> P1PeerP;
+	 SPeer1 -> P1Sender;
+
+	 S2 -> SPeer2;
+	 SPeer2 -> P2Receiver;
+	 SPeer2 -> P2SendQ;
+	 SPeer2 -> P2PeerP;
+	 SPeer2 -> P2Sender;
+
+	 S2 -> SPeer3;
+	 SPeer3 -> P3Receiver;
+	 SPeer3 -> P3SendQ;
+	 SPeer3 -> P3PeerP;
+	 SPeer3 -> P3Sender;
+}

@@ -1,14 +1,50 @@
-digraph {
+graph {
 
+	node [shape=ellipse];
+	{ rank=same; P1; P2; P3; }
 	node [shape=box];
 	Tracker;
-	Peer [shape=box3d];
 	{ rank = same;
           PeerMgr;
 	  ChokeMgr;
         }
 
-	OMBox [shape=Msquare];
+
+	subgraph cluster_p1 {
+		 label="Peer #1";
+
+		 P1Main [label="PeerP"];
+		 P1Receiver [label="Peer_Receiver"];
+		 P1SendQ [label="Peer SendQueue"];
+		 P1Sender [label="Peer Sender"];
+
+		 P1Receiver -- P1Main;
+		 P1Main -- P1SendQ -- P1Sender;
+        }
+
+	subgraph cluster_p2 {
+		 label="Peer #2";
+
+		 P2Main [label="PeerP"];
+		 P2Receiver [label="Peer_Receiver"];
+		 P2SendQ [label="Peer SendQueue"];
+		 P2Sender [label="Peer Sender"];
+
+		 P2Receiver -- P2Main;
+		 P2Main -- P2SendQ -- P2Sender;
+        }
+
+	subgraph cluster_p3 {
+		 label="Peer #3";
+
+		 P3Main [label="PeerP"];
+		 P3Receiver [label="Peer_Receiver"];
+		 P3SendQ [label="Peer SendQueue"];
+		 P3Sender [label="Peer Sender"];
+
+		 P3Receiver -- P3Main;
+		 P3Main -- P3SendQ -- P3Sender;
+        }
 
 	Status;
 	FS;
@@ -24,43 +60,60 @@ digraph {
 	Socket;
 
 	edge [style=dotted,color=deepskyblue4];
-	Tracker -> HTTP;
-	HTTP    -> Tracker;
-	Peer -> Socket;
-	Listener-> Socket;
+	HTTP    -- Tracker;
+	P1 -- Socket;
+	P2 -- Socket;
+	P3 -- Socket;
+	Listener-- Socket;
 
 	edge [style=solid,color=black];
 
-	Tracker -> PeerMgr;
-	Tracker -> Timer [style=dashed,color=darkgreen];
-	Tracker -> Status
+	Tracker -- PeerMgr;
 
-	Timer -> Tracker;
+	Timer -- Tracker;
 
-	OMBox -> Peer;
-	PeerMgr -> Peer [style=dashed,color=darkgreen];
-	PeerMgr -> Status;
-	ChokeMgr -> OMBox;
-	PeerMgr -> ChokeMgr;
+	PeerMgr -- Status;
+	ChokeMgr -- P1;
+	ChokeMgr -- P2;
+	ChokeMgr -- P3;
+	PeerMgr -- ChokeMgr;
 
-	Peer -> PeerMgr;
+	PHub [shape=point];
+	P1 -- PHub [arrowhead=none];
+	P2 -- PHub [arrowhead=none];
+	P3 -- PHub [arrowhead=none];
+	PHub -- PeerMgr;
 
-	FS -> Peer;
-	Peer -> Status;
+	PHub_FS [shape=point];
+	PHub_FS -- P1;
+	PHub_FS -- P2;
+	PHub_FS -- P3;
+	PHub_FS -- FS;
 
-	Peer -> PieceMgr;
 
-	PieceMgr -> FS;
+	PHub_S [shape=point];
+	P1 -- PHub_S [arrowhead=none];
+	P2 -- PHub_S [arrowhead=none];
+	P3 -- PHub_S [arrowhead=none];
+	PHub_S -- Status;
 
-	FS -> Status;
+	PHub_PM [shape=point];
 
-	Main -> Console;
-	Main -> FS;
+	P1 -- PHub_PM [arrowhead=none];
+	P2 -- PHub_PM [arrowhead=none];
+	P3 -- PHub_PM [arrowhead=none];
+	PHub_PM -- PieceMgr;
 
-	Console -> Main;
+	PieceMgr -- FS;
 
-	Status -> Tracker;
-	Status -> Main;
+	FS -- Status;
 
-	Listener -> Peer [style=dashed,color=darkgreen];
+	Main -- Console;
+	Main -- FS;
+
+	Status -- Tracker;
+	Status -- Main;
+
+	Listener -- P1 [style=dashed,color=darkgreen];
+
 }

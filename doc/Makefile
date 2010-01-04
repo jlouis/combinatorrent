@@ -1,6 +1,6 @@
 .PHONY: all
 
-all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf piecemanager.html
+all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf piecemanager.html PHierachy.pdf
 
 %.pdf: %.dot
 	dot -Tpdf $<  > $@
