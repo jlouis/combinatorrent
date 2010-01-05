@@ -113,13 +113,14 @@ instance Serialize BCode where
     
     get = getBInt <|> getBArray <|> getBDict <|> getBString
 
+-- | Get something wrapped in two Chars
 getWrapped :: Char -> Char -> Get a -> Get a
 getWrapped a b p = char a *> p <* char b
 
 -- | Parses a BInt
 getBInt :: Get BCode
-getBInt = BInt . read <$> getWrapped 'i' 'e' (getDigits)
-
+getBInt = BInt . read <$> getWrapped 'i' 'e' intP
+    where intP = ((:) <$> char '-' <*> getDigits) <|> getDigits
 
 -- | Parses a BArray
 getBArray :: Get BCode
@@ -179,14 +180,13 @@ many1 p = (:) <$> p <*> many p
 
 -- | Parse a given character
 char :: Char -> Get ()
-char c = 
-    do
-        x <- getWord8
-        if fromW8 x == c
-            then return ()
-            else fail $ "Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\'']
+char c = do
+    x <- getCharG
+    if x == c
+        then return ()
+        else fail $ "Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\'']
 
--- | Get a Char
+-- | Get a Char. Only works with single byte characters
 getCharG :: Get Char
 getCharG = fromW8 <$> getWord8
 
@@ -200,28 +200,6 @@ hashInfoDict bc =
     do ih <- info bc
        let encoded = encode ih
        return . bytestringDigest . sha1 . L.fromChunks $ [encoded]
-
-
-
--- parseDict :: Parser BCode
--- parseDict = do char 'd'
---                l <- many parsePair
---                char 'e'
---                return . BDict . M.fromList $ l
---   where parsePair = do
---           (BString s) <- parseString
---           b <- parseBCode
---           return (s,b)
--- 
--- parseBCode :: Parser BCode
--- parseBCode = parseString `mplus` parseList `mplus` parseInt `mplus` parseDict
-
--- Use parsec for this bastard
--- decode :: String -> Either ParseError BCode
--- decode = parse parseBCode "(unknown)"
-
--- decode :: B.ByteString -> Either String BCode
--- decode = runParser parseBCode
 
 
 toPS :: String -> Path
@@ -293,7 +271,7 @@ infoLength bc = do BInt i <- search [toPS "info", toPS "length"] bc
 infoPieces :: BCode -> Maybe [B.ByteString]
 infoPieces b = do t <- searchInfo "pieces" b
                   case t of
-                    BString str -> return $ sha1Split str --(B.pack $ map (fromIntegral . ord) str)
+                    BString str -> return $ sha1Split str
                     _ -> mzero
       where sha1Split r | r == B.empty = []
                         | otherwise = block : sha1Split rest
@@ -306,7 +284,7 @@ pp :: BCode -> Doc
 pp bc =
     case bc of
       BInt i -> integer i
-      BString s -> text (fromBS s)
+      BString s -> text (show s)
       BArray arr -> text "[" <+> (cat $ intersperse comma al) <+> text "]"
           where al = map pp arr
       BDict mp -> text "{" <+> (cat $ intersperse comma mpl) <+> text "}"
