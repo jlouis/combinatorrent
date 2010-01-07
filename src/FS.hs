@@ -64,11 +64,11 @@ readPiece pn handle mp =
           then return bs
           else fail "FS: Wrong number of bytes read"
 
-readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO L.ByteString
+readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
 readBlock pn blk handle mp =
     do pInfo <- pInfoLookup pn mp
        hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
-       L.hGet handle (blockSize blk)
+       B.hGet handle (blockSize blk)
 
 -- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
 --   to the file pointed to by handle at the correct position in the file. If the
