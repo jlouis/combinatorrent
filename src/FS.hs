@@ -56,20 +56,20 @@ pInfoLookup pn mp = case M.lookup pn mp of
                       Nothing -> fail "FS: Error lookup in PieceMap"
                       Just i -> return i
 
-readPiece :: PieceNum -> Handle -> PieceMap -> IO B.ByteString
+readPiece :: PieceNum -> Handle -> PieceMap -> IO L.ByteString
 readPiece pn handle mp =
     do pInfo <- pInfoLookup pn mp
        hSeek handle AbsoluteSeek (offset pInfo)
-       bs <- B.hGet handle (fromInteger . len $ pInfo)
-       if B.length bs == (fromInteger . len $ pInfo)
+       bs <- L.hGet handle (fromInteger . len $ pInfo)
+       if L.length bs == (fromInteger . len $ pInfo)
           then return bs
           else fail "FS: Wrong number of bytes read"
 
-readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
+readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO L.ByteString
 readBlock pn blk handle mp =
     do pInfo <- pInfoLookup pn mp
        hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
-       B.hGet handle (blockSize blk)
+       L.hGet handle (blockSize blk)
 
 {-
 writePiece :: PieceNum -> Handle -> PieceMap -> B.ByteString -> IO (Either String ())
@@ -91,7 +91,7 @@ checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
   bs <- L.hGet h (fromInteger . len $ inf)
-  return $ (bytestringDigest . sha1) bs == L.fromChunks [digest inf]
+  return $ (bytestringDigest . sha1) bs == digest inf
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
@@ -117,11 +117,11 @@ mkPieceMap bc = fetchData
         extract _    0     _    []       = []
         extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,
                                                           len = tlen,
-                                                          digest = p } : extract plen 0 (offst + plen) ps
+                                                          digest = L.fromChunks  [p] } : extract plen 0 (offst + plen) ps
                                   | otherwise = inf : extract plen (tlen - plen) (offst + plen) ps
                                        where inf = PieceInfo { offset = offst,
                                                                len = plen,
-                                                               digest = p }
+                                                               digest = L.fromChunks [p] }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
             --undefined -- Can never be hit (famous last words)
 
