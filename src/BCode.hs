@@ -118,7 +118,7 @@ getWrapped a b p = char a *> p <* char b
 
 -- | Parses a BInt
 getBInt :: Get BCode
-getBInt = BInt . read <$> getWrapped 'i' 'e' (getDigits)
+getBInt = BInt . read <$> getWrapped 'i' 'e' getDigits
 
 
 -- | Parses a BArray
@@ -165,7 +165,7 @@ wrap a b m = do
 
 -- | Put something as it is shown using @show@
 putShow :: Show a => a -> Put
-putShow x = mapM_ put (show x)
+putShow = mapM_ put . show
 
 -- * Get Helper functions
 
