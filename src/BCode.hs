@@ -82,7 +82,7 @@ data BCode = BInt Integer                       -- ^ An integer
            | BString B.ByteString               -- ^ A string of bytes
            | BArray [BCode]                     -- ^ An array
            | BDict (M.Map B.ByteString BCode)   -- ^ A key, value map
-  deriving Show
+  deriving (Show, Eq)
 
 data Path = PString B.ByteString
           | PInt Int
@@ -139,7 +139,14 @@ getBDict = BDict . M.fromList <$> getWrapped 'd' 'e' (many getPairs)
 getBString :: Get BCode
 getBString = do
     count <- getDigits
-    BString <$> ( char ':' *> getByteString (read count))
+    BString <$> ( char ':' *> getStr (read count :: Integer))
+    where maxInt = fromIntegral (maxBound :: Int) :: Integer
+          
+          getStr n | n >= 0 = B.concat <$> (sequence $ getStr' n)
+                   | otherwise = fail $ "read a negative length string, length: " ++ show n
+          
+          getStr' n | n > maxInt = getByteString maxBound : getStr' (n-maxInt)
+                    | otherwise = [getByteString . fromIntegral $ n]
 
 
 -- | Get one or more digit characters
@@ -179,12 +186,12 @@ many1 :: Get a -> Get [a]
 many1 p = (:) <$> p <*> many p
 
 -- | Parse a given character
-char :: Char -> Get ()
+char :: Char -> Get Char
 char c = do
     x <- getCharG
     if x == c
-        then return ()
-        else fail $ "Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\'']
+        then return c
+        else fail $ "Expected char: '" ++ c:"' got: '" ++ [x,'\'']
 
 -- | Get a Char. Only works with single byte characters
 getCharG :: Get Char
@@ -292,3 +299,39 @@ pp bc =
 
 prettyPrint :: BCode -> String
 prettyPrint = render . pp
+
+
+testDecodeEncodeProp1 :: BCode -> Bool
+testDecodeEncodeProp1 m =
+    let encoded = encode m
+        decoded = decode encoded
+    in case decoded of
+         Left _ -> False
+         Right m' -> m == m'
+
+testData = [BInt 123,
+            BInt (-123),
+            BString (toBS "Hello"),
+            BString (toBS ['\NUL'..'\255']),
+            BArray [BInt 1234567890
+                   ,toBString "a longer string with eieldei stuff to mess things up"
+                   ],
+            toBDict [
+                     ("hello",BInt 3)
+                    ,("a key",toBString "and a value")
+                    ,("a sub dict",toBDict [
+                                            ("some stuff",BInt 1)
+                                           ,("some more stuff", toBString "with a string")
+                                           ])
+                    ]
+           ]
+
+toBDict :: [(String,BCode)] -> BCode
+toBDict = BDict . M.fromList . map (\(k,v) -> ((toBS k),v))
+
+toBString :: String -> BCode
+toBString = BString . toBS
+
+
+
+
