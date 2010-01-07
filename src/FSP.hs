@@ -35,6 +35,7 @@ import Control.Concurrent.CML
 import System.IO
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 
 import ConsoleP
 import Torrent
@@ -55,8 +56,8 @@ data State = State {
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, Block, B.ByteString),
-                                                    Channel (FSPMsg, Channel B.ByteString))
+start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel (PieceNum, Block, L.ByteString),
+                                                    Channel (FSPMsg, Channel L.ByteString))
 start handle logC pm =
     do wc  <- channel
        rpcc <- channel
