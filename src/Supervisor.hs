@@ -51,33 +51,33 @@ allForOne children parentC = do
 	       PleaseDie _ -> do mapM_ (finChild c) childs
 			         return ())
 
-	finChild :: SupervisorChan -> ChildInfo -> IO ()
-	finChild _ (HWorker tid) = killThread tid
-	finChild c (HSupervisor tid) = sync $ transmit c (PleaseDie tid)
-
-	spawnChild :: SupervisorChan -> Child -> IO ChildInfo
-	spawnChild c (Worker proc)     = HWorker <$> proc c
-	spawnChild c (Supervisor proc) = HSupervisor <$> proc c
 
 -- | Run a set of processes. If one dies, then let the others run on as if
 --   Nothing happened.
-{-
 oneForOne :: Children -> SupervisorChan -> IO ThreadId
 oneForOne children parentC = do
     c <- channel
     childs <- mapM (spawnChild c) children
     spawn $ eventLoop childs c
   where eventLoop childs c = do
-	    msg <- sync $ receive c (const True)
-	    case msg of
-		IAmDying tid -> eventLoop (childs \\ [tid]) c
-		SpawnNew proc -> do nTid <- proc c
-				    eventLoop (nTid : childs) c
-		PleaseDie -> do finalize childs
-				return ()
-	finalize childs = mapM_ killThread childs
-	spawnChild c (Worker proc) = proc c
--}
+	    mTid <- myThreadId
+	    sync $ choose [childEvent c childs,
+			   parentEvent mTid c childs]
+	childEvent c childs = wrap (receive c (const True))
+	    (\msg -> case msg of
+		        IAmDying tid -> eventLoop (pruneChild tid childs) c
+			SpawnNew chld -> do n <- spawnChild c chld
+					    eventLoop (n : childs) c)
+	parentEvent mTid c childs = wrap (receive parentC (\(PleaseDie tid) -> tid == mTid))
+				    (\msg -> mapM_ (finChild c) childs)
+	pruneChild tid childs = filter check childs
+	  where check (HSupervisor t) = t == tid
+	        check (HWorker t)     = t == tid
 
--- TODO: Thinking hat on, we need to understand these details some more.
---
+finChild :: SupervisorChan -> ChildInfo -> IO ()
+finChild _ (HWorker tid) = killThread tid
+finChild c (HSupervisor tid) = sync $ transmit c (PleaseDie tid)
+
+spawnChild :: SupervisorChan -> Child -> IO ChildInfo
+spawnChild c (Worker proc)     = HWorker <$> proc c
+spawnChild c (Supervisor proc) = HSupervisor <$> proc c
