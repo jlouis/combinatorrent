@@ -31,7 +31,7 @@ wish-list.
     * Support UDP tracking extension
     * Support partial downloads (select files you want in the torrent)
     * Write an ETA estimator
-    * Implement a creator for torrent files
+    * (thomaschrstnsn) Implement a creator for torrent files
     * Implement a scraper on trackers
     * Turn the logging system into a better framework, add log levels,
       add process names so we can see who is doing what.
@@ -45,7 +45,7 @@ wish-list.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
-    * (thomaschrstnsn) Implement the Leecher code in the PeerP.
+    * Implement the Leecher code in the PeerP.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
