@@ -9,5 +9,6 @@ Main
 /TAGS
 /tags
 /doc/processes.png
-
-
+*~
+*.orig
+*.swp
