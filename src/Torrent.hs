@@ -80,7 +80,7 @@ type PieceSize = Int
 data PieceInfo = PieceInfo {
       offset :: Integer,
       len :: Integer,
-      digest :: B.ByteString } deriving (Eq, Show)
+      digest :: L.ByteString } deriving (Eq, Show)
 
 type MissingMap = M.Map PieceNum Bool
 
