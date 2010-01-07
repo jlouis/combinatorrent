@@ -82,7 +82,7 @@ data BCode = BInt Integer                       -- ^ An integer
            | BString B.ByteString               -- ^ A string of bytes
            | BArray [BCode]                     -- ^ An array
            | BDict (M.Map B.ByteString BCode)   -- ^ A key, value map
-  deriving Show
+  deriving (Show, Eq)
 
 data Path = PString B.ByteString
           | PInt Int
@@ -113,13 +113,14 @@ instance Serialize BCode where
     
     get = getBInt <|> getBArray <|> getBDict <|> getBString
 
+-- | Get something wrapped in two Chars
 getWrapped :: Char -> Char -> Get a -> Get a
 getWrapped a b p = char a *> p <* char b
 
 -- | Parses a BInt
 getBInt :: Get BCode
-getBInt = BInt . read <$> getWrapped 'i' 'e' (getDigits)
-
+getBInt = BInt . read <$> getWrapped 'i' 'e' intP
+    where intP = ((:) <$> char '-' <*> getDigits) <|> getDigits
 
 -- | Parses a BArray
 getBArray :: Get BCode
@@ -138,7 +139,14 @@ getBDict = BDict . M.fromList <$> getWrapped 'd' 'e' (many getPairs)
 getBString :: Get BCode
 getBString = do
     count <- getDigits
-    BString <$> ( char ':' *> getByteString (read count))
+    BString <$> ( char ':' *> getStr (read count :: Integer))
+    where maxInt = fromIntegral (maxBound :: Int) :: Integer
+          
+          getStr n | n >= 0 = B.concat <$> (sequence $ getStr' n)
+                   | otherwise = fail $ "read a negative length string, length: " ++ show n
+          
+          getStr' n | n > maxInt = getByteString maxBound : getStr' (n-maxInt)
+                    | otherwise = [getByteString . fromIntegral $ n]
 
 
 -- | Get one or more digit characters
@@ -178,13 +186,14 @@ many1 :: Get a -> Get [a]
 many1 p = (:) <$> p <*> many p
 
 -- | Parse a given character
-char :: Char -> Get ()
-char c = 
-    do
-        x <- getWord8
-        unless (fromW8 x == c) $
-            fail ("Expected char: '" ++ c:"' got: '" ++ [fromW8 x,'\''])
--- | Get a Char
+char :: Char -> Get Char
+char c = do
+    x <- getCharG
+    if x == c
+        then return c
+        else fail $ "Expected char: '" ++ c:"' got: '" ++ [x,'\'']
+
+-- | Get a Char. Only works with single byte characters
 getCharG :: Get Char
 getCharG = fromW8 <$> getWord8
 
@@ -196,28 +205,6 @@ hashInfoDict bc =
     do ih <- info bc
        let encoded = encode ih
        return . bytestringDigest . sha1 . L.fromChunks $ [encoded]
-
-
-
--- parseDict :: Parser BCode
--- parseDict = do char 'd'
---                l <- many parsePair
---                char 'e'
---                return . BDict . M.fromList $ l
---   where parsePair = do
---           (BString s) <- parseString
---           b <- parseBCode
---           return (s,b)
--- 
--- parseBCode :: Parser BCode
--- parseBCode = parseString `mplus` parseList `mplus` parseInt `mplus` parseDict
-
--- Use parsec for this bastard
--- decode :: String -> Either ParseError BCode
--- decode = parse parseBCode "(unknown)"
-
--- decode :: B.ByteString -> Either String BCode
--- decode = runParser parseBCode
 
 
 toPS :: String -> Path
@@ -289,7 +276,7 @@ infoLength bc = do BInt i <- search [toPS "info", toPS "length"] bc
 infoPieces :: BCode -> Maybe [B.ByteString]
 infoPieces b = do t <- searchInfo "pieces" b
                   case t of
-                    BString str -> return $ sha1Split str --(B.pack $ map (fromIntegral . ord) str)
+                    BString str -> return $ sha1Split str
                     _ -> mzero
       where sha1Split r | r == B.empty = []
                         | otherwise = block : sha1Split rest
@@ -302,11 +289,47 @@ pp :: BCode -> Doc
 pp bc =
     case bc of
       BInt i -> integer i
-      BString s -> text (fromBS s)
-      BArray arr -> text "[" <+> cat (intersperse comma al) <+> text "]"
+      BString s -> text (show s)
+      BArray arr -> text "[" <+> (cat $ intersperse comma al) <+> text "]"
           where al = map pp arr
       BDict mp -> text "{" <+> cat (intersperse comma mpl) <+> text "}"
           where mpl = map (\(s, bc') -> text (fromBS s) <+> text "->" <+> pp bc') $ M.toList mp
 
 prettyPrint :: BCode -> String
 prettyPrint = render . pp
+
+
+testDecodeEncodeProp1 :: BCode -> Bool
+testDecodeEncodeProp1 m =
+    let encoded = encode m
+        decoded = decode encoded
+    in case decoded of
+         Left _ -> False
+         Right m' -> m == m'
+
+testData = [BInt 123,
+            BInt (-123),
+            BString (toBS "Hello"),
+            BString (toBS ['\NUL'..'\255']),
+            BArray [BInt 1234567890
+                   ,toBString "a longer string with eieldei stuff to mess things up"
+                   ],
+            toBDict [
+                     ("hello",BInt 3)
+                    ,("a key",toBString "and a value")
+                    ,("a sub dict",toBDict [
+                                            ("some stuff",BInt 1)
+                                           ,("some more stuff", toBString "with a string")
+                                           ])
+                    ]
+           ]
+
+toBDict :: [(String,BCode)] -> BCode
+toBDict = BDict . M.fromList . map (\(k,v) -> ((toBS k),v))
+
+toBString :: String -> BCode
+toBString = BString . toBS
+
+
+
+
