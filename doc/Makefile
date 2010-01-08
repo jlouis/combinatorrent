@@ -1,12 +1,20 @@
 .PHONY: all
 
-all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf piecemanager.html
+all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf PHierachy.pdf \
+	piecemanager.html on-hieraches.html \
+	processes.png PHierachy.png
 
 %.pdf: %.dot
 	dot -Tpdf $<  > $@
 
+%.png: %.dot
+	dot -Tpng $< > $@
+
 %.html: %.lhs
 	pandoc --smart --from=markdown+lhs --to=html+lhs $< > $@
+
+%.html: %.md
+	pandoc --smart --from=markdown --to=html $< > $@
 
 clean:
 	rm -f *.pdf

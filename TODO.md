@@ -19,6 +19,7 @@ wish-list.
       The Peer Process
     * Don't connect twice to the same client id. Track the clients we
       connected to.
+    * Consider if we need OMbox'es at all.
     * Make it possible to Poison OMBox'es. Currently we leak due to them.
     * Handle error cases when checking a torrent file.
     * Add support for DHT
@@ -33,7 +34,7 @@ wish-list.
     * Write an ETA estimator
     * (thomaschrstnsn) Implement a creator for torrent files
     * Implement a scraper on trackers
-    * Turn the logging system into a better framework, add log levels,
+    * (axman) Turn the logging system into a better framework, add log levels,
       add process names so we can see who is doing what.
     * If we get a wrong URI, the code currently deadlocks since the tracker
       dies. Handle this problem gracefully.
@@ -45,7 +46,6 @@ wish-list.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
-    * Implement the Leecher code in the PeerP.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
@@ -58,6 +58,7 @@ wish-list.
     * Send keepalives every two minutes as per the spec.
     * Improve the Peer Manager to the point where it can manage choking/unchoking
       of peers.
+    * (jlouis) Improve stability by using supervisor primitives.
     * Improve the rate calculation code. Use a running average such that the rate
       is fairly measured when we do rechoking ticks.
     * Make git.md into a markdown document
@@ -68,3 +69,13 @@ wish-list.
       [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
       Hinze has a paper on that at [Hinze, R., A Simple Implementation
       Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
+    * Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
+      of the PeerMgr code.
+
+
+Items for later
+---------------
+
+    * Write the Users Guide.
+    * Design, build and improve a graphic UI.
+    * Design, build and improve a protocol for communicating with the client.
