@@ -19,8 +19,6 @@ wish-list.
       The Peer Process
     * Don't connect twice to the same client id. Track the clients we
       connected to.
-    * Consider if we need OMbox'es at all.
-    * Make it possible to Poison OMBox'es. Currently we leak due to them.
     * Handle error cases when checking a torrent file.
     * Add support for DHT
     * Add support for multiple files
