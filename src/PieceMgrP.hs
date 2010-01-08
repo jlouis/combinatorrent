@@ -215,12 +215,12 @@ grabBlocks' k eligible db = tryGrabProgress k eligible db []
           (h:_) ->
               let blockList = createBlock h db
                   ipp = InProgressPiece 0 bSz S.empty blockList
-                  bSz = len $ fromJust $ M.lookup n (infoMap db)
+                  bSz = fromInteger . len $ fromJust $ M.lookup n (infoMap db)
                   nDb = db { pendingPieces = pendingPieces db \\ [h],
                              inProgress    = M.insert h ipp (inProgress db) }
               in tryGrabProgress n ps nDb captured
     createBlock :: Int -> PieceDB -> [Block]
     createBlock pn = blockPiece
-                      defaultBlockSize . len . fromJust . M.lookup pn . infoMap
+                      defaultBlockSize . fromInteger . len . fromJust . M.lookup pn . infoMap
 
 
