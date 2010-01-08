@@ -21,6 +21,7 @@ import qualified PeerMgrP
 import qualified PieceMgrP (start, createPieceDb)
 import qualified ChokeMgrP ()
 import qualified StatusP
+import Supervisor()
 import qualified TimerP()
 import Torrent
 import qualified TrackerP
