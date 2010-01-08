@@ -1,5 +1,11 @@
+.PHONY: build clean rebuild local-install haddock hlint etags ctags
 build:
 	runghc Setup.lhs build
+
+clean:
+	runghc Setup.lhs clean
+
+rebuild: clean local-install
 
 local-install:
 	cabal install --prefix=$$HOME --user
