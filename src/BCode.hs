@@ -173,7 +173,7 @@ wrap a b m = do
 
 -- | Put something as it is shown using @show@
 putShow :: Show a => a -> Put
-putShow x = mapM_ put (show x)
+putShow = mapM_ put . show
 
 -- * Get Helper functions
 

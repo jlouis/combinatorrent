@@ -42,8 +42,8 @@ start logC ch ur = do
     spawn $ lp $ State logC ch initPdb ur
     TimerP.register 10 Tick ch
   where initPdb = PeerDB 2 M.empty []
-        lp s = (sync $ choose [timerEvent s]) >>= lp
-        timerEvent s = do wrap (receive (mgrCh s) (const True))
+        lp s = sync (choose [timerEvent s]) >>= lp
+        timerEvent s = wrap (receive (mgrCh s) (const True))
                                    (\_ -> do logMsg logC "Ticked"
                                              TimerP.register 10 Tick (mgrCh s)
                                              update s >>= rechoke)
@@ -105,11 +105,11 @@ addPeerChain gen pid ls = (front ++ pid : back, gen')
 
 -- | Predicate. Is the peer interested in any of our pieces?
 isInterested :: PeerPid -> PeerMap -> Bool
-isInterested p = pInterestedInUs . fromJust . (M.lookup p)
+isInterested p = pInterestedInUs . fromJust . M.lookup p
 
 -- | Predicate. Is the peer choking us?
 isChokingUs :: PeerPid -> PeerMap -> Bool
-isChokingUs p = pChokingUs . fromJust . (M.lookup p)
+isChokingUs p = pChokingUs . fromJust . M.lookup p
 
 -- | Calculate the amount of upload slots we have available. If the
 --   number of slots is explicitly given, use that. Otherwise we
@@ -199,7 +199,7 @@ performChokingUnchoking elected peers =
 splitSeedLeech :: [RechokeData] -> ([RechokeData], [RechokeData])
 splitSeedLeech ps = partition (pAreSeeding . snd) $ filter picker ps
   where
-    picker (_, pi) = (not $ pIsASeeder pi) || pInterestedInUs pi
+    picker (_, pi) = not (pIsASeeder pi) || pInterestedInUs pi
 
 
 buildRechokeData :: PeerDB -> [RechokeData]
@@ -222,9 +222,9 @@ updateDb db = do nmp <- T.mapM gatherRate $ peerMap db
 
 runRechokeRound :: PeerDB -> Int -> IO PeerDB
 runRechokeRound db uploadRate = do
-    db' <- return $ if chokeRound db == 0
+    let db' = if chokeRound db == 0
                     then db { peerChain = advancePeerChain (peerChain db) (peerMap db),
                               chokeRound = 2 }
                     else db { chokeRound = chokeRound db - 1 }
     rechoke db' uploadRate
-    return $ db'
+    return db'
