@@ -29,7 +29,6 @@ import PeerTypes
 import ConsoleP
 import FSP hiding (pieceMap)
 import PieceMgrP
-import qualified OMBox
 import qualified Queue as Q
 import Torrent
 import WireProtocol
@@ -156,7 +155,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        pieceMgrCh :: PieceMgrChannel,
                        logCh :: LogChannel,
                        fsCh :: FSPChannel,
-                       peerC :: PeerChannel,
+                       peerCh :: PeerChannel,
                        weChoke :: Bool,
                        pieceMap :: PieceMap,
                        blockQueue :: S.Set (PieceNum, Block),
@@ -170,21 +169,21 @@ peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -
 peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
     outBound <- sendP logC h
     inBound  <- receiverP logC h
-    (putC, getC) <- OMBox.new
     logMsg logC "Spawning Peer process"
     spawn $ do
+      peerC <- channel
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
       -- The Connect must happen before the bitfield is transferred. That way any piece getting done
       -- in the meantime will be sent as one of the first "normal" messages to the peer.
-      sync $ transmit pMgrC $ Connect tid putC
+      sync $ transmit pMgrC $ Connect tid peerC
       pieces <- PieceMgrP.getPieceDone pieceMgrC
       sync $ transmit outBound $ SendQMsg $ BitField (constructBitField nPieces pieces)
       sync $ transmit outBound $ SendQMsg Interested
       lp MkState { inCh = inBound,
                    outCh = outBound,
                    logCh = logC,
-                   peerC = getC,
+                   peerCh = peerC,
                    fsCh  = fsC,
                    pieceMgrCh = pieceMgrC,
                    pieceMap = pm,
@@ -195,7 +194,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
                    peerPieces = [] }
     return ()
   where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
-        peerMgrEvent s = wrap (receive (peerC s) (const True))
+        peerMgrEvent s = wrap (receive (peerCh s) (const True))
                            (\msg ->
                                 case msg of
                                      ChokePeer -> do sync $ transmit (outCh s) SendOChoke
