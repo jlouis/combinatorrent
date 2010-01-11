@@ -20,6 +20,9 @@ wish-list.
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Handle error cases when checking a torrent file.
+    * Do not connect to ourselves :)
+    * Write an installation and compilation guide.
+    * Write a small introduction to git bisect we can point people towards.
     * Add support for DHT
     * Add support for multiple files
     * Add rate limitation support, locally or globally
