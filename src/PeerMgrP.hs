@@ -10,6 +10,7 @@ import qualified Data.Set as S
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Monad
 
 import System.Random
 
@@ -18,6 +19,7 @@ import PeerTypes
 import PieceMgrP hiding (start)
 import ConsoleP hiding (start)
 import FSP hiding (start)
+import Supervisor
 import Torrent hiding (infoHash)
 
 
@@ -29,12 +31,15 @@ data State = MkState { peerCh :: Channel [Peer],
                        peerId :: PeerId,
                        infoHash :: InfoHash,
                        fsCh :: FSPChannel,
+                       peerPool :: SupervisorChan,
                        logCh :: LogChannel }
 
 start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> IO ()
 start ch pid ih pm pieceMgrC fsC logC nPieces =
     do mgrC <- channel
-       spawn $ lp (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC logC )
+       fakeChan <- channel
+       pool <- liftM snd $ oneForOne [] fakeChan
+       spawn $ lp (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC )
        return ()
   where lp s = do logMsg logC "Looping PeerMgr"
                   sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
@@ -60,6 +65,6 @@ start ch pid ih pm pieceMgrC fsC logC nPieces =
                            return s { peersInQueue = rest }
         addPeer s (Peer hn prt) = do
           logMsg (logCh s) "Adding peer"
-          PeerP.connect hn prt (peerId s) (infoHash s) pm (pieceMgrCh s) (fsCh s) (logCh s) (mgrCh s) nPieces
+	  PeerP.connect (hn, prt, peerId s, infoHash s, pm) (peerPool s) (pieceMgrCh s) (fsCh s) (logCh s) (mgrCh s) nPieces
           logMsg (logCh s) "... Added"
 

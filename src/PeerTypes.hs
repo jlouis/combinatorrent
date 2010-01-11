@@ -11,7 +11,7 @@ data Peer = Peer { peerHost :: HostName,
 
 data PeerMessage = ChokePeer
                  | UnchokePeer
-                 | PeerRate Double
+                 | PeerStats (Channel (Double, Bool))
 
 type PeerChannel = Channel PeerMessage
 

@@ -1,4 +1,6 @@
-module ChokeMgrP ()
+module ChokeMgrP (
+    start
+    )
 where
 
 import Data.List
@@ -10,6 +12,9 @@ import Data.Traversable as T
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Exception
+
+import Prelude hiding (catch)
 
 import System.Random
 
@@ -25,13 +30,15 @@ import TimerP
 ----------------------------------------------------------------------
 
 data ChokeMgrMsg = Tick
+		 | RemovePeer PeerPid
+		 | AddPeer PeerPid PeerChannel Bool
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
 data State = State
     { logCh :: LogChannel
     , mgrCh :: ChokeMgrChannel
     , peerDB :: PeerDB
-    , uploadRate :: Int
+    , uploadSlots :: Int
     }
 
 -- INTERFACE
@@ -39,23 +46,30 @@ data State = State
 
 start :: LogChannel -> ChokeMgrChannel -> Int -> IO ()
 start logC ch ur = do
-    spawn $ lp $ State logC ch initPdb ur
+    spawn $ lp $ State logC ch initPdb (calcUploadSlots ur Nothing)
     TimerP.register 10 Tick ch
   where initPdb = PeerDB 2 M.empty []
-        lp s = sync (choose [timerEvent s]) >>= lp
-        timerEvent s = wrap (receive (mgrCh s) (const True))
-                                   (\_ -> do logMsg logC "Ticked"
-                                             TimerP.register 10 Tick (mgrCh s)
-                                             update s >>= rechoke)
-        update s = do db' <- updateDb (peerDB s)
-                      return s { peerDB = db' }
-        rechoke s = do db' <- runRechokeRound (peerDB s) (uploadRate s)
-                       return s { peerDB = db' }
+        lp s = sync (mgrEvent s) >>= lp
+        mgrEvent s = wrap (receive (mgrCh s) (const True))
+                                   (\msg -> case msg of
+				      Tick -> tick s
+				      RemovePeer t -> removePeer t s
+				      AddPeer t pCh seed -> addP t pCh seed s)
+	tick s = do logMsg logC "Ticked"
+		    TimerP.register 10 Tick (mgrCh s)
+		    update s >>= rechoke
+	withPeerDB f s = do db' <- f (peerDB s)
+			    return s { peerDB = db' }
+	removePeer tid = withPeerDB (\db -> return $ db { peerMap = M.delete tid (peerMap db) })
+	addP tid pCh weSeed s = withPeerDB
+		(\db -> getStdRandom (addPeer db pCh weSeed tid)) s
+	update = withPeerDB updateDB
+	rechoke s = withPeerDB (flip runRechokeRound (uploadSlots s)) s
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
-type PeerPid = Int -- For now, should probably change
+type PeerPid = ThreadId -- For now, should probably change
 
 
 -- | The PeerDB is the database we keep over peers. It maps all the information necessary to determine
@@ -95,6 +109,21 @@ advancePeerChain :: [PeerPid] -> PeerMap -> [PeerPid]
 advancePeerChain [] mp = []
 advancePeerChain peers mp = back ++ front
   where (front, back) = break (\p -> isInterested p mp && isChokingUs p mp) peers
+
+-- | Add a peer to the Peer Database
+addPeer :: PeerDB -> PeerChannel -> Bool -> PeerPid -> StdGen -> (PeerDB, StdGen)
+addPeer db pCh weSeeding tid gen =
+    (db { peerMap = M.insert tid initialPeerInfo (peerMap db)
+        , peerChain = nChain }, gen')
+  where
+    (nChain, gen')  = addPeerChain gen tid (peerChain db)
+    initialPeerInfo = PeerInfo { pChokingUs = True
+			       , pDownRate = 0.0
+			       , pChannel = pCh
+			       , pInterestedInUs = False
+			       , pAreSeeding = weSeeding -- TODO: Update this on torrent completion
+			       , pIsASeeder = False -- May get updated quickly
+			       }
 
 -- | Insert a Peer randomly into the Peer chain. Threads the random number generator
 --   through.
@@ -162,10 +191,10 @@ assignUploadSlots slots downloaderPeers seederPeers =
 --   peers @s@. The value of @upRate@ defines the upload rate for the client and is used in determining
 --   the rate of the slots.
 selectPeers :: Int -> [RechokeData] -> [RechokeData] -> S.Set PeerPid
-selectPeers uploadRate downPeers seedPeers = S.union downPids seedPids
+selectPeers uploadSlots downPeers seedPeers = S.union downPids seedPids
     where
       (nDownSlots, nSeedSlots) = assignUploadSlots
-                                 (calcUploadSlots uploadRate Nothing)
+                                 uploadSlots
                                  downPeers
                                  seedPeers
       downPids = S.fromList $ map fst $ take nDownSlots downPeers
@@ -174,13 +203,19 @@ selectPeers uploadRate downPeers seedPeers = S.union downPids seedPids
 -- | This function carries out the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> IO ()
 performChokingUnchoking elected peers =
-    do mapM_ unchoke unchokers
+    do mapM_ (unchoke . snd) unchokers
        optChoke defaultOptimisticSlots chokers
   where
     -- Partition the peers based on they were selected or not
     (unchokers, chokers) = partition (\rd -> S.member (fst rd) elected) peers
-    -- Unchoke peer p
-    unchoke (p, pi) = unchokePeer (pChannel pi)
+    -- Choke and unchoke helpers.
+    --   If we block on the sync, it means that the process in the other end must
+    --   be dead. Thus we can just skip it. We will eventually receive this knowledge
+    --   through another channel.
+    unchoke pi = unchokePeer (pChannel pi)
+		    `catch` (\BlockedOnDeadMVar -> return ())
+    choke   pi = chokePeer (pChannel pi)
+		    `catch` (\BlockedOnDeadMVar -> return ())
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
     --  in us. The rest will either be unchoked if they are not interested (ensuring fast start
     --    should they become interested); or they will be choked to avoid TCP/IP congestion.
@@ -207,24 +242,28 @@ buildRechokeData db = map cPeer (peerChain db)
   where cPeer pid = (pid, fromJust $ M.lookup pid (peerMap db))
 
 rechoke :: PeerDB -> Int -> IO ()
-rechoke db uploadRate = performChokingUnchoking electedPeers peers
+rechoke db uploadSlots = performChokingUnchoking electedPeers peers
   where
     peers = buildRechokeData db
     (down, seed) = splitSeedLeech peers
-    electedPeers = selectPeers uploadRate down seed
+    electedPeers = selectPeers uploadSlots down seed
 
-updateDb :: PeerDB -> IO PeerDB
-updateDb db = do nmp <- T.mapM gatherRate $ peerMap db
+updateDB :: PeerDB -> IO PeerDB
+updateDB db = do nmp <- T.mapM gatherRate $ peerMap db
                  return db { peerMap = nmp }
     where
-      gatherRate pi = do PeerRate rt <- sync $ receive (pChannel pi) (const True)
-                         return pi { pDownRate = rt }
+      gatherRate pi = do ch <- channel
+			 (do sync $ transmit (pChannel pi) $ PeerStats ch
+			     (rt, interested) <- sync $ receive ch (const True)
+                             return pi { pDownRate = rt,
+				         pInterestedInUs = interested })
+			    `catch` (\BlockedOnDeadMVar -> return pi) -- Peer dead, ignore it.
 
 runRechokeRound :: PeerDB -> Int -> IO PeerDB
-runRechokeRound db uploadRate = do
+runRechokeRound db uploadSlots = do
     let db' = if chokeRound db == 0
                     then db { peerChain = advancePeerChain (peerChain db) (peerMap db),
                               chokeRound = 2 }
                     else db { chokeRound = chokeRound db - 1 }
-    rechoke db' uploadRate
+    rechoke db' uploadSlots
     return db'

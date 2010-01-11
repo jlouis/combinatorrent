@@ -1,14 +1,21 @@
 -- | Peer proceeses
-module PeerP (PeerMessage(..),
-              connect,
-              unchokePeer,
-              chokePeer,
-              constructBitField)
+{-# LANGUAGE ScopedTypeVariables #-}
+module PeerP (
+    -- * Types
+    PeerMessage(..),
+    -- * Interface
+    connect,
+    unchokePeer,
+    chokePeer,
+    constructBitField)
 where
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Exception
 import Control.Monad
+
+import Prelude hiding (catch)
 
 import Data.Bits
 import qualified Data.ByteString as B
@@ -30,22 +37,29 @@ import ConsoleP
 import FSP hiding (pieceMap)
 import PieceMgrP
 import qualified Queue as Q
+import Supervisor
 import Torrent
 import WireProtocol
 
 -- INTERFACE
 ----------------------------------------------------------------------
 
+-- | Send a choke message to the peer process at PeerChannel. May raise
+--   exceptions if the peer is not running anymore.
 chokePeer :: PeerChannel -> IO ()
 chokePeer ch = sync $ transmit ch ChokePeer
 
+-- | Send an unchoke message to the peer process at PeerChannel. May raise
+--   exceptions if the peer is not running anymore.
 unchokePeer :: PeerChannel -> IO ()
 unchokePeer ch = sync $ transmit ch UnchokePeer
 
-connect :: HostName -> PortID -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel
+type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
+
+connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel -> LogChannel
         -> MgrChannel -> Int
-        -> IO ()
-connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >> return ()
+        -> IO ThreadId
+connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC mgrC nPieces = spawn (connector >> return ())
   where connector =
          do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
@@ -58,15 +72,42 @@ connect host port pid ih pm pieceMgrC fsC logC mgrC nPieces = spawn connector >>
                              return ()
               Right (_caps, _rpid) ->
                   do logMsg logC "entering peerP loop code"
-                     peerP mgrC pieceMgrC fsC pm logC nPieces h
+		     supC <- channel -- TODO: Should be linked later on
+		     children <- peerChildren logC h mgrC pieceMgrC fsC pm nPieces
+		     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne children)
+		     return ()
+
+-- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
+--   BITFIELD message to a peer.
+constructBitField :: Int -> [PieceNum] -> L.ByteString
+constructBitField sz pieces = L.pack . build $ m
+    where m = map (`elem` pieces) [0..sz-1 + pad]
+          pad = 8 - (sz `mod` 8)
+          build [] = []
+          build l = let (first, rest) = splitAt 8 l
+                    in if length first /= 8
+                       then error "Wront bitfield"
+                       else bytify first : build rest
+          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1 else 0,
+                                                  if b1 then 2 else 0,
+                                                  if b2 then 4 else 0,
+                                                  if b3 then 8 else 0,
+                                                  if b4 then 16 else 0,
+                                                  if b5 then 32 else 0,
+                                                  if b6 then 64 else 0,
+                                                  if b7 then 128 else 0]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: LogChannel -> Handle -> Channel (Maybe Message) -> IO ()
-senderP logC handle ch = lp
-  where lp = do msg <- sync $ receive ch (const True)
+senderP :: LogChannel -> Handle -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
+senderP logC handle ch supC = spawn startup
+  where startup = lp `catches` [Handler (\ThreadKilled -> do hClose handle),
+				Handler (\(ex :: IOException) -> do t <- myThreadId
+								    sync $ transmit supC $ IAmDying t
+								    hClose handle)]
+        lp = do msg <- sync $ receive ch (const True)
                 case msg of
                   Nothing -> return ()
                   Just m  -> do logMsg logC $ "Sending: " ++ show m
@@ -83,10 +124,15 @@ data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we c
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
---   TODO: Make it possible to stop again.
-sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel (Maybe Message) -> IO ()
-sendQueueP logC inC outC = lp Q.empty
-  where lp eventQ =
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
+sendQueueP logC inC outC supC = spawn startup
+  where startup = (lp Q.empty)
+	    `catches` [Handler (\ThreadKilled -> return ()),
+		       Handler (\(ex :: SomeException) ->
+			do logMsg logC $ "sendQueueP kill: " ++ show ex
+			   mTid <- myThreadId
+			   sync $ transmit supC (IAmDying mTid))]
+	lp eventQ =
             do eq <- if Q.isEmpty eventQ
                        then sync $ queueEvent eventQ
                        else sync $ choose [queueEvent eventQ, sendEvent eventQ]
@@ -100,28 +146,32 @@ sendQueueP logC inC outC = lp Q.empty
                                                   return $ Q.push Choke nq)
         filterAllPiece (Piece _ _ _) = True
         filterAllPiece _             = False
-
-        filterPiece n off m = case m of Piece n off _ -> False
-                                        _             -> True
+        filterPiece n off m =
+	    case m of Piece n off _ -> False
+                      _             -> True
         sendEvent q =
             let Just (e, r) = Q.pop q
             in wrap (transmit outC $ Just e)
                    (\() -> do logMsg logC "Sent event"
                               return r)
 
-sendP :: LogChannel -> Handle -> IO (Channel SendQueueMessage)
-sendP logC handle = do inC <- channel
-                       outC <- channel
-                       spawn $ senderP logC handle outC
-                       spawn $ sendQueueP logC inC outC
-                       return inC
+peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
+	     -> FSPChannel -> PieceMap -> Int -> IO Children
+peerChildren logC handle pMgrC pieceMgrC fsC pm nPieces = do
+    queueC <- channel
+    senderC <- channel
+    receiverC <- channel
+    return [Worker $ senderP logC handle senderC,
+	    Worker $ sendQueueP logC queueC senderC,
+	    Worker $ receiverP logC handle receiverC,
+	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC]
 
-
-receiverP :: LogChannel -> Handle -> IO (Channel (Maybe Message))
-receiverP logC hndl = do ch <- channel
-                         spawn $ lp ch
-                         return ch
-  where lp ch = do logMsg logC "Peer waiting for input"
+receiverP :: LogChannel -> Handle -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
+receiverP logC hndl ch supC = spawn startup
+  where startup = (lp ch) `catches` [Handler (\ThreadKilled -> return ()),
+				     Handler (\(ex :: IOException) -> do mTid <- myThreadId
+									 sync $ transmit supC $ IAmDying mTid)]
+	lp ch = do logMsg logC "Peer waiting for input"
                    readHeader ch
         -- This checking could be done when we read 0 bytes and conversion fails.
         readHeader ch = do
@@ -165,42 +215,49 @@ data State = MkState { inCh :: Channel (Maybe Message),
 
 -- TODO: The PeerP should always attempt to move the BitField first
 -- TODO: Consider filling blocks after each loop...
-peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle -> IO ()
-peerP pMgrC pieceMgrC fsC pm logC nPieces h = do
-    outBound <- sendP logC h
-    inBound  <- receiverP logC h
+peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
+         -> Channel SendQueueMessage -> Channel (Maybe Message) 
+	 -> SupervisorChan -> IO ThreadId
+peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
     logMsg logC "Spawning Peer process"
-    spawn $ do
-      peerC <- channel
+    t <- spawn $ do
       tid <- myThreadId
       logMsg logC "Syncing a connect Back"
+      ch <- channel
       -- The Connect must happen before the bitfield is transferred. That way any piece getting done
       -- in the meantime will be sent as one of the first "normal" messages to the peer.
-      sync $ transmit pMgrC $ Connect tid peerC
+      sync $ transmit pMgrC $ Connect tid ch
       pieces <- PieceMgrP.getPieceDone pieceMgrC
       sync $ transmit outBound $ SendQMsg $ BitField (constructBitField nPieces pieces)
       sync $ transmit outBound $ SendQMsg Interested
-      lp MkState { inCh = inBound,
-                   outCh = outBound,
-                   logCh = logC,
-                   peerCh = peerC,
-                   fsCh  = fsC,
-                   pieceMgrCh = pieceMgrC,
-                   pieceMap = pm,
-                   blockQueue = S.empty,
-                   weChoke = True,
-                   peerChoke = True,
-                   peerInterested = False,
-                   peerPieces = [] }
-    return ()
-  where lp s = sync (choose [peerMsgEvent s, peerMgrEvent s]) >>= lp
-        peerMgrEvent s = wrap (receive (peerCh s) (const True))
+      (lp MkState { inCh = inBound,
+		    outCh = outBound,
+                    logCh = logC,
+                    peerCh = ch,
+                    fsCh  = fsC,
+                    pieceMgrCh = pieceMgrC,
+                    pieceMap = pm,
+                    blockQueue = S.empty,
+                    weChoke = True,
+                    peerChoke = True,
+                    peerInterested = False,
+                    peerPieces = [] }) `catches`
+	    [Handler (\ThreadKilled -> return ()),
+	     Handler (\(ex :: SomeException) -> do logMsg logC $ "PeerP Killed: " ++ show ex
+						   mTid <- myThreadId
+						   sync $ transmit supC $ IAmDying mTid)]
+    return t
+  where lp s = sync (choose [peerMsgEvent s, chokeMgrEvent s]) >>= lp
+        chokeMgrEvent s = wrap (receive (peerCh s) (const True))
                            (\msg ->
                                 case msg of
                                      ChokePeer -> do sync $ transmit (outCh s) SendOChoke
                                                      return s { weChoke = True }
                                      UnchokePeer -> do sync $ transmit (outCh s) $ SendQMsg Unchoke
-                                                       return s { weChoke = False })
+                                                       return s { weChoke = False }
+			             PeerStats retCh -> do sync $ transmit retCh (0.0, -- TODO: Fix
+										  peerInterested s)
+							   return s)
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
                                 case msg of
@@ -279,25 +336,6 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
 
 
 
--- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
---   BITFIELD message to a peer.
-constructBitField :: Int -> [PieceNum] -> L.ByteString
-constructBitField sz pieces = L.pack . build $ m
-    where m = map (`elem` pieces) [0..sz-1 + pad]
-          pad = 8 - (sz `mod` 8)
-          build [] = []
-          build l = let (first, rest) = splitAt 8 l
-                    in if length first /= 8
-                       then error "Wront bitfield"
-                       else bytify first : build rest
-          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1 else 0,
-                                                  if b1 then 2 else 0,
-                                                  if b2 then 4 else 0,
-                                                  if b3 then 8 else 0,
-                                                  if b4 then 16 else 0,
-                                                  if b5 then 32 else 0,
-                                                  if b6 then 64 else 0,
-                                                  if b7 then 128 else 0]
 
 showPort :: PortID -> String
 showPort (PortNumber pn) = show pn

@@ -3,6 +3,13 @@
 --   are currently subject to change until I figure out how a nice interface will
 --   look like. At that moment they could be split off into their own package.
 module Supervisor
+  ( allForOne
+  , oneForOne
+  , Child(..)
+  , Children
+  , SupervisorMsg(..)
+  , SupervisorChan
+  )
 where
 
 import Control.Applicative
@@ -52,13 +59,20 @@ allForOne children parentC = do
 			         return ())
 
 
--- | Run a set of processes. If one dies, then let the others run on as if
---   Nothing happened.
-oneForOne :: Children -> SupervisorChan -> IO ThreadId
+-- | A One-for-one supervisor is called with @oneForOne children parentCh@. It will spawn and run
+--   @children@ and be linked into the supervisor structure on @parentCh@. It returns the ThreadId
+--   of the supervisor itself and the Channel of which it is the controller.
+--
+--   Should a process die, the one-for-one supervisor will do nothing about it. It will just record
+--   the death and let the other processes keep running.
+--
+--   TODO: Restart policies.
+oneForOne :: Children -> SupervisorChan -> IO (ThreadId, SupervisorChan)
 oneForOne children parentC = do
     c <- channel
     childs <- mapM (spawnChild c) children
-    spawn $ eventLoop childs c
+    tid <- spawn $ eventLoop childs c
+    return (tid, c)
   where eventLoop childs c = do
 	    mTid <- myThreadId
 	    sync $ choose [childEvent c childs,
