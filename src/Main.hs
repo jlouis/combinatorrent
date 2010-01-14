@@ -21,7 +21,7 @@ import qualified PeerMgrP
 import qualified PieceMgrP (start, createPieceDb)
 import qualified ChokeMgrP ()
 import qualified StatusP
-import Supervisor()
+import Supervisor
 import qualified TimerP()
 import Torrent
 import qualified TrackerP
@@ -50,25 +50,24 @@ download name = do
            waitC    <- channel
            pieceMgrC <- channel
            putStrLn "Created channels"
-           -- create logger
-           logC <- ConsoleP.start waitC
-           putStrLn "Started logger"
-           -- The fst of the following is for writing data
-           fspC <- FSP.start h logC pieceMap
+	   supC <- channel
+	   logC <- channel
+	   fspC <- channel
            ciC <- channel
            pmC <- channel
            gen <- getStdGen
            let pid = mkPeerId gen
            let ti = fromJust $ mkTorrentInfo bc
-           putStrLn $ "Created various data, pieceCount is " ++ show (pieceCount ti)
-           PeerMgrP.start pmC pid (infoHash ti) pieceMap pieceMgrC fspC logC (pieceCount ti)
-           putStrLn "Started Peer Manager"
-           PieceMgrP.start logC pieceMgrC fspC (PieceMgrP.createPieceDb haveMap pieceMap)
-           putStrLn "Started Piece Manager"
-           StatusP.start logC 0 StatusP.Leeching statusC ciC -- TODO: Fix the 0 here
-           putStrLn "Started Status Process"
-           TrackerP.start ti pid defaultPort logC statusC ciC trackerC pmC
-           putStrLn "Started Tracker Process"
+	   -- Create main supervisor process
+	   allForOne [Worker $ ConsoleP.start logC waitC,
+		      Worker $ FSP.start h logC pieceMap fspC,
+		      Worker $ PeerMgrP.start pmC pid (infoHash ti)
+				    pieceMap pieceMgrC fspC logC (pieceCount ti),
+		      Worker $ PieceMgrP.start logC pieceMgrC fspC
+					(PieceMgrP.createPieceDb haveMap pieceMap),
+		      Worker $ StatusP.start logC 0 StatusP.Leeching statusC ciC,
+		      Worker $ TrackerP.start ti pid defaultPort logC statusC ciC
+					trackerC pmC] supC
            sync $ receive waitC (const True)
-           TrackerP.poison trackerC
+           TrackerP.poison trackerC -- This is probably wrong.
            return ()

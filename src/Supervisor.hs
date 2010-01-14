@@ -2,13 +2,19 @@
 --   Note that yet, these are not really good enough for using in other projects.
 --   are currently subject to change until I figure out how a nice interface will
 --   look like. At that moment they could be split off into their own package.
-module Supervisor
-  ( allForOne
-  , oneForOne
-  , Child(..)
+{-# LANGUAGE ScopedTypeVariables #-}
+module Supervisor (
+    -- * Types
+    Child(..)
   , Children
   , SupervisorMsg(..)
   , SupervisorChan
+    -- * Supervisor Initialization
+  , allForOne
+  , oneForOne
+    -- * helper calls
+  , pDie
+  , defaultStartup
   )
 where
 
@@ -34,6 +40,19 @@ type Children = [Child]
 
 data ChildInfo = HSupervisor ThreadId
 	       | HWorker ThreadId
+
+
+pDie :: SupervisorChan -> IO ()
+pDie supC = do
+    tid <- myThreadId
+    sync $ transmit supC $ IAmDying tid
+
+defaultStartup :: SupervisorChan -> String -> IO () -> IO ()
+defaultStartup supC name thnk = thnk `catches`
+    [Handler (\ThreadKilled -> return ()),
+     Handler (\(ex :: SomeException) ->
+		    do putStrLn $ "Process " ++ name ++ " dying: " ++ show ex
+		       pDie supC)]
 
 -- | Run a set of processes and do it once in the sense that if someone dies,
 --   no restart is attempted. We will just kill off everybody without any kind
@@ -87,6 +106,8 @@ oneForOne children parentC = do
 	pruneChild tid childs = filter check childs
 	  where check (HSupervisor t) = t == tid
 	        check (HWorker t)     = t == tid
+
+
 
 finChild :: SupervisorChan -> ChildInfo -> IO ()
 finChild _ (HWorker tid) = killThread tid

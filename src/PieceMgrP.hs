@@ -1,17 +1,19 @@
 module PieceMgrP
 where
 
-import Control.Monad
-import Control.Concurrent.CML
 
-import qualified Data.ByteString as B
+import Control.Concurrent
+import Control.Concurrent.CML
+import Control.Monad
 import Data.List
-import qualified Data.Map as M
 import Data.Maybe
+import qualified Data.ByteString as B
+import qualified Data.Map as M
 import qualified Data.Set as S
 
 import ConsoleP
 import FSP
+import Supervisor
 import Torrent
 
 ----------------------------------------------------------------------
@@ -58,9 +60,11 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 
 type PieceMgrChannel = Channel PieceMgrMsg
 
-start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB -> IO ()
-start logC mgrC fspC db = spawn (lp db) >> return ()
-  where lp db = do
+start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB
+      -> SupervisorChan -> IO ThreadId
+start logC mgrC fspC db supC = spawn (startup db)
+  where startup db = Supervisor.defaultStartup supC "PieceMgr" (lp db)
+        lp db = do
           msg <- sync $ receive mgrC (const True)
           case msg of
             GrabBlocks n eligible c ->
