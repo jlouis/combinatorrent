@@ -1,5 +1,9 @@
-module PeerMgrP (Peer(..),
-                 start)
+module PeerMgrP (
+   -- * Types
+     Peer(..)
+   -- * Interface
+   , start
+)
 where
 
 import Data.List
@@ -14,6 +18,7 @@ import Control.Monad
 
 import System.Random
 
+import ChokeMgrP hiding (start)
 import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
@@ -32,14 +37,16 @@ data State = MkState { peerCh :: Channel [Peer],
                        infoHash :: InfoHash,
                        fsCh :: FSPChannel,
                        peerPool :: SupervisorChan,
-                       logCh :: LogChannel }
+                       logCh :: LogChannel,
+		       weSeeding :: Bool -- ^ True if we are currently seeding the torrent
+		       }
 
-start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> SupervisorChan -> IO ThreadId
-start ch pid ih pm pieceMgrC fsC logC nPieces supC =
+start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> ChokeMgrChannel -> Int -> SupervisorChan -> IO ThreadId
+start ch pid ih pm pieceMgrC fsC logC chokeMgrC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne [] fakeChan
-       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC )
+       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC False)
   where startup s = Supervisor.defaultStartup supC "PeerMgr" (lp s)
 	lp s = do logMsg logC "Looping PeerMgr"
                   sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
@@ -53,9 +60,10 @@ start ch pid ih pm pieceMgrC fsC logC nPieces supC =
                                Connect tid c -> newPeer s tid c
                                Disconnect tid -> removePeer s tid)
         newPeer s tid c  = do logMsg (logCh s) "Unchoking new peer"
-                              sync $ transmit c UnchokePeer -- TODO: This is a hack for now
+			      ChokeMgrP.addPeer chokeMgrC tid c (weSeeding s)
                               return s { peers = M.insert tid c (peers s)}
         removePeer s tid = do logMsg (logCh s) "Deleting peer"
+			      ChokeMgrP.removePeer chokeMgrC tid
                               return s { peers = M.delete tid (peers s) }
         fillPeers s | M.size (peers s) > 40 = return s
                     | otherwise =

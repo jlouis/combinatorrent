@@ -241,12 +241,17 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
                     peerChoke = True,
                     peerInterested = False,
                     peerPieces = [] }) `catches`
-	    [Handler (\ThreadKilled -> return ()),
-	     Handler (\(ex :: SomeException) -> do logMsg logC $ "PeerP Killed: " ++ show ex
-						   mTid <- myThreadId
-						   sync $ transmit supC $ IAmDying mTid)]
+	    [Handler (\ThreadKilled -> do
+	        stop pMgrC),
+	     Handler (\(ex :: SomeException) -> do
+		logMsg logC $ "PeerP Killed: " ++ show ex
+		stop pMgrC
+		mTid <- myThreadId
+		sync $ transmit supC $ IAmDying mTid)]
     return t
   where lp s = sync (choose [peerMsgEvent s, chokeMgrEvent s]) >>= lp
+	stop pMgrC = do mtid <- myThreadId
+			disconnectPeer pMgrC mtid
         chokeMgrEvent s = wrap (receive (peerCh s) (const True))
                            (\msg ->
                                 case msg of
@@ -339,6 +344,10 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
 showPort :: PortID -> String
 showPort (PortNumber pn) = show pn
 showPort _               = "N/A"
+
+disconnectPeer :: MgrChannel -> ThreadId -> IO ()
+disconnectPeer c t = sync $ transmit c $ Disconnect t
+
 
 -- TODO: Consider if this code is correct with what we did to [connect]
 {-
