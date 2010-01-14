@@ -35,9 +35,11 @@ module StatusP (TorrentState(..),
                 start)
 where
 
+import Control.Concurrent
 import Control.Concurrent.CML
 
 import ConsoleP (LogChannel, logMsg)
+import Supervisor
 
 data TorrentState = Seeding | Leeching
 
@@ -51,10 +53,11 @@ data State = MkState { uploaded :: Integer,
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
 start :: LogChannel -> Integer -> TorrentState -> Channel State
-      -> Channel (Integer, Integer) -> IO ()
-start logCh l tstate trackerChanOut statusChan = do spawn $ lp $ MkState 0 0 l 0 0 tstate
-                                                    return ()
-  where lp s = sync (choose [sendEvent s, recvEvent s]) >>= lp
+      -> Channel (Integer, Integer) -> SupervisorChan -> IO ThreadId
+start logCh l tstate trackerChanOut statusChan supC = do
+    spawn $ startup $ MkState 0 0 l 0 0 tstate
+  where startup s = Supervisor.defaultStartup supC "Status" (lp s)
+        lp s = sync (choose [sendEvent s, recvEvent s]) >>= lp
         sendEvent s = wrap (transmit trackerChanOut s)
                         (\_ -> do logMsg logCh "Sending event to Tracker"
                                   return s)

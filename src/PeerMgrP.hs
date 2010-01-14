@@ -34,14 +34,14 @@ data State = MkState { peerCh :: Channel [Peer],
                        peerPool :: SupervisorChan,
                        logCh :: LogChannel }
 
-start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> IO ()
-start ch pid ih pm pieceMgrC fsC logC nPieces =
+start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> Int -> SupervisorChan -> IO ThreadId
+start ch pid ih pm pieceMgrC fsC logC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne [] fakeChan
-       spawn $ lp (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC )
-       return ()
-  where lp s = do logMsg logC "Looping PeerMgr"
+       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC )
+  where startup s = Supervisor.defaultStartup supC "PeerMgr" (lp s)
+	lp s = do logMsg logC "Looping PeerMgr"
                   sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
         trackerPeers s = wrap (receive (peerCh s) (const True))
                            (\ps ->

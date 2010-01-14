@@ -28,11 +28,16 @@
 --   question and can only do single-file torrents. It should be
 --   fairly easy to add Multi-file torrents by altering this file and
 --   the FS module.
+{-# LANGUAGE ScopedTypeVariables #-}
 module FSP
 where
 
+import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Exception
 import System.IO
+
+import Prelude hiding (catch)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -41,6 +46,7 @@ import qualified Data.Map as M
 import ConsoleP
 import Torrent
 import qualified FS
+import Supervisor
 
 data FSPMsg = CheckPiece PieceNum (Channel (Maybe Bool))
             | WriteBlock PieceNum Block B.ByteString
@@ -58,12 +64,15 @@ data State = State {
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Handle -> LogChannel -> FS.PieceMap -> IO (Channel FSPMsg)
-start handle logC pm =
-    do fspC <- channel
-       spawn $ lp $ State fspC handle pm
-       return fspC
-  where lp s = sync (msgEvent s) >>= lp
+start :: Handle -> LogChannel -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
+start handle logC pm fspC supC =
+    spawn $ startup $ State fspC handle pm
+  where startup st = (lp st) `catches`
+		       [Handler (\ThreadKilled -> return ()),
+		        Handler (\(ex :: SomeException) ->
+			    do logMsg logC $ "FSP Dying: " ++ show ex
+			       return ())]
+        lp s = sync (msgEvent s) >>= lp
         msgEvent s = wrap (receive (fspCh s) (const True))
                        -- TODO: Coalesce common 'return s'
                        (\m -> case m of

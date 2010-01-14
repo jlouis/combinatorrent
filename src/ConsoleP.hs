@@ -27,13 +27,21 @@
 -- | The Console process has two main purposes. It is a telnet-like
 --   interface with the user and it is our first simple logging device
 --   for what happens inside the system.
+{-# LANGUAGE ScopedTypeVariables #-}
 module ConsoleP (LogChannel,
                  start,
                  logMsg,
                  logFatal)
 where
 
+import Control.Concurrent
 import Control.Concurrent.CML
+
+import Control.Exception
+
+import Prelude hiding (catch)
+
+import Supervisor
 
 data LogPriority = Low
                  | Default
@@ -65,18 +73,19 @@ logMsg' c pri = sync . transmit c . Mes pri
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> IO (Channel LogMsg)
-start waitCh = do c <- channel
-                  cmdCh <- readerP c
-                  spawn (logger cmdCh c)
-                  return c
-  where logger cmdCh logCh = do sync $ choose [logEvent logCh,
-                                               quitEvent cmdCh]
-                                logger cmdCh logCh
-        logEvent logCh = wrap (receive logCh (const True))
-                           print
-        quitEvent ch = wrap (receive ch (==Quit))
-                     (\_ -> sync $ transmit waitCh ())
+start :: LogChannel -> Channel () -> SupervisorChan -> IO ThreadId
+start logC waitC supC = do
+    cmdC <- readerP logC -- We shouldn't be doing this in the long run
+    spawn $ startup cmdC
+  where startup cmdC = logger cmdC `catches`
+	       [Handler (\ThreadKilled -> return ()),
+	        Handler (\(ex :: SomeException) ->
+	          putStrLn $ "Unknown Message to the consoleP: " ++ show ex)]
+	logger cmdC = (sync $ choose [logEvent, quitEvent cmdC]) >> logger cmdC
+	logEvent = wrap (receive logC (const True))
+                      print
+        quitEvent cmdC = wrap (receive cmdC (==Quit))
+		    (\_ -> sync $ transmit waitC ())
 
 
 

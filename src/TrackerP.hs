@@ -39,14 +39,15 @@ module TrackerP
 where
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Concurrent.CML
 
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Data.Char (ord, chr)
 import Data.List (intersperse)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 
 import Network
 import Network.HTTP hiding (port)
@@ -59,22 +60,25 @@ import BCode hiding (encode)
 import ConsoleP (LogChannel, logMsg)
 import qualified PeerMgrP
 import qualified StatusP
+import Supervisor
 import qualified TimerP
 import Torrent
 
 
 
--- | The tracker state is used to tell the tracker our current state. In order to output it
---   correctly, we override the default show instance with the version below. This may be
---   wrong to do in the long run, but for now it works fine.
+-- | The tracker state is used to tell the tracker our current state. In order
+--   to output it correctly, we override the default show instance with the
+--   version below. This may be wrong to do in the long run, but for now it works
+--   fine.
 --
---   The state is either started or stopped upon the client starting. The tracker will create
---   an entry for us if we tell it that we started, and it will tear down this entry if we tell
---   it that we stopped. It will know if we are a seeder or a leecher based on how much data
---   is left for us to download.
+--   The state is either started or stopped upon the client starting. The
+--   tracker will create an entry for us if we tell it that we started, and it
+--   will tear down this entry if we tell it that we stopped. It will know if
+--   we are a seeder or a leecher based on how much data is left for us to
+--   download.
 --
---   the 'Completed' entry is used once in the lifetime of a torrent. It explains to the
---   tracker that we completed the torrent in question.
+--   the 'Completed' entry is used once in the lifetime of a torrent. It
+--   explains to the tracker that we completed the torrent in question.
 data TrackerState = Started | Stopped | Completed
 
 -- | TrackerChannel is the channel of the tracker
@@ -112,10 +116,14 @@ data State = State {
       peerChan :: Channel [PeerMgrP.Peer] }
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
-      -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer] -> IO ()
-start ti pid port logC sc cic msgC pc =
+      -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
+      -> SupervisorChan -> IO ThreadId
+start ti pid port logC sc cic msgC pc supC =
     do tm <- getPOSIXTime
-       spawn $ lp State { torrentInfo = ti,
+       -- Install a timer which triggers in 1 seconds
+       TimerP.register 1 (TrackerTick 0) msgC
+       logMsg logC "Timer in 1 seconds"
+       spawn $ startup State { torrentInfo = ti,
                           peerId = pid,
                           state = Started,
                           localPort = port,
@@ -126,11 +134,9 @@ start ti pid port logC sc cic msgC pc =
                           nextTick = 0,
                           trackerMsgC = msgC,
                           peerChan = pc }
-       -- Install a timer which triggers in 5 seconds
-       TimerP.register 1 (TrackerTick 0) msgC
-       logMsg logC "Timer in 1 seconds"
-       return ()
-  where lp s = loop s >>= lp
+  where
+    startup s = Supervisor.defaultStartup supC "Tracker" (lp s)
+    lp s = loop s >>= lp
 
 poison :: Channel TrackerMsg -> IO ()
 poison ch = sync $ transmit ch Poison
