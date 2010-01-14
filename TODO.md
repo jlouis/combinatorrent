@@ -69,6 +69,7 @@ wish-list.
       Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
     * Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
       of the PeerMgr code.
+    * Update the Seeder status in PeerMgrP.
 
 
 Items for later
@@ -77,3 +78,5 @@ Items for later
     * Write the Users Guide.
     * Design, build and improve a graphic UI.
     * Design, build and improve a protocol for communicating with the client.
+
+# vim: filetype=none tw=76 expandtab

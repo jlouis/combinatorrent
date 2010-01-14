@@ -213,7 +213,6 @@ data State = MkState { inCh :: Channel (Maybe Message),
                        peerInterested :: Bool,
                        peerPieces :: [PieceNum]}
 
--- TODO: The PeerP should always attempt to move the BitField first
 -- TODO: Consider filling blocks after each loop...
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
          -> Channel SendQueueMessage -> Channel (Maybe Message) 
