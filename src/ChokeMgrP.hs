@@ -1,5 +1,11 @@
 module ChokeMgrP (
-    start
+    -- * Types, Channels
+      ChokeMgrChannel
+    -- * Interface
+    , start
+    -- * Helper functions
+    , removePeer
+    , addPeer
     )
 where
 
@@ -23,6 +29,7 @@ import PeerTypes
 import PieceMgrP hiding (start)
 import ConsoleP hiding (start)
 import FSP hiding (start, State)
+import Supervisor
 import Torrent hiding (infoHash)
 import TimerP
 
@@ -44,17 +51,18 @@ data State = State
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: LogChannel -> ChokeMgrChannel -> Int -> IO ()
-start logC ch ur = do
-    spawn $ lp $ State logC ch initPdb (calcUploadSlots ur Nothing)
+start :: LogChannel -> ChokeMgrChannel -> Int -> SupervisorChan -> IO ThreadId
+start logC ch ur supC = do
     TimerP.register 10 Tick ch
-  where initPdb = PeerDB 2 M.empty []
+    spawn $ startup $ State logC ch initPdb (calcUploadSlots ur Nothing)
+  where startup s = Supervisor.defaultStartup supC "ChokeMgr" (lp s)
+        initPdb = PeerDB 2 M.empty []
         lp s = sync (mgrEvent s) >>= lp
         mgrEvent s = wrap (receive (mgrCh s) (const True))
                                    (\msg -> case msg of
 				      Tick -> tick s
 				      RemovePeer t -> removePeer t s
-				      AddPeer t pCh seed -> addP t pCh seed s)
+				      AddPeer t pCh weSeed -> addP t pCh weSeed s)
 	tick s = do logMsg logC "Ticked"
 		    TimerP.register 10 Tick (mgrCh s)
 		    update s >>= rechoke
@@ -62,9 +70,15 @@ start logC ch ur = do
 			    return s { peerDB = db' }
 	removePeer tid = withPeerDB (\db -> return $ db { peerMap = M.delete tid (peerMap db) })
 	addP tid pCh weSeed s = withPeerDB
-		(\db -> getStdRandom (addPeer db pCh weSeed tid)) s
+		(\db -> getStdRandom (addPeer' db pCh weSeed tid)) s
 	update = withPeerDB updateDB
 	rechoke s = withPeerDB (flip runRechokeRound (uploadSlots s)) s
+
+addPeer :: ChokeMgrChannel -> PeerPid -> PeerChannel -> Bool -> IO ()
+addPeer ch pid pch = sync . transmit ch . (AddPeer pid pch)
+
+removePeer :: ChokeMgrChannel -> PeerPid -> IO ()
+removePeer ch pid = sync $ transmit ch $ RemovePeer pid
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
@@ -111,8 +125,8 @@ advancePeerChain peers mp = back ++ front
   where (front, back) = break (\p -> isInterested p mp && isChokingUs p mp) peers
 
 -- | Add a peer to the Peer Database
-addPeer :: PeerDB -> PeerChannel -> Bool -> PeerPid -> StdGen -> (PeerDB, StdGen)
-addPeer db pCh weSeeding tid gen =
+addPeer' :: PeerDB -> PeerChannel -> Bool -> PeerPid -> StdGen -> (PeerDB, StdGen)
+addPeer' db pCh weSeeding tid gen =
     (db { peerMap = M.insert tid initialPeerInfo (peerMap db)
         , peerChain = nChain }, gen')
   where
