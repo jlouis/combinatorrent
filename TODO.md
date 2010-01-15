@@ -75,6 +75,7 @@ wish-list.
     * Update the Seeder status in PeerMgrP.
     * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
     * The defaultStartup code in Supervisor can be used in more places.
+    * When stopping a Peer, put back the Pieces to the Piece Manager.
 
 Items for later
 ---------------
