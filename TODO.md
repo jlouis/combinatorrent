@@ -20,6 +20,9 @@ wish-list.
     * Don't connect twice to the same client id. Track the clients we
       connected to.
     * Handle error cases when checking a torrent file.
+    * Do not connect to ourselves :)
+    * Write an installation and compilation guide.
+    * Write a small introduction to git bisect we can point people towards.
     * Add support for DHT
     * Add support for multiple files
     * Add rate limitation support, locally or globally
@@ -70,7 +73,8 @@ wish-list.
     * Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
       of the PeerMgr code.
     * Update the Seeder status in PeerMgrP.
-
+    * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
+    * The defaultStartup code in Supervisor can be used in more places.
 
 Items for later
 ---------------
@@ -78,5 +82,9 @@ Items for later
     * Write the Users Guide.
     * Design, build and improve a graphic UI.
     * Design, build and improve a protocol for communicating with the client.
+<<<<<<< HEAD
 
 # vim: filetype=none tw=76 expandtab
+=======
+    * Process monitoring in general. Think.
+>>>>>>> TODO Additions.
