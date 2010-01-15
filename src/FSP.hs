@@ -43,7 +43,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
 
-import ConsoleP
+import Logging
 import Torrent
 import qualified FS
 import Supervisor

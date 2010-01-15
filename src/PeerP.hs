@@ -1,21 +1,24 @@
 -- | Peer proceeses
 {-# LANGUAGE ScopedTypeVariables #-}
-module PeerP (
+module PeerP
     -- * Types
-    PeerMessage(..),
+    ( PeerMessage(..)
     -- * Interface
-    connect,
-    unchokePeer,
-    chokePeer,
-    constructBitField)
+    , connect
+    , unchokePeer
+    , chokePeer
+    )
 where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Exception
 import Control.Monad
+import Control.Monad.State
+import Control.Monad.Reader
 
-import Prelude hiding (catch)
+import Prelude hiding (catch, log)
 
 import Data.Bits
 import qualified Data.ByteString as B
@@ -33,7 +36,8 @@ import Network
 import System.IO
 
 import PeerTypes
-import ConsoleP
+import Process
+import Logging
 import FSP hiding (pieceMap)
 import PieceMgrP
 import qualified Queue as Q
@@ -77,83 +81,76 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC mgrC nPieces = spawn (
 		     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne children)
 		     return ()
 
--- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
---   BITFIELD message to a peer.
-constructBitField :: Int -> [PieceNum] -> L.ByteString
-constructBitField sz pieces = L.pack . build $ m
-    where m = map (`elem` pieces) [0..sz-1 + pad]
-          pad = 8 - (sz `mod` 8)
-          build [] = []
-          build l = let (first, rest) = splitAt 8 l
-                    in if length first /= 8
-                       then error "Wront bitfield"
-                       else bytify first : build rest
-          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1 else 0,
-                                                  if b1 then 2 else 0,
-                                                  if b2 then 4 else 0,
-                                                  if b3 then 8 else 0,
-                                                  if b4 then 16 else 0,
-                                                  if b5 then 32 else 0,
-                                                  if b6 then 64 else 0,
-                                                  if b7 then 128 else 0]
-
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
+data SPCF = SPCF { spLogCh :: LogChannel
+		 , spMsgCh :: Channel Message
+		 }
+
+instance Logging SPCF where
+   getLogger = spLogCh
+
 -- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: LogChannel -> Handle -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
-senderP logC handle ch supC = spawn startup
-  where startup = lp `catches` [Handler (\ThreadKilled -> do hClose handle),
-				Handler (\(ex :: IOException) -> do t <- myThreadId
-								    sync $ transmit supC $ IAmDying t
-								    hClose handle)]
-        lp = do msg <- sync $ receive ch (const True)
-                case msg of
-                  Nothing -> return ()
-                  Just m  -> do logMsg logC $ "Sending: " ++ show m
-                                let bs = encode m
-                                L.hPut handle bs
-                                hFlush handle
-                                logMsg logC "Sent and flushed"
-                                lp
+senderP :: LogChannel -> Handle -> Channel Message -> SupervisorChan -> IO ThreadId
+senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
+						    (do t <- liftIO $ myThreadId
+							syncP =<< (sendP supC $ IAmDying t)
+							liftIO $ hClose h))
+  where
+    pgm :: Process SPCF Handle ()
+    pgm = do
+	c <- ask
+	m <- syncP =<< recvPC spMsgCh
+	let bs = encode m
+	h <- get
+	liftIO $ do L.hPut h bs
+	            hFlush h
+	Process.log "Sent and flushed msg"
 
 -- | Messages we can send to the Send Queue
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
                       | SendQMsg Message           -- ^ We want to send the Message to the peer
                       | SendOChoke                 -- ^ We want to choke the peer
 
+data SQCF = SQCF { sqLogC :: LogChannel
+		 , sqInCh :: Channel SendQueueMessage
+		 , sqOutCh :: Channel Message
+		 }
+
+instance Logging SQCF where
+  getLogger = sqLogC
+
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
-sendQueueP logC inC outC supC = spawn startup
-  where startup = (lp Q.empty)
-	    `catches` [Handler (\ThreadKilled -> return ()),
-		       Handler (\(ex :: SomeException) ->
-			do logMsg logC $ "sendQueueP kill: " ++ show ex
-			   mTid <- myThreadId
-			   sync $ transmit supC (IAmDying mTid))]
-	lp eventQ =
-            do eq <- if Q.isEmpty eventQ
-                       then sync $ queueEvent eventQ
-                       else sync $ choose [queueEvent eventQ, sendEvent eventQ]
-               lp eq
-        queueEvent q = wrap (receive inC (const True))
-                        (\m -> case m of
-                                 SendQMsg msg -> do logMsg logC "Queueing event for sending"
-                                                    return $ Q.push msg q
-                                 SendQCancel n blk -> return $ Q.filter (filterPiece n (blockOffset blk)) q
-                                 SendOChoke -> do let nq = Q.filter filterAllPiece q
-                                                  return $ Q.push Choke nq)
-        filterAllPiece (Piece _ _ _) = True
-        filterAllPiece _             = False
-        filterPiece n off m =
-	    case m of Piece n off _ -> False
-                      _             -> True
-        sendEvent q =
-            let Just (e, r) = Q.pop q
-            in wrap (transmit outC $ Just e)
-                   (\() -> do logMsg logC "Sent event"
-                              return r)
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel Message -> SupervisorChan -> IO ThreadId
+sendQueueP logC inC outC supC = spawnP (SQCF logC inC outC) Q.empty (catchP (foreverP pgm)
+								        (defaultStopHandler supC))
+  where
+    pgm = do
+	q <- get
+	if Q.isEmpty q
+	    then queueEvent >>= syncP
+	    else chooseP [queueEvent, sendEvent] >>= syncP
+    queueEvent = do
+	ev <- recvPC sqInCh
+	wrapP ev (\m -> case m of
+			SendQMsg msg -> do log "Queueing event for sending"
+					   modify (Q.push msg)
+			SendQCancel n blk -> modify (Q.filter (filterPiece n (blockOffset blk)))
+			SendOChoke -> do modify (Q.filter filterAllPiece)
+					 modify (Q.push Choke))
+    sendEvent = do
+	Just (e, r) <- gets Q.pop
+	tEvt <- sendPC sqOutCh e
+	wrapP tEvt (\() -> do log "Dequeued event"
+			      put r)
+    filterAllPiece (Piece _ _ _) = True
+    filterAllPiece _             = False
+    filterPiece n off m =
+        case m of Piece n off _ -> False
+                  _             -> True
+
 
 peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
 	     -> FSPChannel -> PieceMap -> Int -> IO Children
@@ -166,41 +163,44 @@ peerChildren logC handle pMgrC pieceMgrC fsC pm nPieces = do
 	    Worker $ receiverP logC handle receiverC,
 	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC]
 
-receiverP :: LogChannel -> Handle -> Channel (Maybe Message) -> SupervisorChan -> IO ThreadId
-receiverP logC hndl ch supC = spawn startup
-  where startup = (lp ch) `catches` [Handler (\ThreadKilled -> return ()),
-				     Handler (\(ex :: IOException) -> do mTid <- myThreadId
-									 sync $ transmit supC $ IAmDying mTid)]
-	lp ch = do logMsg logC "Peer waiting for input"
-                   readHeader ch
-        -- This checking could be done when we read 0 bytes and conversion fails.
-        readHeader ch = do
-          feof <- hIsEOF hndl
-          if feof
-            then do logMsg logC "Handle is closed, dying!"
-                    return ()
-            else do bs' <- L.hGet hndl 4
-                    l <- conv bs'
-                    readMessage l ch
-        readMessage l ch = do
-          when (l == 0) (lp ch)
-          logMsg logC $ "Reading off " ++ show l ++ " bytes"
-          bs <- L.hGet hndl (fromIntegral l)
-          case runParser decodeMsg bs of
-            Left _ -> do sync $ transmit ch Nothing
-                         logMsg logC "Incorrect parse in receiver, dying!"
-                         return () -- Die!
-            Right msg -> do sync $ transmit ch (Just msg)
-                            lp ch
-        conv :: L.ByteString -> IO Word32
-        conv bs = do
-          logMsg logC $ show $ L.length bs
-          case runParser getWord32be bs of
-                    Left err -> do logMsg logC $ "Incorrent parse in receiver, dying: " ++ show err
-                                   error "receiverP: Incorrent length in receiver, dying!"
-                    Right i -> return i
+data RPCF = RPCF { rpLogC :: LogChannel
+                 , rpMsgC :: Channel Message }
 
-data State = MkState { inCh :: Channel (Maybe Message),
+instance Logging RPCF where
+  getLogger = rpLogC
+
+receiverP :: LogChannel -> Handle -> Channel Message -> SupervisorChan -> IO ThreadId
+receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
+						       (defaultStopHandler supC))
+  where
+    pgm = do log "Peer waiting for input"
+             readHeader ch
+    readHeader ch = do
+        h <- get
+	feof <- liftIO $ hIsEOF h
+	if feof
+	    then do log "Handle Closed"
+		    stopP
+	    else do bs' <- liftIO $ L.hGet h 4
+		    l <- conv bs'
+		    readMessage l ch
+    readMessage l ch = do
+	when (l == 0) (return ())
+	log $ "Reading off " ++ show l ++ " bytes"
+	h <- get
+	bs <- liftIO $ L.hGet h (fromIntegral l)
+	case runParser decodeMsg bs of
+            Left _ -> do log "Incorrect parse in receiver, dying!"
+                         stopP
+            Right msg -> sendPC rpMsgC msg >>= syncP
+    conv bs = do
+        log $ show $ L.length bs
+        case runParser getWord32be bs of
+          Left err -> do log $ "Incorrent parse in receiver, dying: " ++ show err
+                         stopP
+          Right i -> return i
+
+data State = MkState { inCh :: Channel Message,
                        outCh :: Channel SendQueueMessage,
                        pieceMgrCh :: PieceMgrChannel,
                        logCh :: LogChannel,
@@ -215,7 +215,7 @@ data State = MkState { inCh :: Channel (Maybe Message),
 
 -- TODO: Consider filling blocks after each loop...
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
-         -> Channel SendQueueMessage -> Channel (Maybe Message) 
+         -> Channel SendQueueMessage -> Channel Message
 	 -> SupervisorChan -> IO ThreadId
 peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
     logMsg logC "Spawning Peer process"
@@ -264,8 +264,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 							   return s)
         peerMsgEvent s = wrap (receive (inCh s) (const True))
                            (\msg ->
-                                case msg of
-                                  Just m -> case m of
+                                  case msg of
                                               KeepAlive -> return s -- Do nothing here
                                               Choke     -> do PieceMgrP.putbackBlocks
                                                                            (pieceMgrCh s)
@@ -305,8 +304,6 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
                                               Cancel n blk -> do sync $ transmit (outCh s) $ SendQCancel n blk
                                                                  return s
                                               Port _ -> return s -- No DHT Yet, silently ignore
-                                  Nothing -> do logMsg (logCh s) "Unknown message"
-                                                undefined -- TODO: Kill off gracefully
                            )
         fillBlocks s = if peerChoke s
                          then return s

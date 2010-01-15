@@ -31,36 +31,50 @@
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
 module StatusP (TorrentState(..),
-                State(uploaded, downloaded, state, left),
+                ST(uploaded, downloaded, state, left),
                 start)
 where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML
 
-import ConsoleP (LogChannel, logMsg)
+import Control.Monad.State
+import Control.Monad.Reader
+
+import Logging (LogChannel, logMsg)
 import Supervisor
+import Process
 
 data TorrentState = Seeding | Leeching
 
-data State = MkState { uploaded :: Integer,
-                       downloaded :: Integer,
-                       left :: Integer,
-                       incomplete :: Integer,
-                       complete :: Integer,
-                       state :: TorrentState }
+data CF  = CF { logCh :: LogChannel,
+		statusCh :: Channel (Integer, Integer),
+		trackerCh :: Channel ST }
+
+data ST = ST { uploaded :: Integer,
+               downloaded :: Integer,
+               left :: Integer,
+               incomplete :: Integer,
+               complete :: Integer,
+               state :: TorrentState }
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: LogChannel -> Integer -> TorrentState -> Channel State
+--
+--  TODO: Write and use some errorhandler code
+start :: LogChannel -> Integer -> TorrentState -> Channel ST
       -> Channel (Integer, Integer) -> SupervisorChan -> IO ThreadId
-start logCh l tstate trackerChanOut statusChan supC = do
-    spawn $ startup $ MkState 0 0 l 0 0 tstate
-  where startup s = Supervisor.defaultStartup supC "Status" (lp s)
-        lp s = sync (choose [sendEvent s, recvEvent s]) >>= lp
-        sendEvent s = wrap (transmit trackerChanOut s)
-                        (\_ -> do logMsg logCh "Sending event to Tracker"
-                                  return s)
-        recvEvent s = wrap (receive statusChan (const True))
-                        (\(ic, c) -> do logMsg logCh "Receiving event from Tracker"
-                                        return s { incomplete = ic, complete = c})
+start logC l tState trackerC statusC supC = do
+    spawnP (CF logC statusC trackerC) (ST 0 0 l 0 0 tState) (foreverP pgm)
+  where
+    pgm = do ev <- chooseP [sendEvent, recvEvent]
+	     syncP ev
+    sendEvent = do s <- get
+                   c <- ask
+		   sendP (trackerCh c) s
+    recvEvent = do c <- ask
+		   evt <- recvP (statusCh c) (const True)
+		   wrapP evt (\(ic, c) -> do s <- get
+					     put s { incomplete = ic,
+						     complete   = c })

@@ -28,48 +28,25 @@
 --   interface with the user and it is our first simple logging device
 --   for what happens inside the system.
 {-# LANGUAGE ScopedTypeVariables #-}
-module ConsoleP (LogChannel,
-                 start,
-                 logMsg,
-                 logFatal)
+module ConsoleP
+    ( start
+    )
 where
 
 import Control.Concurrent
 import Control.Concurrent.CML
-
 import Control.Exception
 
 import Prelude hiding (catch)
 
+import Logging
 import Supervisor
-
-data LogPriority = Low
-                 | Default
-                 | System
-                 | High
-                 | Fatal
-                 deriving Show
-
-data LogMsg = Mes LogPriority String
-
-type LogChannel = Channel LogMsg
 
 data Cmd = Quit -- Quit the program
          deriving (Eq, Show)
 
 type CmdChannel = Channel Cmd
 
--- | Log a message to a channel
-logMsg :: LogChannel -> String -> IO ()
-logMsg c = sync . transmit c . Mes Default
-
--- | Log a fatal message on a channel, TODO: use logMsg' for this
-logFatal :: LogChannel -> String -> IO ()
-logFatal c = sync . transmit c . Mes Fatal
-
--- | Log a message to a channel with a priority
-logMsg' :: LogChannel -> LogPriority -> String -> IO ()
-logMsg' c pri = sync . transmit c . Mes pri
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
@@ -88,9 +65,6 @@ start logC waitC supC = do
 		    (\_ -> sync $ transmit waitC ())
 
 
-
-
-
 readerP :: LogChannel -> IO CmdChannel
 readerP logCh = do cmdCh <- channel
                    spawn $ lp cmdCh
@@ -101,6 +75,3 @@ readerP logCh = do cmdCh <- channel
                         cmd    -> do logMsg' logCh Low $ "Unrecognized command: " ++ show cmd
                                      lp cmdCh
 
-
-instance Show LogMsg where
-    show (Mes pri str) = show pri ++ ":\t" ++ str

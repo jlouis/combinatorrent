@@ -57,7 +57,7 @@ import Numeric (showHex)
 
 
 import BCode hiding (encode)
-import ConsoleP (LogChannel, logMsg)
+import Logging
 import qualified PeerMgrP
 import qualified StatusP
 import Supervisor
@@ -108,14 +108,14 @@ data State = State {
       state :: TrackerState,
       localPort :: PortID,
       logCh :: LogChannel,
-      statusC :: Channel StatusP.State,
+      statusC :: Channel StatusP.ST,
       completeIncompleteC :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
       trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
-start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
+start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc cic msgC pc supC =
@@ -153,16 +153,16 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                             Just u -> return u
                    resp <- trackerRequest (logCh s) uri
                    case resp of
-                     Left err -> do ConsoleP.logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
+                     Left err -> do logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseWarning wrn) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Warning: " ++ fromBS wrn)
+                         do logMsg (logCh s) ("Tracker Warning: " ++ fromBS wrn)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ fromBS err)
+                         do logMsg (logCh s) ("Tracker Error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseDecodeError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
+                         do logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
@@ -238,7 +238,7 @@ trackerRequest logC uri =
                            rqBody = ""}
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestUrl :: State -> StatusP.State -> String
+buildRequestUrl :: State -> StatusP.ST -> String
 buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
