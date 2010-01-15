@@ -169,3 +169,22 @@ testDecodeEncodeProp1 m =
          Left _ -> False
          Right m' -> m == m'
 
+-- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
+--   BITFIELD message to a peer.
+constructBitField :: Int -> [PieceNum] -> L.ByteString
+constructBitField sz pieces = L.pack . build $ m
+    where m = map (`elem` pieces) [0..sz-1 + pad]
+          pad = 8 - (sz `mod` 8)
+          build [] = []
+          build l = let (first, rest) = splitAt 8 l
+                    in if length first /= 8
+                       then error "Wront bitfield"
+                       else bytify first : build rest
+          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1 else 0,
+                                                  if b1 then 2 else 0,
+                                                  if b2 then 4 else 0,
+                                                  if b3 then 8 else 0,
+                                                  if b4 then 16 else 0,
+                                                  if b5 then 32 else 0,
+                                                  if b6 then 64 else 0,
+                                                  if b7 then 128 else 0]

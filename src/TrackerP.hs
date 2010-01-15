@@ -108,14 +108,14 @@ data State = State {
       state :: TrackerState,
       localPort :: PortID,
       logCh :: LogChannel,
-      statusC :: Channel StatusP.State,
+      statusC :: Channel StatusP.ST,
       completeIncompleteC :: Channel (Integer, Integer),
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
       trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
-start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.State
+start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
       -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc cic msgC pc supC =
@@ -238,7 +238,7 @@ trackerRequest logC uri =
                            rqBody = ""}
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestUrl :: State -> StatusP.State -> String
+buildRequestUrl :: State -> StatusP.ST -> String
 buildRequestUrl s ss = concat [fromBS . announceURL . torrentInfo $ s, "?", concat hlist]
     where hlist :: [String]
           hlist = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) headers
