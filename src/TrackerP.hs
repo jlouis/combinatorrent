@@ -57,7 +57,7 @@ import Numeric (showHex)
 
 
 import BCode hiding (encode)
-import ConsoleP (LogChannel, logMsg)
+import Logging
 import qualified PeerMgrP
 import qualified StatusP
 import Supervisor
@@ -153,16 +153,16 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                             Just u -> return u
                    resp <- trackerRequest (logCh s) uri
                    case resp of
-                     Left err -> do ConsoleP.logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
+                     Left err -> do logMsg (logCh s) ("Tracker HTTP Error: " ++ err)
                                     timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseWarning wrn) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Warning: " ++ fromBS wrn)
+                         do logMsg (logCh s) ("Tracker Warning: " ++ fromBS wrn)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Tracker Error: " ++ fromBS err)
+                         do logMsg (logCh s) ("Tracker Error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right (ResponseDecodeError err) ->
-                         do ConsoleP.logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
+                         do logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
                                     sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)

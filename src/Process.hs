@@ -14,7 +14,7 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
 
-import ConsoleP
+import Logging
 
 import Data.Typeable
 

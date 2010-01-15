@@ -27,7 +27,7 @@ import System.Random
 import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
-import ConsoleP hiding (start)
+import Logging
 import FSP hiding (start, State)
 import Supervisor
 import Torrent hiding (infoHash)

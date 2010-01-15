@@ -33,7 +33,7 @@ import Network
 import System.IO
 
 import PeerTypes
-import ConsoleP
+import Logging
 import FSP hiding (pieceMap)
 import PieceMgrP
 import qualified Queue as Q

@@ -38,7 +38,7 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 
-import ConsoleP (LogChannel, logMsg)
+import Logging (LogChannel, logMsg)
 import Supervisor
 
 data TorrentState = Seeding | Leeching

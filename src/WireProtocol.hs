@@ -12,7 +12,7 @@ import Data.ByteString.Parser
 import Data.Word
 import System.IO
 
-import ConsoleP
+import Logging
 import Torrent
 
 ------------------------------------------------------------
