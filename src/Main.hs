@@ -19,6 +19,7 @@ import FS
 import qualified FSP
 import qualified PeerMgrP
 import qualified PieceMgrP (start, createPieceDb)
+import qualified Process ()
 import qualified ChokeMgrP (start)
 import qualified StatusP
 import Supervisor
