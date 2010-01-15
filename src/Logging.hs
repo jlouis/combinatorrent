@@ -19,6 +19,7 @@ data LogPriority = Low
                  | Fatal
                  deriving Show
 
+-- TODO: Consider generalizing this to any member of Show
 data LogMsg = Mes LogPriority String
 
 instance Show LogMsg where
