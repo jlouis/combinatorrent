@@ -13,6 +13,7 @@ module Process
     , runP
     , spawnP
     , catchP
+    , cleanupP
     , foreverP
     , syncP
     , chooseP
@@ -78,15 +79,22 @@ spawnP c st p = spawn proc
 -- | Run the process monad for its side effect, with a stopHandler if exceptions
 --   are raised in the process
 catchP :: Process a b () -> Process a b () -> Process a b ()
-catchP proc stopH = do
+catchP proc stopH = cleanupP proc stopH (return ())
+
+-- | Run the process monad for its side effect. @cleanupP p sh ch@ describes to
+--   run @p@. If @p@ dies by a kill from a supervisor, run @ch@. Otherwise it runs
+--   @ch >> sh@ on death.
+cleanupP :: Process a b () -> Process a b () -> Process a b () -> Process a b ()
+cleanupP proc stopH cleanupH = do
   st <- get
   c  <- ask
   (a, s') <- liftIO $ runP c st proc `catches`
-		[ Handler (\ThreadKilled -> return ((), st))
+		[ Handler (\ThreadKilled -> do
+		    do runP c st cleanupH)
 		, Handler (\StopException -> 
-		    do runP c st stopH) -- This one is ok
+		    do runP c st (cleanupH >> stopH)) -- This one is ok
 		, Handler (\(ex :: SomeException) ->
-		    do hPrint stderr ex; runP c st stopH)
+		    do hPrint stderr ex; runP c st (cleanupH >> stopH))
 		]
   put s'
   return a

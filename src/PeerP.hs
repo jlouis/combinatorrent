@@ -221,16 +221,6 @@ data PST = PST { weChoke :: Bool
 	       , peerPieces :: [PieceNum]
 	       }
 
-{-
- -
-	    [Handler (\ThreadKilled -> do
-	        stop pMgrC),
-	     Handler (\(ex :: SomeException) -> do
-		logMsg logC $ "PeerP Killed: " ++ show ex
-		stop pMgrC
-		mTid <- myThreadId
-		sync $ transmit supC $ IAmDying mTid)]
--}
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
          -> Channel SendQueueMessage -> Channel Message
 	 -> SupervisorChan -> IO ThreadId
@@ -238,7 +228,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
     ch <- channel
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch pm)
 	   (PST True S.empty True False [])
-	   (catchP startup (defaultStopHandler supC)) -- TODO: Fix the default stophandler
+	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
 	    log "Syncing a connectBack"
@@ -247,6 +237,9 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
 	    syncP =<< (sendPC outCh $ SendQMsg Interested)
 	    foreverP (recvEvt >> fillBlocks)
+	cleanup = do
+	    t <- liftIO myThreadId
+	    syncP =<< sendPC peerMgrCh (Disconnect t)
         getPiecesDone = do
 	    c <- liftIO $ channel
 	    syncP =<< (sendPC pieceMgrCh $ GetDone c)
