@@ -185,14 +185,15 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
 		    l <- conv bs'
 		    readMessage l ch
     readMessage l ch = do
-	when (l == 0) (return ())
-	log $ "Reading off " ++ show l ++ " bytes"
-	h <- get
-	bs <- liftIO $ L.hGet h (fromIntegral l)
-	case runParser decodeMsg bs of
-            Left _ -> do log "Incorrect parse in receiver, dying!"
-                         stopP
-            Right msg -> sendPC rpMsgC msg >>= syncP
+        if (l == 0)
+	    then return ()
+	    else do log $ "Reading off " ++ show l ++ " bytes"
+		    h <- get
+		    bs <- liftIO $ L.hGet h (fromIntegral l)
+		    case runParser decodeMsg bs of
+			Left _ -> do log "Incorrect parse in receiver, dying!"
+                                     stopP
+                        Right msg -> sendPC rpMsgC msg >>= syncP
     conv bs = do
         log $ show $ L.length bs
         case runParser getWord32be bs of
@@ -300,9 +301,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	requestMsg :: PieceNum -> Block -> Process PCF PST ()
 	requestMsg pn blk = do
 	    choking <- gets weChoke
-	    when choking (return ()) -- Stray requests might happen. Ignore them
-	    bs <- readBlock pn blk -- TODO: Pushdown to send process
-	    syncP =<< sendPC outCh (SendQMsg $ Piece pn (blockOffset blk) bs)
+	    unless (choking)
+		 (do
+		    bs <- readBlock pn blk -- TODO: Pushdown to send process
+		    syncP =<< sendPC outCh (SendQMsg $ Piece pn (blockOffset blk) bs))
 	readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
 	readBlock pn blk = do
 	    c <- liftIO $ channel
