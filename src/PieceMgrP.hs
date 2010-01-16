@@ -91,24 +91,6 @@ start logC mgrC fspC db supC = spawn (startup db)
             GetDone c -> do sync $ transmit c (donePiece db)
                             lp db
 
-getPieceDone :: PieceMgrChannel -> IO [PieceNum]
-getPieceDone ch = do
-  c <- channel
-  sync $ transmit ch $ GetDone c
-  sync $ receive c (const True)
-
-putbackBlocks :: PieceMgrChannel -> [(PieceNum, Block)] -> IO ()
-putbackBlocks ch = sync . transmit ch . PutbackBlocks
-
-storeBlock :: PieceMgrChannel -> PieceNum -> Block -> B.ByteString -> IO ()
-storeBlock ch n blk = sync . transmit ch . StoreBlock n blk
-
-grabBlocks :: PieceMgrChannel -> Int -> [PieceNum] -> IO [(PieceNum, Block)]
-grabBlocks pmC n pieceSet = do
-    c <- channel :: IO (Channel ([(PieceNum, [Block])]))
-    sync $ transmit pmC (GrabBlocks n pieceSet c)
-    blks <- sync $ receive c (const True)
-    return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
 
 -- HELPERS
 ----------------------------------------------------------------------

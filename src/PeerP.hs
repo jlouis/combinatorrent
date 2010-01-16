@@ -200,47 +200,28 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
                          stopP
           Right i -> return i
 
-data State = MkState { inCh :: Channel Message,
-                       outCh :: Channel SendQueueMessage,
-                       pieceMgrCh :: PieceMgrChannel,
-                       logCh :: LogChannel,
-                       fsCh :: FSPChannel,
-                       peerCh :: PeerChannel,
-                       weChoke :: Bool,
-                       pieceMap :: PieceMap,
-                       blockQueue :: S.Set (PieceNum, Block),
-                       peerChoke :: Bool,
-                       peerInterested :: Bool,
-                       peerPieces :: [PieceNum]}
+data PCF = PCF { inCh :: Channel Message
+	       , outCh :: Channel SendQueueMessage
+	       , peerMgrCh :: MgrChannel
+	       , pieceMgrCh :: PieceMgrChannel
+	       , logCh :: LogChannel
+	       , fsCh :: FSPChannel
+	       , peerCh :: PeerChannel
+	       , pieceMap :: PieceMap
+	       }
 
--- TODO: Consider filling blocks after each loop...
-peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
-         -> Channel SendQueueMessage -> Channel Message
-	 -> SupervisorChan -> IO ThreadId
-peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
-    logMsg logC "Spawning Peer process"
-    t <- spawn $ do
-      tid <- myThreadId
-      logMsg logC "Syncing a connect Back"
-      ch <- channel
-      -- The Connect must happen before the bitfield is transferred. That way any piece getting done
-      -- in the meantime will be sent as one of the first "normal" messages to the peer.
-      sync $ transmit pMgrC $ Connect tid ch
-      pieces <- PieceMgrP.getPieceDone pieceMgrC
-      sync $ transmit outBound $ SendQMsg $ BitField (constructBitField nPieces pieces)
-      sync $ transmit outBound $ SendQMsg Interested
-      (lp MkState { inCh = inBound,
-		    outCh = outBound,
-                    logCh = logC,
-                    peerCh = ch,
-                    fsCh  = fsC,
-                    pieceMgrCh = pieceMgrC,
-                    pieceMap = pm,
-                    blockQueue = S.empty,
-                    weChoke = True,
-                    peerChoke = True,
-                    peerInterested = False,
-                    peerPieces = [] }) `catches`
+instance Logging PCF where
+  getLogger = logCh
+
+data PST = PST { weChoke :: Bool
+	       , blockQueue :: S.Set (PieceNum, Block)
+	       , peerChoke :: Bool
+	       , peerInterested :: Bool
+	       , peerPieces :: [PieceNum]
+	       }
+
+{-
+ -
 	    [Handler (\ThreadKilled -> do
 	        stop pMgrC),
 	     Handler (\(ex :: SomeException) -> do
@@ -248,79 +229,123 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 		stop pMgrC
 		mTid <- myThreadId
 		sync $ transmit supC $ IAmDying mTid)]
-    return t
-  where lp s = sync (choose [peerMsgEvent s, chokeMgrEvent s]) >>= lp
-	stop pMgrC = do mtid <- myThreadId
-			disconnectPeer pMgrC mtid
-        chokeMgrEvent s = wrap (receive (peerCh s) (const True))
-                           (\msg ->
-                                case msg of
-                                     ChokePeer -> do sync $ transmit (outCh s) SendOChoke
-                                                     return s { weChoke = True }
-                                     UnchokePeer -> do sync $ transmit (outCh s) $ SendQMsg Unchoke
-                                                       return s { weChoke = False }
-			             PeerStats retCh -> do sync $ transmit retCh (0.0, -- TODO: Fix
-										  peerInterested s)
-							   return s)
-        peerMsgEvent s = wrap (receive (inCh s) (const True))
-                           (\msg ->
-                                  case msg of
-                                              KeepAlive -> return s -- Do nothing here
-                                              Choke     -> do PieceMgrP.putbackBlocks
-                                                                           (pieceMgrCh s)
-                                                                           (S.toList $ blockQueue s)
-                                                              return s { blockQueue = S.empty }
-                                              Unchoke   -> fillBlocks s { peerChoke = False }
-                                              -- The next two is dependent in the PeerManager being more clever
-                                              Interested -> return s { peerInterested = True } -- TODO
-                                              NotInterested -> return s { peerInterested = False } -- TODO
-                                              Have pn ->
-                                                  if M.member pn (pieceMap s)
-                                                     then fillBlocks s { peerPieces = pn : peerPieces s }
-                                                     else error "Unknown piece" -- TODO: Handle error properly
-                                              BitField bf ->
-                                                  case peerPieces s of
-                                                    -- TODO: Don't trust the BitField
-                                                    [] -> fillBlocks s { peerPieces = createPeerPieces bf }
-                                                    _  -> error "Out of band BitField request" -- TODO: Kill off gracefully
-                                              Request pn blk ->
-                                                  if weChoke s
-                                                    then return s -- Ignore, there might be stray packets
-                                                    else
-                                                        do c <- channel
-                                                           readBlock (fsCh s) c pn blk -- TODO: Pushdown in Send Process
-                                                           bs <- sync $ receive c (const True)
-                                                           sync $ transmit (outCh s) $
-                                                                SendQMsg (Piece pn (blockOffset blk) bs)
-                                                           return s
-                                              Piece n os bs ->
-                                                  let sz = B.length bs
-                                                      blk = Block os sz
-                                                      e = (n, blk)
-                                                  in if S.member e (blockQueue s)
-                                                       then do PieceMgrP.storeBlock (pieceMgrCh s) n (Block os sz) bs
-                                                               fillBlocks s { blockQueue = S.delete e (blockQueue s) }
-                                                       else fillBlocks s -- Piece might be stray
-                                              Cancel n blk -> do sync $ transmit (outCh s) $ SendQCancel n blk
-                                                                 return s
-                                              Port _ -> return s -- No DHT Yet, silently ignore
-                           )
-        fillBlocks s = if peerChoke s
-                         then return s
-                         else checkWatermark s
-        checkWatermark s =
-            let sz = S.size (blockQueue s)
-            in if sz < loMark
-                 then do
-                   logMsg logC $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
-                   toQueue <- PieceMgrP.grabBlocks (pieceMgrCh s) (hiMark - sz) (peerPieces s)
-                   logMsg logC $ "Got " ++ show (length toQueue) ++ " blocks"
-                   queuePieces s toQueue
-                 else return s -- Do nothing, we have plenty queued already
-        queuePieces s toQueue = do mapM_ (pushPiece $ outCh s) toQueue
-                                   return s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) }
-        pushPiece ch (pn, blk) =
-            sync $ transmit ch $ SendQMsg $ Request pn blk
+-}
+peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
+         -> Channel SendQueueMessage -> Channel Message
+	 -> SupervisorChan -> IO ThreadId
+peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
+    ch <- channel
+    spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch pm)
+	   (PST True S.empty True False [])
+	   (catchP startup (defaultStopHandler supC)) -- TODO: Fix the default stophandler
+  where startup = do
+	    tid <- liftIO $ myThreadId
+	    log "Syncing a connectBack"
+	    asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect tid ch) >>= syncP
+	    pieces <- getPiecesDone
+	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
+	    syncP =<< (sendPC outCh $ SendQMsg Interested)
+	    foreverP (recvEvt >> fillBlocks)
+        getPiecesDone = do
+	    c <- liftIO $ channel
+	    syncP =<< (sendPC pieceMgrCh $ GetDone c)
+	    recvP c (const True) >>= syncP
+	recvEvt = do
+	    syncP =<< chooseP [peerMsgEvent, chokeMgrEvent]
+	chokeMgrEvent = do
+	    evt <- recvPC peerCh
+	    wrapP evt (\msg ->
+		case msg of
+		    ChokePeer -> do syncP =<< sendPC outCh SendOChoke
+				    modify (\s -> s {weChoke = True})
+		    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
+				      modify (\s -> s {weChoke = False})
+		    PeerStats retCh -> do i <- gets peerInterested
+					  syncP =<< sendP retCh (0.0, i)) -- TODO: Fix
+	peerMsgEvent = do
+	    evt <- recvPC inCh
+	    wrapP evt (\msg ->
+		case msg of
+		  KeepAlive  -> return ()
+		  Choke      -> do putbackBlocks
+		                   modify (\s -> s { peerChoke = True })
+		  Unchoke    -> modify (\s -> s { peerChoke = False })
+                  -- The next two is dependent in the PeerManager being more clever
+                  Interested -> modify (\s -> s { peerInterested = True })
+		  NotInterested -> modify (\s -> s { peerInterested = False })
+		  Have pn -> haveMsg pn
+		  BitField bf -> bitfieldMsg bf
+		  Request pn blk -> requestMsg pn blk
+		  Piece n os bs -> pieceMsg n os bs
+		  Cancel pn blk -> cancelMsg pn blk
+		  Port _ -> return ()) -- No DHT yet, silently ignore
+	putbackBlocks = do
+	    blks <- gets blockQueue
+	    syncP =<< sendPC pieceMgrCh (PutbackBlocks (S.toList blks))
+	    modify (\s -> s { blockQueue = S.empty })
+	haveMsg :: PieceNum -> Process PCF PST ()
+	haveMsg pn = do
+	    pm <- asks pieceMap
+	    if M.member pn pm
+		then modify (\s -> s { peerPieces = pn : peerPieces s})
+		else do log "Unknown Piece"
+		        stopP
+	bitfieldMsg bf = do
+	    pieces <- gets peerPieces
+	    case pieces of
+	      -- TODO: Don't trust the bitfield
+	      [] -> modify (\s -> s { peerPieces = createPeerPieces bf})
+	      _  -> do log "Got out of band Bitfield request, dying"
+	               stopP
+	requestMsg :: PieceNum -> Block -> Process PCF PST ()
+	requestMsg pn blk = do
+	    choking <- gets weChoke
+	    when choking (return ()) -- Stray requests might happen. Ignore them
+	    bs <- readBlock pn blk -- TODO: Pushdown to send process
+	    syncP =<< sendPC outCh (SendQMsg $ Piece pn (blockOffset blk) bs)
+	readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
+	readBlock pn blk = do
+	    c <- liftIO $ channel
+	    syncP =<< sendPC fsCh (ReadBlock pn blk c)
+	    syncP =<< recvP c (const True)
+	pieceMsg :: PieceNum -> Int -> B.ByteString -> Process PCF PST ()
+	pieceMsg n os bs = do
+	    let sz = B.length bs
+	        blk = Block os sz
+		e = (n, blk)
+	    q <- gets blockQueue
+	    when (S.member e q)
+		(do storeBlock n (Block os sz) bs
+		    modify (\s -> s { blockQueue = S.delete e (blockQueue s)}))
+	    -- When e is not a member, the piece may be stray, so ignore it. Perhaps print something
+	    --   here.
+	cancelMsg n blk =
+	    syncP =<< sendPC outCh (SendQCancel n blk)
+        fillBlocks = do
+	    choking <- gets peerChoke
+	    unless choking checkWatermark
+        checkWatermark = do
+	    q <- gets blockQueue
+	    let sz = S.size q
+	    when (sz < loMark)
+		(do
+                   log $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
+		   toQueue <- grabBlocks (hiMark - sz)
+                   log $ "Got " ++ show (length toQueue) ++ " blocks"
+                   queuePieces toQueue)
+	queuePieces toQueue = do
+	    mapM_ pushPiece toQueue
+	    modify (\s -> s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) })
+	pushPiece (pn, blk) =
+	    syncP =<< sendPC outCh (SendQMsg $ Request pn blk)
+	storeBlock n blk bs =
+	    syncP =<< sendPC fsCh (WriteBlock n blk bs)
+	grabBlocks n = do
+	    c <- liftIO $ channel
+	    ps <- gets peerPieces
+	    syncP =<< sendPC pieceMgrCh (GrabBlocks n ps c)
+	    blks <- syncP =<< recvP c (const True)
+	    return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
         loMark = 10
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
@@ -334,8 +359,6 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
             in fmap dBit [0..7]
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
-
-
 
 
 showPort :: PortID -> String
