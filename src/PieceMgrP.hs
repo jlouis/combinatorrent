@@ -1,4 +1,9 @@
 module PieceMgrP
+    ( PieceMgrMsg(..)
+    , PieceMgrChannel
+    , start
+    , createPieceDb
+    )
 where
 
 
@@ -12,9 +17,10 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 
 import Logging
-import FSP
+import FSP hiding (start)
 import Supervisor
 import Torrent
+import Process
 
 ----------------------------------------------------------------------
 
@@ -59,6 +65,15 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                  | GetDone (Channel [PieceNum])
 
 type PieceMgrChannel = Channel PieceMgrMsg
+
+data PieceMgrCfg = PieceMgrCfg
+    { logCh :: LogChannel
+    , pieceMgrCh :: PieceMgrChannel
+    , fspCh :: FSPChannel
+    }
+
+instance Logging PieceMgrCfg where
+  getLogger = logCh
 
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB
       -> SupervisorChan -> IO ThreadId
