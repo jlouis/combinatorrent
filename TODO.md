@@ -77,15 +77,15 @@ wish-list.
     * The defaultStartup code in Supervisor can be used in more places.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
 
+
 Items for later
 ---------------
 
     * Write the Users Guide.
     * Design, build and improve a graphic UI.
     * Design, build and improve a protocol for communicating with the client.
-<<<<<<< HEAD
+    * Azureus/Vuze has a keepalive flood detector built-in. Consider if this
+      is relevant for this client.
+    * Process monitoring in general. Think.
 
 # vim: filetype=none tw=76 expandtab
-=======
-    * Process monitoring in general. Think.
->>>>>>> TODO Additions.
