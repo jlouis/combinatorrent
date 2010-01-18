@@ -10,14 +10,17 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Monad
+import Control.Monad.State
 import Data.List
 import Data.Maybe
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+import Prelude hiding (log)
+
 import Logging
-import FSP hiding (start)
+import FSP hiding (start, fspCh)
 import Supervisor
 import Torrent
 import Process
@@ -75,37 +78,41 @@ data PieceMgrCfg = PieceMgrCfg
 instance Logging PieceMgrCfg where
   getLogger = logCh
 
+type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
+
 start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB
       -> SupervisorChan -> IO ThreadId
-start logC mgrC fspC db supC = spawn (startup db)
-  where startup db = Supervisor.defaultStartup supC "PieceMgr" (lp db)
-        lp db = do
-          msg <- sync $ receive mgrC (const True)
-          case msg of
-            GrabBlocks n eligible c ->
-                do logMsg logC "Grabbing blocks"
-                   let (blocks, db') = grabBlocks' n eligible db
-                   logMsg logC "Grabbed..."
-                   sync $ transmit c blocks
-                   lp db'
-            StoreBlock pn blk d ->
-                do FSP.storeBlock fspC pn blk d
-                   let (done, db') = updateProgress db pn blk
-                   if done
-                      then do assertPieceComplete db pn logC
-                              pieceOk <- FSP.checkPiece fspC pn
-                              let db'' = case pieceOk of
-                                           Nothing ->
-                                               error "PieceMgrP: Piece Nonexisting!"
-                                           Just True -> completePiece db' pn
-                                           Just False -> putBackPiece db' pn
-                              lp db''
-                      else lp db'
-            PutbackBlocks blks ->
-              lp $ foldl (\db (pn, blk) -> putbackBlock pn blk db) db blks
-            GetDone c -> do sync $ transmit c (donePiece db)
-                            lp db
-
+start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (forever pgm)
+									(defaultStopHandler supC))
+  where pgm = do
+	    msg <- recvPC pieceMgrCh >>= syncP
+	    case msg of
+		GrabBlocks n eligible c ->
+		    do log "Grabbing Blocks"
+		       blocks <- grabBlocks' n eligible
+		       log "Grabbed..."
+		       syncP =<< sendP c blocks
+		StoreBlock pn blk d ->
+		    do storeBlock pn blk d
+		       done <- updateProgress pn blk
+		       when done
+			   (do assertPieceComplete pn
+			       pieceOk <- checkPiece pn
+			       case pieceOk of
+				 Nothing ->
+					do log "PieceMgrP: Piece Nonexisting!"
+					   stopP
+				 Just True -> completePiece pn
+				 Just False -> putbackPiece pn)
+		PutbackBlocks blks ->
+		    mapM_ putbackBlock blks
+		GetDone c -> do done <- gets donePiece
+				syncP =<< sendP c done
+	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
+	checkPiece n = do
+	    ch <- liftIO channel
+	    syncP =<< (sendPC fspCh $ CheckPiece n ch)
+	    syncP =<< recvP ch (const True)
 
 -- HELPERS
 ----------------------------------------------------------------------
@@ -119,32 +126,32 @@ createPieceDb mmap pmap = PieceDB pending done M.empty pmap
 
 -- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
 --   and return the updated Piece Database.
-completePiece :: PieceDB -> PieceNum -> PieceDB
-completePiece db pn =
-    db { inProgress = M.delete pn (inProgress db),
-         donePiece  = pn : donePiece db }
+completePiece :: PieceNum -> PieceMgrProcess ()
+completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
+                                       donePiece  = pn : donePiece db })
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again. Returns the new database.
-putBackPiece :: PieceDB -> PieceNum -> PieceDB
-putBackPiece db pn =
-    db { inProgress = M.delete pn (inProgress db),
-         pendingPieces = pn : pendingPieces db }
+putbackPiece :: PieceNum -> PieceMgrProcess ()
+putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
+                                      pendingPieces = pn : pendingPieces db })
 
-putbackBlock :: PieceNum -> Block -> PieceDB -> PieceDB
-putbackBlock pn blk db = db { inProgress = ndb }
-  where ndb = M.alter f pn (inProgress db)
-        f Nothing     = error "The 'impossible' happened, are you implementing endgame?" -- This might happen in endgame
+putbackBlock :: (PieceNum, Block) -> PieceMgrProcess ()
+putbackBlock (pn, blk) = modify (\db -> db { inProgress = ndb (inProgress db)})
+  where ndb db = M.alter f pn db
+        -- The first of these might happen in the endgame
+        f Nothing     = error "The 'impossible' happened, are you implementing endgame?"
         f (Just ipp) = Just ipp { ipPendingBlocks = blk : ipPendingBlocks ipp }
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.
-assertPieceComplete :: PieceDB -> PieceNum -> LogChannel -> IO ()
-assertPieceComplete db pn logC = do
-    let ipp = fromJust $ M.lookup pn (inProgress db)
-    unless (assertComplete ipp) $
-      do logFatal logC $ "Could not assert completion of the piece with block state " ++ show ipp
-         return ()
+assertPieceComplete :: PieceNum -> PieceMgrProcess ()
+assertPieceComplete pn = do
+    inprog <- gets inProgress
+    let ipp = fromJust $ M.lookup pn inprog
+    unless (assertComplete ipp)
+      (do log $ "Could not assert completion of the piece with block state " ++ show ipp
+	  stopP)
   where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs
         checkBlock (offs, left, state) blk = (offs + blockSize blk,
@@ -158,21 +165,22 @@ assertPieceComplete db pn logC = do
 --   track this in the Piece Database. This function returns a pair @(complete, nDb)@
 --   where @complete@ is @True@ if the piece is percieved to be complete and @False@
 --   otherwise. @nDb@ is the updated Piece Database
-updateProgress :: PieceDB -> PieceNum -> Block -> (Bool, PieceDB)
-updateProgress db pn blk =
+updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
+updateProgress pn blk = do
+    ipdb <- gets inProgress
     case M.lookup pn ipdb of
-      Nothing -> (False, db) -- Ignore, this might be wrong
+      Nothing -> return False -- XXX: Ignore, this might be wrong
       Just pg ->
           let blkSet = ipHaveBlocks pg
           in if blk `S.member` blkSet
-               then (False, db) -- Stray block download.
-                                -- Will happen without FAST extension
-                                -- at times
+               then return False -- Stray block download.
+                                 -- Will happen without FAST extension
+                                 -- at times
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
-  where checkComplete pg = (ipHave pg == ipDone pg, db { inProgress =
-                                                             M.adjust (const pg) pn ipdb})
+  where checkComplete pg = do
+	    modify (\db -> db { inProgress = M.adjust (const pg) pn (inProgress db) })
+	    return (ipHave pg == ipDone pg)
         ipHave = S.size . ipHaveBlocks
-        ipdb = inProgress db
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
@@ -187,41 +195,49 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
-grabBlocks' :: Int -> [PieceNum] -> PieceDB -> ([(PieceNum, [Block])], PieceDB)
-grabBlocks' k eligible db = tryGrabProgress k eligible db []
+grabBlocks' :: Int -> [PieceNum] -> PieceMgrProcess [(PieceNum, [Block])]
+grabBlocks' k eligible = tryGrabProgress k eligible []
   where
     -- Grabbing blocks is a state machine implemented by tail calls
     -- Try grabbing pieces from the pieces in progress first
-    tryGrabProgress 0 _  db captured = (captured, db)
-    tryGrabProgress n ps db captured =
-        case ps `intersect` fmap fst (M.toList (inProgress db)) of
-          []  -> tryGrabPending n ps db captured
-          (h:_) -> grabFromProgress n ps h db captured
+    tryGrabProgress 0 _  captured = return captured
+    tryGrabProgress n ps captured = do
+	inprog <- gets inProgress
+        case ps `intersect` fmap fst (M.toList inprog) of
+          []  -> tryGrabPending n ps captured
+          (h:_) -> grabFromProgress n ps h captured
     -- The Piece @p@ was found, grab it
-    grabFromProgress n ps p db captured =
-        let ipp = fromJust $ M.lookup p (inProgress db)
+    grabFromProgress n ps p captured = do
+        inprog <- gets inProgress
+        let ipp = fromJust $ M.lookup p inprog
             (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
             nIpp = ipp { ipPendingBlocks = rest }
-            nDb  = db { inProgress = M.insert p nIpp (inProgress db) }
-        in
-          -- This rather ugly piece of code should be substituted with something better
-          if grabbed == []
+        -- This rather ugly piece of code should be substituted with something better
+        if grabbed == []
              -- All pieces are taken, try the next one.
-             then tryGrabProgress n (ps \\ [p]) db captured
-             else tryGrabProgress (n - length grabbed) ps nDb ((p, grabbed) : captured)
+             then tryGrabProgress n (ps \\ [p]) captured
+             else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
+		     tryGrabProgress (n - length grabbed) ps ((p, grabbed) : captured)
     -- Try grabbing pieces from the pending blocks
-    tryGrabPending n ps db captured =
-        case ps `intersect` pendingPieces db of
-          []    -> (captured, db) -- No (more) pieces to download, return
-          (h:_) ->
-              let blockList = createBlock h db
-                  ipp = InProgressPiece 0 bSz S.empty blockList
-                  bSz = fromInteger . len $ fromJust $ M.lookup n (infoMap db)
-                  nDb = db { pendingPieces = pendingPieces db \\ [h],
-                             inProgress    = M.insert h ipp (inProgress db) }
-              in tryGrabProgress n ps nDb captured
-    createBlock :: Int -> PieceDB -> [Block]
-    createBlock pn = blockPiece
-                      defaultBlockSize . fromInteger . len . fromJust . M.lookup pn . infoMap
+    tryGrabPending n ps captured = do
+	pending <- gets pendingPieces
+        case ps `intersect` pending of
+          []    -> return captured -- No (more) pieces to download, return
+          (h:_) -> do
+	      infMap <- gets infoMap
+	      inProg <- gets inProgress
+              blockList <- createBlock h
+              let bSz = fromInteger . len $ fromJust $ M.lookup n infMap
+	          ipp = InProgressPiece 0 bSz S.empty blockList
+              modify (\db -> db { pendingPieces = pendingPieces db \\ [h],
+                                  inProgress    = M.insert h ipp inProg })
+	      tryGrabProgress n ps captured
+    createBlock :: Int -> PieceMgrProcess [Block]
+    createBlock pn =
+	let cBlock = blockPiece
+                        defaultBlockSize . fromInteger . len . fromJust . M.lookup pn . infoMap
+	in
+	    get >>= return . cBlock
+
 
 
