@@ -76,6 +76,14 @@ wish-list.
     * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
     * The defaultStartup code in Supervisor can be used in more places.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
+    * Interest propagation:
+      - Convert PeerMgr to Transformer stack
+      - Convert PieceMgr to Transformer stack
+      - Let the PieceMgr tell PeerMgr when a piece is complete
+      - Write a broadcast service
+      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
+        a peer dies.
+
 
 Items for later
 ---------------
@@ -83,9 +91,8 @@ Items for later
     * Write the Users Guide.
     * Design, build and improve a graphic UI.
     * Design, build and improve a protocol for communicating with the client.
-<<<<<<< HEAD
+    * Azureus/Vuze has a keepalive flood detector built-in. Consider if this
+      is relevant for this client.
+    * Process monitoring in general. Think.
 
 # vim: filetype=none tw=76 expandtab
-=======
-    * Process monitoring in general. Think.
->>>>>>> TODO Additions.

@@ -1,7 +1,7 @@
 .PHONY: all
 
 all: processes.pdf timer.pdf PieceManager.pdf Peer.pdf PHierachy.pdf \
-	piecemanager.html on-hieraches.html \
+	piecemanager.html on-hieraches.html process-transformers.html \
 	processes.png PHierachy.png
 
 %.pdf: %.dot
