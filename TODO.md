@@ -76,6 +76,13 @@ wish-list.
     * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
     * The defaultStartup code in Supervisor can be used in more places.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
+    * Interest propagation:
+      - Convert PeerMgr to Transformer stack
+      - Convert PieceMgr to Transformer stack
+      - Let the PieceMgr tell PeerMgr when a piece is complete
+      - Write a broadcast service
+      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
+        a peer dies.
 
 
 Items for later
