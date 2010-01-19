@@ -42,12 +42,12 @@ import Control.Monad
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Digest.Pure.SHA
 import qualified Data.Map as M
 import Data.Maybe
 import System.IO
 
 import BCode
+import qualified Digest as D
 import Torrent
 
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
@@ -88,7 +88,7 @@ checkPiece :: Handle -> PieceInfo -> IO Bool
 checkPiece h inf = do
   hSeek h AbsoluteSeek (offset inf)
   bs <- L.hGet h (fromInteger . len $ inf)
-  return $ (bytestringDigest . sha1) bs == digest inf
+  return $ D.digest bs == digest inf
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
