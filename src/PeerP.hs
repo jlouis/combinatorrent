@@ -250,6 +250,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	    evt <- recvPC peerCh
 	    wrapP evt (\msg ->
 		case msg of
+		    PieceCompleted pn -> do
+			syncP =<< (sendPC outCh $ SendQMsg $ Have pn)
 		    ChokePeer -> do syncP =<< sendPC outCh SendOChoke
 				    modify (\s -> s {weChoke = True})
 		    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)

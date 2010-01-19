@@ -69,6 +69,13 @@ wish-list.
       of the PeerMgr code.
     * Update the Seeder status in PeerMgrP.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
+    * Interest propagation:
+      - Convert PeerMgr to Transformer stack
+      - Convert PieceMgr to Transformer stack
+      - Let the PieceMgr tell PeerMgr when a piece is complete
+      - Write a broadcast service
+      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
+        a peer dies.
     * Do not send HAVE messages if the Peer already has the Piece Number.
 
 Before releasing into the "wild"
