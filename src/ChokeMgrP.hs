@@ -19,14 +19,18 @@ import Data.Traversable as T
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Exception
+import Control.Monad.Reader
+import Control.Monad.State
 
-import Prelude hiding (catch)
+
+import Prelude hiding (catch, log)
 
 import System.Random
 
 import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
+import Process
 import Logging
 import FSP hiding (start, State)
 import Supervisor
@@ -41,12 +45,14 @@ data ChokeMgrMsg = Tick
 		 | AddPeer PeerPid PeerChannel Bool
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
-data State = State
-    { logCh :: LogChannel
-    , mgrCh :: ChokeMgrChannel
-    , peerDB :: PeerDB
-    , uploadSlots :: Int
-    }
+data CF = CF { logCh :: LogChannel
+	     , mgrCh :: ChokeMgrChannel
+	     }
+
+instance Logging CF where
+  getLogger = logCh
+
+type ChokeMgrProcess a = Process CF PeerDB a
 
 -- INTERFACE
 ----------------------------------------------------------------------
@@ -54,25 +60,24 @@ data State = State
 start :: LogChannel -> ChokeMgrChannel -> Int -> SupervisorChan -> IO ThreadId
 start logC ch ur supC = do
     TimerP.register 10 Tick ch
-    spawn $ startup $ State logC ch initPdb (calcUploadSlots ur Nothing)
-  where startup s = Supervisor.defaultStartup supC "ChokeMgr" (lp s)
-        initPdb = PeerDB 2 M.empty []
-        lp s = sync (mgrEvent s) >>= lp
-        mgrEvent s = wrap (receive (mgrCh s) (const True))
-                                   (\msg -> case msg of
-				      Tick -> tick s
-				      RemovePeer t -> removePeer t s
-				      AddPeer t pCh weSeed -> addP t pCh weSeed s)
-	tick s = do logMsg logC "Ticked"
-		    TimerP.register 10 Tick (mgrCh s)
-		    update s >>= rechoke
-	withPeerDB f s = do db' <- f (peerDB s)
-			    return s { peerDB = db' }
-	removePeer tid = withPeerDB (\db -> return $ db { peerMap = M.delete tid (peerMap db) })
-	addP tid pCh weSeed s = withPeerDB
-		(\db -> getStdRandom (addPeer' db pCh weSeed tid)) s
-	update = withPeerDB updateDB
-	rechoke s = withPeerDB (flip runRechokeRound (uploadSlots s)) s
+    spawnP (CF logC ch) (initPeerDB $ calcUploadSlots ur Nothing) (catchP (forever lp)
+								    (defaultStopHandler supC))
+  where
+    initPeerDB slots = PeerDB 2 slots M.empty []
+    lp = do ev <- mgrEvent
+            syncP ev
+    mgrEvent = do
+	  ev <- recvPC mgrCh
+	  wrapP ev (\msg -> case msg of
+			Tick                 -> tick
+			RemovePeer t         -> removePeer t
+			AddPeer t pCh weSeed -> addPeer' pCh weSeed t)
+    tick = do log "Ticked"
+	      ch <- asks mgrCh
+	      liftIO $ TimerP.register 10 Tick ch
+	      updateDB
+	      runRechokeRound
+    removePeer tid = modify (\db -> db { peerMap = M.delete tid (peerMap db) })
 
 addPeer :: ChokeMgrChannel -> PeerPid -> PeerChannel -> Bool -> IO ()
 addPeer ch pid pch = sync . transmit ch . (AddPeer pid pch)
@@ -91,6 +96,7 @@ type PeerPid = ThreadId -- For now, should probably change
 --   far we are in the process of wandering the optimistic unchoke chain.
 data PeerDB = PeerDB
     { chokeRound :: Int       -- ^ Counted down by one from 2. If 0 then we should advance the peer chain.
+    , uploadSlots :: Int      -- ^ Current number of upload slots
     , peerMap :: PeerMap      -- ^ Map of peers
     , peerChain ::  [PeerPid] -- ^ The order in which peers are optimistically unchoked
     }
@@ -125,12 +131,11 @@ advancePeerChain peers mp = back ++ front
   where (front, back) = break (\p -> isInterested p mp && isChokingUs p mp) peers
 
 -- | Add a peer to the Peer Database
-addPeer' :: PeerDB -> PeerChannel -> Bool -> PeerPid -> StdGen -> (PeerDB, StdGen)
-addPeer' db pCh weSeeding tid gen =
-    (db { peerMap = M.insert tid initialPeerInfo (peerMap db)
-        , peerChain = nChain }, gen')
+addPeer' :: PeerChannel -> Bool -> PeerPid -> ChokeMgrProcess ()
+addPeer' pCh weSeeding tid = do
+    addPeerChain tid
+    modify (\db -> db { peerMap = M.insert tid initialPeerInfo (peerMap db)})
   where
-    (nChain, gen')  = addPeerChain gen tid (peerChain db)
     initialPeerInfo = PeerInfo { pChokingUs = True
 			       , pDownRate = 0.0
 			       , pChannel = pCh
@@ -141,10 +146,12 @@ addPeer' db pCh weSeeding tid gen =
 
 -- | Insert a Peer randomly into the Peer chain. Threads the random number generator
 --   through.
-addPeerChain :: StdGen -> PeerPid -> [PeerPid] -> ([PeerPid], StdGen)
-addPeerChain gen pid ls = (front ++ pid : back, gen')
-  where (front, back) = splitAt pt ls
-        (pt, gen') = randomR (0, length ls - 1) gen
+addPeerChain :: PeerPid -> ChokeMgrProcess ()
+addPeerChain pid = do
+    ls <- gets peerChain
+    pt <- liftIO $ getStdRandom (\gen -> randomR (0, length ls - 1) gen)
+    let (front, back) = splitAt pt ls
+    modify (\db -> db { peerChain = (front ++ pid : back) })
 
 -- | Predicate. Is the peer interested in any of our pieces?
 isInterested :: PeerPid -> PeerMap -> Bool
@@ -251,33 +258,48 @@ splitSeedLeech ps = partition (pAreSeeding . snd) $ filter picker ps
     picker (_, pi) = not (pIsASeeder pi) || pInterestedInUs pi
 
 
-buildRechokeData :: PeerDB -> [RechokeData]
-buildRechokeData db = map cPeer (peerChain db)
-  where cPeer pid = (pid, fromJust $ M.lookup pid (peerMap db))
+buildRechokeData :: ChokeMgrProcess [RechokeData]
+buildRechokeData = do
+    chain <- gets peerChain
+    pm    <- gets peerMap
+    return $ map (cPeer pm) chain
+  where cPeer pm pid = (pid, fromJust $ M.lookup pid pm)
 
-rechoke :: PeerDB -> Int -> IO ()
-rechoke db uploadSlots = performChokingUnchoking electedPeers peers
+rechoke :: ChokeMgrProcess ()
+rechoke = do
+    peers <- buildRechokeData
+    us <- gets uploadSlots
+    let (down, seed) = splitSeedLeech peers
+        electedPeers = selectPeers us down seed
+    liftIO $ performChokingUnchoking electedPeers peers
+
+updateDB :: ChokeMgrProcess ()
+updateDB = do
+    nmp <- T.mapM gatherRate =<< gets peerMap
+    modify (\db -> db { peerMap = nmp })
   where
-    peers = buildRechokeData db
-    (down, seed) = splitSeedLeech peers
-    electedPeers = selectPeers uploadSlots down seed
+      gatherRate pi = do
+	ch <- liftIO $ channel
+	-- The following should be refactored to the Process module
+	st <- get
+	c  <- ask
+	(a, s') <- liftIO $ runP c st (proc ch pi) `catches`
+	    [ Handler (\BlockedOnDeadMVar -> return (pi, st)) ] -- Peer Dead, ignore it
+	put s'
+	return a
+      proc ch pi = do
+	(sendP (pChannel pi) $ PeerStats ch) >>= syncP
+	(rt, interested) <- recvP ch (const True) >>= syncP
+	return pi { pDownRate = rt,
+	            pInterestedInUs = interested }
 
-updateDB :: PeerDB -> IO PeerDB
-updateDB db = do nmp <- T.mapM gatherRate $ peerMap db
-                 return db { peerMap = nmp }
-    where
-      gatherRate pi = do ch <- channel
-			 (do sync $ transmit (pChannel pi) $ PeerStats ch
-			     (rt, interested) <- sync $ receive ch (const True)
-                             return pi { pDownRate = rt,
-				         pInterestedInUs = interested })
-			    `catch` (\BlockedOnDeadMVar -> return pi) -- Peer dead, ignore it.
-
-runRechokeRound :: PeerDB -> Int -> IO PeerDB
-runRechokeRound db uploadSlots = do
-    let db' = if chokeRound db == 0
-                    then db { peerChain = advancePeerChain (peerChain db) (peerMap db),
-                              chokeRound = 2 }
-                    else db { chokeRound = chokeRound db - 1 }
-    rechoke db' uploadSlots
-    return db'
+runRechokeRound :: ChokeMgrProcess ()
+runRechokeRound = do
+    cRound <- gets chokeRound
+    if (cRound == 0)
+	then do chain <- gets peerChain
+		pm    <- gets peerMap
+	        modify (\db -> db { chokeRound = 2,
+				    peerChain = advancePeerChain chain pm })
+	else modify (\db -> db { chokeRound = (chokeRound db) - 1 })
+    rechoke
