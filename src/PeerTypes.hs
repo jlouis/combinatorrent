@@ -5,6 +5,7 @@ import Control.Concurrent
 import Control.Concurrent.CML
 
 import Network
+import Torrent
 
 data Peer = Peer { peerHost :: HostName,
                    peerPort :: PortID }
@@ -12,6 +13,7 @@ data Peer = Peer { peerHost :: HostName,
 data PeerMessage = ChokePeer
                  | UnchokePeer
                  | PeerStats (Channel (Double, Bool))
+		 | PieceCompleted PieceNum
 
 type PeerChannel = Channel PeerMessage
 
