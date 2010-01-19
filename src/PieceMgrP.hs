@@ -1,6 +1,8 @@
 module PieceMgrP
     ( PieceMgrMsg(..)
     , PieceMgrChannel
+    , ChokeInfoChannel
+    , ChokeInfoMsg(..)
     , start
     , createPieceDb
     )
@@ -73,10 +75,10 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                  | GetDone (Channel [PieceNum])
 		   -- ^ Get the pieces which are already done
 
-data PieceDoneMsg = PieceDone PieceNum
+data ChokeInfoMsg = PieceDone PieceNum
 
 type PieceMgrChannel = Channel PieceMgrMsg
-type ChokeInfoChannel = Channel PieceDoneMsg
+type ChokeInfoChannel = Channel ChokeInfoMsg
 
 data PieceMgrCfg = PieceMgrCfg
     { logCh :: LogChannel
@@ -96,7 +98,15 @@ start logC mgrC fspC chokeC db supC = spawnP (PieceMgrCfg logC mgrC fspC chokeC)
 				    (catchP (forever pgm)
 					(defaultStopHandler supC))
   where pgm = do
-	    chooseP [receiveEvt] >>= syncP
+	  dl <- gets donePush
+	  (if dl == []
+	      then receiveEvt
+	      else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
+	sendEvt elem = do
+	    ev <- sendPC chokeCh (PieceDone elem)
+	    wrapP ev remDone
+	remDone :: () -> Process PieceMgrCfg PieceDB ()
+	remDone () = modify (\db -> db { donePush = tail (donePush db) })
         receiveEvt = do
 	    ev <- recvPC pieceMgrCh
 	    wrapP ev (\msg ->
