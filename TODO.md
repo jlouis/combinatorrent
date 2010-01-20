@@ -84,6 +84,23 @@ wish-list.
       - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
         a peer dies.
 
+Before releasing into the "wild"
+--------------------------------
+
+    * The client needs to correctly tell the tracker how many bytes it
+      uploaded and downloaded. This measure is needed on many private
+      trackers as they require people to upload data back.
+    * The client needs to be better at choosing the next eligible piece. Choosing one randomly is good enough.
+    * The client needs to handle multi-file torrents. It is not as hard as
+      it may sound — the only part of the system that needs to know about
+      files is the code handling the file system. All other parts can just
+      keep on transferring pieces.
+    * For choking to work correctly, we must know how fast we are currently
+      transferring to a peer. This is an interesting little problem if
+      somebody feels their curiosity tickled :)
+    * We currently take space proportional to torrent size due to our SHA1
+      calculation being slow and not use a file descriptor. Research into a
+      faster SHA1 library would be really beneficial.
 
 Items for later
 ---------------
@@ -94,5 +111,7 @@ Items for later
     * Azureus/Vuze has a keepalive flood detector built-in. Consider if this
       is relevant for this client.
     * Process monitoring in general. Think.
+    * We need to accept incoming connections. The system only connects
+      outward at the moment
 
 # vim: filetype=none tw=76 expandtab
