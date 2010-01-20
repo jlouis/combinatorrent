@@ -1,4 +1,6 @@
 name: HaskellTorrent
+description: A Haskell Bittorrent client
+category: Network
 version: 0.0
 category: Network
 description: A bittorrent client
@@ -37,6 +39,7 @@ executable HaskellTorrent
     network,
     cml,
     HTTP,
+    HsOpenSSL,
     time
 
   if flag(debug)

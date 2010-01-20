@@ -5,12 +5,23 @@ module Digest
   )
 where
 
+import Control.Monad
+
+import Data.Maybe
+
 import qualified Data.ByteString.Lazy as L
-import qualified Data.Digest.Pure.SHA as P
+import OpenSSL
+import qualified OpenSSL.EVP.Digest as D
 
 -- Consider newtyping this
-type Digest = L.ByteString
+type Digest = String
 
-digest :: L.ByteString -> Digest
-digest = P.bytestringDigest . P.sha1
+sha1Digest :: IO D.Digest
+sha1Digest = liftM fromJust $ D.getDigestByName "SHA1"
+
+digest :: L.ByteString -> IO Digest
+digest bs =
+    withOpenSSL $
+	do sha1 <- sha1Digest
+	   return $ D.digestLBS sha1 bs
 
