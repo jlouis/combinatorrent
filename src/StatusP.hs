@@ -66,7 +66,8 @@ data ST = ST { uploaded :: Integer,
 start :: LogChannel -> Integer -> TorrentState -> Channel ST
       -> Channel (Integer, Integer) -> SupervisorChan -> IO ThreadId
 start logC l tState trackerC statusC supC = do
-    spawnP (CF logC statusC trackerC) (ST 0 0 l 0 0 tState) (foreverP pgm)
+    spawnP (CF logC statusC trackerC) (ST 0 0 l 0 0 tState)
+	(catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
 	     syncP ev
