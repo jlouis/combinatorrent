@@ -26,7 +26,6 @@ wish-list.
     * Add support for DHT
     * Add support for multiple files
     * Add rate limitation support, locally or globally
-    * Add leeching support
     * Add support for multiple torrents at once
     * Add prioritization support of multiTorrents
     * Support the FAST extension
@@ -43,7 +42,6 @@ wish-list.
       stable. The code is an utter mess as it stands right now.
     * (axman) Improve the cabal file for the project, check with GHC 6.12.1,
       provide correct versions of needed packages.
-    * (jlouis) Make the client into an eligible leecher.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
@@ -57,9 +55,6 @@ wish-list.
       (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
        data)
     * Send keepalives every two minutes as per the spec.
-    * Improve the Peer Manager to the point where it can manage choking/unchoking
-      of peers.
-    * (jlouis) Improve stability by using supervisor primitives.
     * Improve the rate calculation code. Use a running average such that the rate
       is fairly measured when we do rechoking ticks.
     * Make git.md into a markdown document
@@ -73,16 +68,8 @@ wish-list.
     * Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
       of the PeerMgr code.
     * Update the Seeder status in PeerMgrP.
-    * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
-    * The defaultStartup code in Supervisor can be used in more places.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
-    * Interest propagation:
-      - Convert PeerMgr to Transformer stack
-      - Convert PieceMgr to Transformer stack
-      - Let the PieceMgr tell PeerMgr when a piece is complete
-      - Write a broadcast service
-      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
-        a peer dies.
+    * Do not send HAVE messages if the Peer already has the Piece Number.
 
 Before releasing into the "wild"
 --------------------------------
