@@ -26,7 +26,6 @@ wish-list.
     * Add support for DHT
     * Add support for multiple files
     * Add rate limitation support, locally or globally
-    * Add leeching support
     * Add support for multiple torrents at once
     * Add prioritization support of multiTorrents
     * Support the FAST extension
@@ -43,7 +42,6 @@ wish-list.
       stable. The code is an utter mess as it stands right now.
     * (axman) Improve the cabal file for the project, check with GHC 6.12.1,
       provide correct versions of needed packages.
-    * (jlouis) Make the client into an eligible leecher.
     * Consider David Himmelstrups work in the packages bencode, torrent
       In the long run it would be beneficial. Short term, there is less need
       for the integration.
@@ -57,9 +55,6 @@ wish-list.
       (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
        data)
     * Send keepalives every two minutes as per the spec.
-    * Improve the Peer Manager to the point where it can manage choking/unchoking
-      of peers.
-    * (jlouis) Improve stability by using supervisor primitives.
     * Improve the rate calculation code. Use a running average such that the rate
       is fairly measured when we do rechoking ticks.
     * Make git.md into a markdown document
@@ -73,17 +68,26 @@ wish-list.
     * Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
       of the PeerMgr code.
     * Update the Seeder status in PeerMgrP.
-    * When a Peer dies, run the cleanup chain in PeerMgr and ChokeMgr.
-    * The defaultStartup code in Supervisor can be used in more places.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
-    * Interest propagation:
-      - Convert PeerMgr to Transformer stack
-      - Convert PieceMgr to Transformer stack
-      - Let the PieceMgr tell PeerMgr when a piece is complete
-      - Write a broadcast service
-      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
-        a peer dies.
+    * Do not send HAVE messages if the Peer already has the Piece Number.
 
+Before releasing into the "wild"
+--------------------------------
+
+    * The client needs to correctly tell the tracker how many bytes it
+      uploaded and downloaded. This measure is needed on many private
+      trackers as they require people to upload data back.
+    * The client needs to be better at choosing the next eligible piece. Choosing one randomly is good enough.
+    * The client needs to handle multi-file torrents. It is not as hard as
+      it may sound — the only part of the system that needs to know about
+      files is the code handling the file system. All other parts can just
+      keep on transferring pieces.
+    * For choking to work correctly, we must know how fast we are currently
+      transferring to a peer. This is an interesting little problem if
+      somebody feels their curiosity tickled :)
+    * We currently take space proportional to torrent size due to our SHA1
+      calculation being slow and not use a file descriptor. Research into a
+      faster SHA1 library would be really beneficial.
 
 Items for later
 ---------------
@@ -94,5 +98,7 @@ Items for later
     * Azureus/Vuze has a keepalive flood detector built-in. Consider if this
       is relevant for this client.
     * Process monitoring in general. Think.
+    * We need to accept incoming connections. The system only connects
+      outward at the moment
 
 # vim: filetype=none tw=76 expandtab
