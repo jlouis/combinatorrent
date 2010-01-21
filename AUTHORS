@@ -1,7 +1,12 @@
 Jesper Louis Andersen <jesper.louis.andersen@gmail.com>
   A bit of everything here and there.
+
 Alex Mason <axman6@gmail.com>
   Tinkering here and there. 
   * Added ByteString support for BCode)
+
 Thomas Christensen <thomas@chrstnsn.dk>
   Applier of hlint suggestions
+
+John Gunderman <johngunderman@gmail.com>
+  Minor Documentation
