@@ -1,8 +1,8 @@
 -- | Peer proceeses
 {-# LANGUAGE ScopedTypeVariables #-}
-module PeerP
+module PeerP (
     -- * Types
-    ( PeerMessage(..)
+      PeerMessage(..)
     -- * Interface
     , connect
     , unchokePeer
