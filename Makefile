@@ -5,7 +5,12 @@ build:
 clean:
 	runghc Setup.lhs clean
 
-rebuild: clean local-install
+configure:
+	runghc Setup.lhs configure --user
+
+rebuild: configure build
+
+dist-rebuild: clean local-install
 
 local-install:
 	cabal install --prefix=$$HOME --user
