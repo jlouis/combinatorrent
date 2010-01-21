@@ -100,5 +100,6 @@ Items for later
     * Process monitoring in general. Think.
     * We need to accept incoming connections. The system only connects
       outward at the moment
+    * Write a fuzzing framework for bittorrent.
 
 # vim: filetype=none tw=76 expandtab
