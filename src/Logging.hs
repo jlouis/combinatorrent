@@ -1,7 +1,7 @@
 -- | Logging primitives
-module Logging
+module Logging (
   -- * Types
-  ( LogChannel
+    LogChannel
   , LogPriority(..)
   -- * Interface
   , logMsg

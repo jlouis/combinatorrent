@@ -4,9 +4,10 @@
              MultiParamTypeClasses, TypeSynonymInstances, CPP #-}
 -- required for deriving Typeable
 {-# OPTIONS_GHC -fglasgow-exts #-}
-module Process
+
+module Process (
     -- * Classes
-    ( Logging(..)
+      Logging(..)
     -- * Types
     , Process
     -- * Interface
