@@ -30,9 +30,15 @@
 --   information about data uploaded, downloaded and how much is
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
-module StatusP (TorrentState(..),
-                ST(uploaded, downloaded, state, left),
-                start)
+module StatusP (
+    -- * Types
+      TorrentState(..)
+    , StatusMsg(..)
+    -- * State
+    , ST(uploaded, downloaded, state, left)
+    -- * Interface
+    , start
+    )
 where
 
 import Control.Applicative
@@ -48,9 +54,15 @@ import Process
 
 data TorrentState = Seeding | Leeching
 
-data CF  = CF { logCh :: LogChannel,
-		statusCh :: Channel (Integer, Integer),
-		trackerCh :: Channel ST }
+data StatusMsg = TrackerStat { trackIncomplete :: Integer
+			     , trackComplete   :: Integer }
+	       | CompletedPiece Integer
+	       | PeerStat { peerUploaded :: Integer
+			  , peerDownloaded :: Integer }
+
+data CF  = CF { logCh :: LogChannel
+	      , statusCh :: Channel StatusMsg
+	      , trackerCh :: Channel ST }
 
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
@@ -64,18 +76,17 @@ data ST = ST { uploaded :: Integer,
 --
 --  TODO: Write and use some errorhandler code
 start :: LogChannel -> Integer -> TorrentState -> Channel ST
-      -> Channel (Integer, Integer) -> SupervisorChan -> IO ThreadId
+      -> Channel StatusMsg -> SupervisorChan -> IO ThreadId
 start logC l tState trackerC statusC supC = do
     spawnP (CF logC statusC trackerC) (ST 0 0 l 0 0 tState)
 	(catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
 	     syncP ev
-    sendEvent = do s <- get
-                   c <- ask
-		   sendP (trackerCh c) s
-    recvEvent = do c <- ask
-		   evt <- recvP (statusCh c) (const True)
-		   wrapP evt (\(ic, c) -> do s <- get
-					     put s { incomplete = ic,
-						     complete   = c })
+    sendEvent = get >>= sendPC trackerCh
+    recvEvent = do evt <- recvPC statusCh
+		   wrapP evt (\m ->
+		    case m of
+			TrackerStat ic c ->
+			   modify (\s -> s { incomplete = ic, complete = c }))
+		   

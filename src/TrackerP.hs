@@ -109,16 +109,16 @@ data State = State {
       localPort :: PortID,
       logCh :: LogChannel,
       statusC :: Channel StatusP.ST,
-      completeIncompleteC :: Channel (Integer, Integer),
+      statusPCh :: Channel StatusP.StatusMsg,
       nextContactTime :: POSIXTime,
       nextTick :: Integer,
       trackerMsgC :: Channel TrackerMsg,
       peerChan :: Channel [PeerMgrP.Peer] }
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
-      -> Channel (Integer, Integer) -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
+      -> Channel StatusP.StatusMsg -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
       -> SupervisorChan -> IO ThreadId
-start ti pid port logC sc cic msgC pc supC =
+start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
        -- Install a timer which triggers in 1 seconds
        TimerP.register 1 (TrackerTick 0) msgC
@@ -129,7 +129,7 @@ start ti pid port logC sc cic msgC pc supC =
                           localPort = port,
                           logCh = logC,
                           statusC = sc,
-                          completeIncompleteC = cic,
+                          statusPCh = statusC,
                           nextContactTime = tm,
                           nextTick = 0,
                           trackerMsgC = msgC,
@@ -165,7 +165,9 @@ pokeTracker s = do upDownLeft <- sync $ receive (statusC s) (const True)
                          do logMsg (logCh s) ("Response Decode error: " ++ fromBS err)
                             timerUpdate s failTimerInterval failTimerInterval
                      Right bc -> do sync $ transmit (peerChan s) (newPeers bc)
-                                    sync $ transmit (completeIncompleteC s) (completeR bc, incompleteR bc)
+                                    sync $ transmit (statusPCh s)
+					    $ StatusP.TrackerStat { StatusP.trackComplete = completeR bc,
+								    StatusP.trackIncomplete = incompleteR bc }
                                     timerUpdate s (timeoutInterval bc) (timeoutMinInterval bc)
 
 timerUpdate :: State -> Integer -> Integer -> IO State
