@@ -88,5 +88,10 @@ start logC l tState trackerC statusC supC = do
 		   wrapP evt (\m ->
 		    case m of
 			TrackerStat ic c ->
-			   modify (\s -> s { incomplete = ic, complete = c }))
+			   modify (\s -> s { incomplete = ic, complete = c })
+		        CompletedPiece bytes ->
+			   modify (\s -> s { left = (left s) - bytes })
+			PeerStat up down ->
+			   modify (\s -> s { uploaded = (uploaded s) + up,
+					     downloaded = (downloaded s) + down }))
 		   
