@@ -53,7 +53,7 @@ download name = do
 	   supC <- channel
 	   logC <- channel
 	   fspC <- channel
-           ciC <- channel
+           statInC <- channel
            pmC <- channel
 	   chokeC <- channel
 	   chokeInfoC <- channel
@@ -67,10 +67,10 @@ download name = do
 		     , Worker $ FSP.start h logC pieceMap fspC
 		     , Worker $ PeerMgrP.start pmC pid (infoHash ti)
 				    pieceMap pieceMgrC fspC logC chokeC (pieceCount ti)
-		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC
+		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
-		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC ciC
-		     , Worker $ TrackerP.start ti pid defaultPort logC statusC ciC
+		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC statInC
+		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
 		     ] supC

@@ -34,6 +34,8 @@ module StatusP (
     -- * Types
       TorrentState(..)
     , StatusMsg(..)
+    -- * Channels
+    , StatusChan
     -- * State
     , ST(uploaded, downloaded, state, left)
     -- * Interface
@@ -59,6 +61,8 @@ data StatusMsg = TrackerStat { trackIncomplete :: Integer
 	       | CompletedPiece Integer
 	       | PeerStat { peerUploaded :: Integer
 			  , peerDownloaded :: Integer }
+
+type StatusChan = Channel StatusMsg
 
 data CF  = CF { logCh :: LogChannel
 	      , statusCh :: Channel StatusMsg

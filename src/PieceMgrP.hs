@@ -25,6 +25,7 @@ import System.Random
 
 import Logging
 import FSP hiding (start, fspCh)
+import StatusP hiding (start)
 import Supervisor
 import Torrent
 import Process
@@ -85,6 +86,7 @@ data PieceMgrCfg = PieceMgrCfg
     , pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
     , chokeCh :: ChokeInfoChannel
+    , statusCh :: StatusChan
     }
 
 instance Logging PieceMgrCfg where
@@ -92,11 +94,12 @@ instance Logging PieceMgrCfg where
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 
-start :: LogChannel -> PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> PieceDB
+start :: LogChannel -> PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> StatusChan -> PieceDB
       -> SupervisorChan -> IO ThreadId
-start logC mgrC fspC chokeC db supC = spawnP (PieceMgrCfg logC mgrC fspC chokeC) db
-				    (catchP (forever pgm)
-					(defaultStopHandler supC))
+start logC mgrC fspC chokeC statC db supC =
+    spawnP (PieceMgrCfg logC mgrC fspC chokeC statC) db
+		    (catchP (forever pgm)
+			(defaultStopHandler supC))
   where pgm = do
 	  dl <- gets donePush
 	  (if dl == []
