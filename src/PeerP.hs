@@ -215,6 +215,7 @@ instance Logging PCF where
   getLogger = logCh
 
 data PST = PST { weChoke :: Bool
+	       , weInterested :: Bool
 	       , blockQueue :: S.Set (PieceNum, Block)
 	       , peerChoke :: Bool
 	       , peerInterested :: Bool
@@ -227,7 +228,7 @@ peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -
 peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
     ch <- channel
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch pm)
-	   (PST True S.empty True False [])
+	   (PST True False S.empty True False [])
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
@@ -235,7 +236,6 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	    asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect tid ch) >>= syncP
 	    pieces <- getPiecesDone
 	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
-	    syncP =<< (sendPC outCh $ SendQMsg Interested)
 	    foreverP (recvEvt >> fillBlocks)
 	cleanup = do
 	    t <- liftIO myThreadId
@@ -281,14 +281,16 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	haveMsg pn = do
 	    pm <- asks pieceMap
 	    if M.member pn pm
-		then modify (\s -> s { peerPieces = pn : peerPieces s})
+		then do modify (\s -> s { peerPieces = pn : peerPieces s})
+		        considerInterest
 		else do log "Unknown Piece"
 		        stopP
 	bitfieldMsg bf = do
 	    pieces <- gets peerPieces
 	    case pieces of
 	      -- TODO: Don't trust the bitfield
-	      [] -> modify (\s -> s { peerPieces = createPeerPieces bf})
+	      [] -> do modify (\s -> s { peerPieces = createPeerPieces bf})
+		       considerInterest
 	      _  -> do log "Got out of band Bitfield request, dying"
 	               stopP
 	requestMsg :: PieceNum -> Block -> Process PCF PST ()
@@ -316,6 +318,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 	    --   here.
 	cancelMsg n blk =
 	    syncP =<< sendPC outCh (SendQCancel n blk)
+	considerInterest = do
+	    c <- liftIO channel
+	    pcs <- gets peerPieces
+	    syncP =<< sendPC pieceMgrCh (AskInterested pcs c)
+	    interested <- syncP =<< recvP c (const True)
+	    if interested
+		then do modify (\s -> s { weInterested = True })
+		        syncP =<< sendPC outCh (SendQMsg Interested)
+		else modify (\s -> s { weInterested = False})
         fillBlocks = do
 	    choking <- gets peerChoke
 	    unless choking checkWatermark
