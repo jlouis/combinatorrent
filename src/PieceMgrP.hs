@@ -65,7 +65,10 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
+		 | AskInterested [PieceNum] (Channel Bool)
+		   -- ^ Ask if any of these pieces are interesting
                  | GetDone (Channel [PieceNum])
+		   -- ^ Get the pieces which are already done
 
 type PieceMgrChannel = Channel PieceMgrMsg
 
@@ -108,6 +111,13 @@ start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (f
 		    mapM_ putbackBlock blks
 		GetDone c -> do done <- gets donePiece
 				syncP =<< sendP c done
+		AskInterested pieces retC -> do
+		    inProg <- liftM (S.fromList . M.keys) $ gets inProgress
+		    pend   <- liftM S.fromList $ gets pendingPieces
+		    -- @i@ is the intersection with with we need and the peer has.
+		    let i = S.null $ S.intersection (S.fromList pieces)
+		                   $ S.union inProg pend 
+		    syncP =<< sendP retC (not i)
 	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
 	checkPiece n = do
 	    ch <- liftIO channel
