@@ -19,6 +19,8 @@ import qualified Data.Set as S
 
 import Prelude hiding (log)
 
+import System.Random
+
 import Logging
 import FSP hiding (start, fspCh)
 import Supervisor
@@ -233,7 +235,8 @@ grabBlocks' k eligible = tryGrabProgress k eligible []
 	pending <- gets pendingPieces
         case ps `intersect` pending of
           []    -> return captured -- No (more) pieces to download, return
-          (h:_) -> do
+          ls    -> do
+	      h <- pickRandom ls
 	      infMap <- gets infoMap
 	      inProg <- gets inProgress
               blockList <- createBlock h
@@ -242,6 +245,9 @@ grabBlocks' k eligible = tryGrabProgress k eligible []
               modify (\db -> db { pendingPieces = pendingPieces db \\ [h],
                                   inProgress    = M.insert h ipp inProg })
 	      tryGrabProgress n ps captured
+    pickRandom pieces = do
+	n <- liftIO $ getStdRandom (\gen -> randomR (0, length pieces - 1) gen)
+	return $ pieces !! n
     createBlock :: Int -> PieceMgrProcess [Block]
     createBlock pn =
 	let cBlock = blockPiece
