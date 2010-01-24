@@ -56,6 +56,7 @@ download name = do
            ciC <- channel
            pmC <- channel
 	   chokeC <- channel
+	   chokeInfoC <- channel
            putStrLn "Created channels"
 	   -- setup StdGen and Peer data
            gen <- getStdGen
@@ -66,12 +67,12 @@ download name = do
 		     , Worker $ FSP.start h logC pieceMap fspC
 		     , Worker $ PeerMgrP.start pmC pid (infoHash ti)
 				    pieceMap pieceMgrC fspC logC chokeC (pieceCount ti)
-		     , Worker $ PieceMgrP.start logC pieceMgrC fspC
+		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
 		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC ciC
 		     , Worker $ TrackerP.start ti pid defaultPort logC statusC ciC
 					trackerC pmC
-		     , Worker $ ChokeMgrP.start logC chokeC 100 -- 100 is upload rate in Kilobytes
+		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
 		     ] supC
            sync $ receive waitC (const True)
            TrackerP.poison trackerC -- This is probably wrong.

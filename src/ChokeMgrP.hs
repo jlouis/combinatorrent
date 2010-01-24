@@ -47,6 +47,7 @@ type ChokeMgrChannel = Channel ChokeMgrMsg
 
 data CF = CF { logCh :: LogChannel
 	     , mgrCh :: ChokeMgrChannel
+	     , infoCh :: ChokeInfoChannel
 	     }
 
 instance Logging CF where
@@ -57,21 +58,24 @@ type ChokeMgrProcess a = Process CF PeerDB a
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: LogChannel -> ChokeMgrChannel -> Int -> SupervisorChan -> IO ThreadId
-start logC ch ur supC = do
+start :: LogChannel -> ChokeMgrChannel -> ChokeInfoChannel -> Int -> SupervisorChan -> IO ThreadId
+start logC ch infoC ur supC = do
     TimerP.register 10 Tick ch
-    spawnP (CF logC ch) (initPeerDB $ calcUploadSlots ur Nothing) (catchP (forever lp)
-								    (defaultStopHandler supC))
+    spawnP (CF logC ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
+	    (catchP (forever pgm)
+	      (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 slots M.empty []
-    lp = do ev <- mgrEvent
-            syncP ev
+    pgm = do chooseP [mgrEvent, infoEvent] >>= syncP
     mgrEvent = do
 	  ev <- recvPC mgrCh
 	  wrapP ev (\msg -> case msg of
 			Tick                 -> tick
 			RemovePeer t         -> removePeer t
 			AddPeer t pCh weSeed -> addPeer' pCh weSeed t)
+    infoEvent = do
+	  ev <- recvPC infoCh
+	  wrapP ev (\(PieceDone pn) -> informDone pn)
     tick = do log "Ticked"
 	      ch <- asks mgrCh
 	      liftIO $ TimerP.register 10 Tick ch
@@ -272,6 +276,22 @@ rechoke = do
     let (down, seed) = splitSeedLeech peers
         electedPeers = selectPeers us down seed
     liftIO $ performChokingUnchoking electedPeers peers
+
+
+informDone :: PieceNum -> ChokeMgrProcess ()
+informDone pn = do
+    T.mapM sendDone =<< gets peerMap
+    return ()
+  where
+    sendDone pi = do
+	st <- get
+	c  <- ask
+	(a, s') <- liftIO $ runP c st (proc pi) `catches`
+	    [ Handler (\BlockedOnDeadMVar -> return ((), st)) ] -- Peer dead, ignore it
+	put s'
+	return a
+    proc pi = do
+	(sendP (pChannel pi) $ PieceCompleted pn) >>= syncP
 
 updateDB :: ChokeMgrProcess ()
 updateDB = do

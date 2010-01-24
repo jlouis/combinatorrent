@@ -1,6 +1,8 @@
 module PieceMgrP
     ( PieceMgrMsg(..)
     , PieceMgrChannel
+    , ChokeInfoChannel
+    , ChokeInfoMsg(..)
     , start
     , createPieceDb
     )
@@ -40,6 +42,7 @@ import Process
 data PieceDB = PieceDB
     { pendingPieces :: [PieceNum] -- ^ Pieces currently pending download
     , donePiece     :: [PieceNum] -- ^ Pieces that are done
+    , donePush      :: [PieceNum] -- ^ Pieces that should be pushed to the Choke Mgr.
     , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
     , infoMap       :: PieceMap   -- ^ Information about pieces
     }
@@ -72,12 +75,16 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
                  | GetDone (Channel [PieceNum])
 		   -- ^ Get the pieces which are already done
 
+data ChokeInfoMsg = PieceDone PieceNum
+
 type PieceMgrChannel = Channel PieceMgrMsg
+type ChokeInfoChannel = Channel ChokeInfoMsg
 
 data PieceMgrCfg = PieceMgrCfg
     { logCh :: LogChannel
     , pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
+    , chokeCh :: ChokeInfoChannel
     }
 
 instance Logging PieceMgrCfg where
@@ -85,13 +92,25 @@ instance Logging PieceMgrCfg where
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 
-start :: LogChannel -> PieceMgrChannel -> FSPChannel -> PieceDB
+start :: LogChannel -> PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> PieceDB
       -> SupervisorChan -> IO ThreadId
-start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (forever pgm)
-									(defaultStopHandler supC))
+start logC mgrC fspC chokeC db supC = spawnP (PieceMgrCfg logC mgrC fspC chokeC) db
+				    (catchP (forever pgm)
+					(defaultStopHandler supC))
   where pgm = do
-	    msg <- recvPC pieceMgrCh >>= syncP
-	    case msg of
+	  dl <- gets donePush
+	  (if dl == []
+	      then receiveEvt
+	      else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
+	sendEvt elem = do
+	    ev <- sendPC chokeCh (PieceDone elem)
+	    wrapP ev remDone
+	remDone :: () -> Process PieceMgrCfg PieceDB ()
+	remDone () = modify (\db -> db { donePush = tail (donePush db) })
+        receiveEvt = do
+	    ev <- recvPC pieceMgrCh
+	    wrapP ev (\msg ->
+	      case msg of
 		GrabBlocks n eligible c ->
 		    do log "Grabbing Blocks"
 		       blocks <- grabBlocks' n eligible
@@ -102,6 +121,7 @@ start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (f
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
+			       pushDone pn
 			       pieceOk <- checkPiece pn
 			       case pieceOk of
 				 Nothing ->
@@ -119,8 +139,10 @@ start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (f
 		    -- @i@ is the intersection with with we need and the peer has.
 		    let i = S.null $ S.intersection (S.fromList pieces)
 		                   $ S.union inProg pend 
-		    syncP =<< sendP retC (not i)
+		    syncP =<< sendP retC (not i))
 	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
+	pushDone pn = do
+	    modify (\db -> db { donePush = pn : donePush db })
 	checkPiece n = do
 	    ch <- liftIO channel
 	    syncP =<< (sendPC fspCh $ CheckPiece n ch)
@@ -130,7 +152,7 @@ start logC mgrC fspC db supC = spawnP (PieceMgrCfg logC mgrC fspC) db (catchP (f
 ----------------------------------------------------------------------
 
 createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
-createPieceDb mmap pmap = PieceDB pending done M.empty pmap
+createPieceDb mmap pmap = PieceDB pending done [] M.empty pmap
   where pending = M.keys $ M.filter (==False) mmap
         done    = M.keys $ M.filter (==True) mmap
 
