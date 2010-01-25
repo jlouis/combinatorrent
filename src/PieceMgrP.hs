@@ -124,7 +124,10 @@ start logC mgrC fspC chokeC statC db supC =
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
-			       pushDone pn
+			       markDone pn
+			       pm <- gets infoMap
+			       let l = len $ fromJust $ M.lookup pn pm
+			       sendPC statusCh (CompletedPiece l) >>= syncP
 			       pieceOk <- checkPiece pn
 			       case pieceOk of
 				 Nothing ->
@@ -144,7 +147,7 @@ start logC mgrC fspC chokeC statC db supC =
 		                   $ S.union inProg pend 
 		    syncP =<< sendP retC (not i))
 	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
-	pushDone pn = do
+	markDone pn = do
 	    modify (\db -> db { donePush = pn : donePush db })
 	checkPiece n = do
 	    ch <- liftIO channel
