@@ -26,25 +26,29 @@
 
 -- | The following module is responsible for general types used
 --   throughout the system.
-module Torrent (InfoHash,
-                PeerId,
-                AnnounceURL,
-                TorrentInfo(..),
-                PieceNum,
-                PieceSize,
-                PieceMap,
-                PiecesDoneMap,
-                PieceInfo(..),
-                BlockSize,
-                Block(..),
-                defaultBlockSize,
-                defaultOptimisticSlots,
-                defaultPort,
-                haskellTorrentVersion,
-                mkPeerId,
-                mkTorrentInfo)
+module Torrent
+    ( InfoHash
+    , PeerId
+    , AnnounceURL
+    , TorrentInfo(..)
+    , PieceNum
+    , PieceSize
+    , PieceMap
+    , PiecesDoneMap
+    , PieceInfo(..)
+    , BlockSize
+    , Block(..)
+    , bytesLeft
+    , defaultBlockSize
+    , defaultOptimisticSlots
+    , defaultPort
+    , haskellTorrentVersion
+    , mkPeerId
+    , mkTorrentInfo
+    )
 where
 
+import qualified Data.Foldable as F
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.List
@@ -89,6 +93,15 @@ type PieceMap = M.Map PieceNum PieceInfo
 
 -- | The PiecesDoneMap is a map which is true if we have the piece and false otherwise
 type PiecesDoneMap = M.Map PieceNum Bool
+
+-- | Return the amount of bytes left on a torrent given what pieces are done and the
+--   map of the shape of the torrent in question.
+bytesLeft :: PiecesDoneMap -> PieceMap -> Integer
+bytesLeft done pm =
+    M.foldWithKey (\k v accu ->
+	case M.lookup k done of
+	       Just True -> (len v) + accu
+	       _         -> accu) 0 pm
 
 -- BLOCKS
 ----------------------------------------------------------------------
