@@ -272,7 +272,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC supC = do
 	    syncP =<< (sendPC pieceMgrCh $ GetDone c)
 	    recvP c (const True) >>= syncP
 	recvEvt = do
-	    syncP =<< chooseP [peerMsgEvent, chokeMgrEvent]
+	    syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent]
 	chokeMgrEvent = do
 	    evt <- recvPC peerCh
 	    wrapP evt (\msg ->
@@ -285,9 +285,14 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC supC = do
 				      modify (\s -> s {weChoke = False})
 		    PeerStats retCh -> do i <- gets peerInterested
 					  syncP =<< sendP retCh (0.0, i)) -- TODO: Fix
+	upRateEvent = do
+	    evt <- recvPC sendBWCh
+	    wrapP evt (\uploaded ->
+		modify (\s -> s { upRate = RC.update uploaded $ upRate s}))
 	peerMsgEvent = do
 	    evt <- recvPC inCh
-	    wrapP evt (\(msg, _) ->
+	    wrapP evt (\(msg, sz) -> do
+		modify (\s -> s { downRate = RC.update sz $ downRate s})
 		case msg of
 		  KeepAlive  -> return ()
 		  Choke      -> do putbackBlocks
