@@ -289,13 +289,17 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent, timerEvent]
 	chokeMgrEvent = do
 	    evt <- recvPC peerCh
-	    wrapP evt (\msg ->
+	    wrapP evt (\msg -> do
+		log "ChokeMgrEvent"
 		case msg of
 		    PieceCompleted pn -> do
+			log "PieceCompleted"
 			syncP =<< (sendPC outCh $ SendQMsg $ Have pn)
 		    ChokePeer -> do syncP =<< sendPC outCh SendOChoke
+				    log "ChokePeer"
 				    modify (\s -> s {weChoke = True})
 		    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
+				      log "UnchokePeer"
 				      modify (\s -> s {weChoke = False})
 		    PeerStats t retCh -> do
 			i <- gets peerInterested
@@ -303,11 +307,13 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 			dr <- gets downRate
 			let (up, nur) = RC.extractRate t ur
 			    (down, ndr) = RC.extractRate t dr
+			log $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
 			sendP retCh (up, down, i) >>= syncP
 			modify (\s -> s { upRate = nur , downRate = ndr }))
 	timerEvent = do
 	    evt <- recvPC timerCh
 	    wrapP evt (\() -> do
+		log "TimerEvent"
 	        tch <- asks timerCh
 		liftIO $ TimerP.register 30 () tch
 		ur <- gets upRate
@@ -319,11 +325,13 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		modify (\s -> s { upRate = nuRate, downRate = ndRate }))
 	upRateEvent = do
 	    evt <- recvPC sendBWCh
-	    wrapP evt (\uploaded ->
+	    wrapP evt (\uploaded -> do
+	        log "upRateEvent"
 		modify (\s -> s { upRate = RC.update uploaded $ upRate s}))
 	peerMsgEvent = do
 	    evt <- recvPC inCh
 	    wrapP evt (\(msg, sz) -> do
+		log "PeerMsgEvent"
 		modify (\s -> s { downRate = RC.update sz $ downRate s})
 		case msg of
 		  KeepAlive  -> return ()
