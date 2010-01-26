@@ -85,14 +85,14 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC mgrC nPieces = spawn (
 ----------------------------------------------------------------------
 
 data SPCF = SPCF { spLogCh :: LogChannel
-		 , spMsgCh :: Channel Message
+		 , spMsgCh :: Channel L.ByteString
 		 }
 
 instance Logging SPCF where
    getLogger = spLogCh
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: LogChannel -> Handle -> Channel Message -> SupervisorChan -> IO ThreadId
+senderP :: LogChannel -> Handle -> Channel L.ByteString -> SupervisorChan -> IO ThreadId
 senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 						    (do t <- liftIO $ myThreadId
 							syncP =<< (sendP supC $ IAmDying t)
@@ -102,9 +102,8 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
     pgm = do
 	c <- ask
 	m <- syncP =<< recvPC spMsgCh
-	let bs = encode m
 	h <- get
-	liftIO $ do L.hPut h bs
+	liftIO $ do L.hPut h m
 	            hFlush h
 	Process.log "Sent and flushed msg"
 
@@ -115,7 +114,7 @@ data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we c
 
 data SQCF = SQCF { sqLogC :: LogChannel
 		 , sqInCh :: Channel SendQueueMessage
-		 , sqOutCh :: Channel Message
+		 , sqOutCh :: Channel L.ByteString
 		 }
 
 instance Logging SQCF where
@@ -123,7 +122,8 @@ instance Logging SQCF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel Message -> SupervisorChan -> IO ThreadId
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel L.ByteString -> SupervisorChan
+	   -> IO ThreadId
 sendQueueP logC inC outC supC = spawnP (SQCF logC inC outC) Q.empty (catchP (foreverP pgm)
 								        (defaultStopHandler supC))
   where
@@ -142,7 +142,8 @@ sendQueueP logC inC outC supC = spawnP (SQCF logC inC outC) Q.empty (catchP (for
 					 modify (Q.push Choke))
     sendEvent = do
 	Just (e, r) <- gets Q.pop
-	tEvt <- sendPC sqOutCh e
+	let bs = encode e
+	tEvt <- sendPC sqOutCh bs
 	wrapP tEvt (\() -> do log "Dequeued event"
 			      put r)
     filterAllPiece (Piece _ _ _) = True
