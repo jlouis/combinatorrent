@@ -29,6 +29,7 @@ import Data.List (sort)
 import Data.Maybe
 
 import Data.Set as S hiding (map)
+import Data.Time.Clock
 import Data.Word
 
 import Network
@@ -263,8 +264,9 @@ peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -
 peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC = do
     ch <- channel
     tch <- channel
+    ct <- getCurrentTime
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch statC pm)
-	   (PST True False S.empty True False [] (RC.new 0) (RC.new 0))
+	   (PST True False S.empty True False [] (RC.new ct) (RC.new ct))
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
