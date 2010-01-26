@@ -23,17 +23,8 @@ wish-list.
     * Do not connect to ourselves :)
     * Write an installation and compilation guide.
     * Write a small introduction to git bisect we can point people towards.
-    * Add support for DHT
     * Add support for multiple files
-    * Add rate limitation support, locally or globally
-    * Add support for multiple torrents at once
-    * Add prioritization support of multiTorrents
-    * Support the FAST extension
-    * Support UDP tracking extension
-    * Support partial downloads (select files you want in the torrent)
-    * Write an ETA estimator
     * (thomaschrstnsn) Implement a creator for torrent files
-    * Implement a scraper on trackers
     * (axman) Turn the logging system into a better framework, add log levels,
       add process names so we can see who is doing what.
     * If we get a wrong URI, the code currently deadlocks since the tracker
@@ -42,9 +33,6 @@ wish-list.
       stable. The code is an utter mess as it stands right now.
     * (axman) Improve the cabal file for the project, check with GHC 6.12.1,
       provide correct versions of needed packages.
-    * Consider David Himmelstrups work in the packages bencode, torrent
-      In the long run it would be beneficial. Short term, there is less need
-      for the integration.
     * When we grab pieces from the Piece Manager, let it provide us with a
       pruned set of pieces we can ask with later. This way, we only need to
       consider pieces we already have once and we get a faster system.
@@ -55,12 +43,7 @@ wish-list.
       (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
        data)
     * Send keepalives every two minutes as per the spec.
-    * Improve the rate calculation code. Use a running average such that the rate
-      is fairly measured when we do rechoking ticks.
     * Make git.md into a markdown document
-    * Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
-      which makes sense.
-    * Implement sending of rates from the Peer Processes. Needed for the choking code.
     * For the histogram code, look at
       [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
       Hinze has a paper on that at [Hinze, R., A Simple Implementation
@@ -82,16 +65,26 @@ Before releasing into the "wild"
       it may sound — the only part of the system that needs to know about
       files is the code handling the file system. All other parts can just
       keep on transferring pieces.
-    * For choking to work correctly, we must know how fast we are currently
-      transferring to a peer. This is an interesting little problem if
-      somebody feels their curiosity tickled :)
     * We currently take space proportional to torrent size due to our SHA1
       calculation being slow and not use a file descriptor. Research into a
       faster SHA1 library would be really beneficial.
+    * Correctly change to seeder mode when we have completed the torrent.
 
-Items for later
----------------
+Items for later (no particular order)
+-------------------------------------
 
+    * Add support for multiple torrents at once
+    * Add prioritization support of multiTorrents
+    * Implement a scraper on trackers
+    * Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
+      which makes sense. See the README file.
+    * Support the FAST extension
+    * Add rate limitation support, locally or globally
+    * Add support for DHT
+    * Support UDP tracking extension
+    * Support partial downloads (select files you want in the torrent)
+    * Write an ETA estimator
+    * Handle Endgame. Endgame is nasty but necessary.
     * Write the Users Guide.
     * Design, build and improve a graphic UI.
     * Design, build and improve a protocol for communicating with the client.
@@ -101,5 +94,8 @@ Items for later
     * We need to accept incoming connections. The system only connects
       outward at the moment
     * Write a fuzzing framework for bittorrent.
+    * Consider David Himmelstrups work in the packages bencode, torrent
+      In the long run it would be beneficial. Short term, there is less need
+      for the integration.
 
 # vim: filetype=none tw=76 expandtab
