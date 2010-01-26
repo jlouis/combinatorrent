@@ -66,7 +66,7 @@ download name = do
 	   allForOne [ Worker $ ConsoleP.start logC waitC
 		     , Worker $ FSP.start h logC pieceMap fspC
 		     , Worker $ PeerMgrP.start pmC pid (infoHash ti)
-				    pieceMap pieceMgrC fspC logC chokeC (pieceCount ti)
+				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
 		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
 		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC statInC

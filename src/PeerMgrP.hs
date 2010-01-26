@@ -24,6 +24,7 @@ import PeerTypes
 import PieceMgrP hiding (start)
 import Logging
 import FSP hiding (start)
+import StatusP hiding (start)
 import Supervisor
 import Torrent hiding (infoHash)
 
@@ -41,8 +42,10 @@ data State = MkState { peerCh :: Channel [Peer],
 		       weSeeding :: Bool -- ^ True if we are currently seeding the torrent
 		       }
 
-start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel -> LogChannel -> ChokeMgrChannel -> Int -> SupervisorChan -> IO ThreadId
-start ch pid ih pm pieceMgrC fsC logC chokeMgrC nPieces supC =
+start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
+      -> LogChannel -> ChokeMgrChannel -> StatusChan -> Int -> SupervisorChan
+      -> IO ThreadId
+start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne [] fakeChan
@@ -73,6 +76,6 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC nPieces supC =
                            return s { peersInQueue = rest }
         addPeer s (Peer hn prt) = do
           logMsg (logCh s) "Adding peer"
-	  PeerP.connect (hn, prt, peerId s, infoHash s, pm) (peerPool s) (pieceMgrCh s) (fsCh s) (logCh s) (mgrCh s) nPieces
+	  PeerP.connect (hn, prt, peerId s, infoHash s, pm) (peerPool s) (pieceMgrCh s) (fsCh s) (logCh s) statC (mgrCh s) nPieces
           logMsg (logCh s) "... Added"
 

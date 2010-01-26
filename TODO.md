@@ -69,22 +69,14 @@ wish-list.
       of the PeerMgr code.
     * Update the Seeder status in PeerMgrP.
     * When stopping a Peer, put back the Pieces to the Piece Manager.
-    * Interest propagation:
-      - Convert PeerMgr to Transformer stack
-      - Convert PieceMgr to Transformer stack
-      - Let the PieceMgr tell PeerMgr when a piece is complete
-      - Write a broadcast service
-      - Broadcast Interest updates to the Peers by a separate broadcasting process. Make it safe when
-        a peer dies.
     * Do not send HAVE messages if the Peer already has the Piece Number.
 
 Before releasing into the "wild"
 --------------------------------
 
-    * The client needs to correctly tell the tracker how many bytes it
-      uploaded and downloaded. This measure is needed on many private
-      trackers as they require people to upload data back.
-    * The client needs to be better at choosing the next eligible piece. Choosing one randomly is good enough.
+    * The client needs to correctly tell the tracker how many bytes there
+      are left and whether we seed or leech. Currently, the values are
+      hardcoded into the client.
     * The client needs to handle multi-file torrents. It is not as hard as
       it may sound — the only part of the system that needs to know about
       files is the code handling the file system. All other parts can just
