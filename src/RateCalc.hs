@@ -5,6 +5,8 @@ module RateCalc (
     -- * Interface
     , new
     , update
+    , extractCount
+    , extractRate
     )
 
 where
