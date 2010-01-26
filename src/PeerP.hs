@@ -297,8 +297,14 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 				    modify (\s -> s {weChoke = True})
 		    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
 				      modify (\s -> s {weChoke = False})
-		    PeerStats retCh -> do i <- gets peerInterested
-					  syncP =<< sendP retCh (0.0, i)) -- TODO: Fix
+		    PeerStats t retCh -> do
+			i <- gets peerInterested
+			ur <- gets upRate
+			dr <- gets downRate
+			let (up, nur) = RC.extractRate t ur
+			    (down, ndr) = RC.extractRate t dr
+			sendP retCh (up, down, i) >>= syncP
+			modify (\s -> s { upRate = nur , downRate = ndr }))
 	timerEvent = do
 	    evt <- recvPC timerCh
 	    wrapP evt (\() -> do

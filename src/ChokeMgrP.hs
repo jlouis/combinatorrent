@@ -9,6 +9,7 @@ module ChokeMgrP (
     )
 where
 
+import Data.Time.Clock
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe
@@ -109,6 +110,7 @@ data PeerDB = PeerDB
 data PeerInfo = PeerInfo
       { pChokingUs :: Bool
       , pDownRate :: Double -- ^ The rate of the peer in question, bytes downloaded in last window
+      , pUpRate   :: Double -- ^ The rate of the peer in question, bytes uploaded in last window
       , pChannel :: PeerChannel -- ^ The channel on which to communicate with the peer
       , pInterestedInUs :: Bool -- ^ Reflection from Peer DB
       , pAreSeeding :: Bool -- ^ True if this peer is connected on a torrent we seed
@@ -142,6 +144,7 @@ addPeer' pCh weSeeding tid = do
   where
     initialPeerInfo = PeerInfo { pChokingUs = True
 			       , pDownRate = 0.0
+			       , pUpRate   = 0.0
 			       , pChannel = pCh
 			       , pInterestedInUs = False
 			       , pAreSeeding = weSeeding -- TODO: Update this on torrent completion
@@ -308,9 +311,11 @@ updateDB = do
 	put s'
 	return a
       proc ch pi = do
-	(sendP (pChannel pi) $ PeerStats ch) >>= syncP
-	(rt, interested) <- recvP ch (const True) >>= syncP
-	return pi { pDownRate = rt,
+        t <- liftIO getCurrentTime
+	(sendP (pChannel pi) $ PeerStats t ch) >>= syncP
+	(uprt, downrt, interested) <- recvP ch (const True) >>= syncP
+	return pi { pDownRate = downrt,
+		    pUpRate   = uprt,
 	            pInterestedInUs = interested }
 
 runRechokeRound :: ChokeMgrProcess ()
