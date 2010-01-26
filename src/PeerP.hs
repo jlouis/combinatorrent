@@ -115,6 +115,11 @@ data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we c
 data SQCF = SQCF { sqLogC :: LogChannel
 		 , sqInCh :: Channel SendQueueMessage
 		 , sqOutCh :: Channel L.ByteString
+		 , bandwidthCh :: BandwidthChannel
+		 }
+
+data SQST = SQST { outQueue :: Q.Queue Message
+		 , bytesTransferred :: Integer
 		 }
 
 instance Logging SQCF where
@@ -122,30 +127,45 @@ instance Logging SQCF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel L.ByteString -> SupervisorChan
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel L.ByteString -> BandwidthChannel 
+	   -> SupervisorChan
 	   -> IO ThreadId
-sendQueueP logC inC outC supC = spawnP (SQCF logC inC outC) Q.empty (catchP (foreverP pgm)
-								        (defaultStopHandler supC))
+sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST Q.empty 0)
+	(catchP (foreverP pgm)
+	        (defaultStopHandler supC))
   where
+    pgm :: Process SQCF SQST ()
     pgm = do
-	q <- get
-	if Q.isEmpty q
-	    then queueEvent >>= syncP
-	    else chooseP [queueEvent, sendEvent] >>= syncP
+	q <- gets outQueue
+	l <- gets bytesTransferred
+	case (Q.isEmpty q, l > 0) of
+	    (True, False) -> queueEvent >>= syncP
+	    (True, True ) -> chooseP [queueEvent, rateUpdateEvent] >>= syncP
+	    (False, False) -> chooseP [queueEvent, sendEvent] >>= syncP
+	    (False, True)  -> chooseP [queueEvent, sendEvent, rateUpdateEvent] >>= syncP
+    rateUpdateEvent = do
+	l <- gets bytesTransferred
+	ev <- sendPC bandwidthCh l
+	wrapP ev (\() ->
+	    modify (\s -> s { bytesTransferred = 0 }))
     queueEvent = do
 	ev <- recvPC sqInCh
 	wrapP ev (\m -> case m of
 			SendQMsg msg -> do log "Queueing event for sending"
-					   modify (Q.push msg)
-			SendQCancel n blk -> modify (Q.filter (filterPiece n (blockOffset blk)))
-			SendOChoke -> do modify (Q.filter filterAllPiece)
-					 modify (Q.push Choke))
+					   modifyQ (Q.push msg)
+			SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
+			SendOChoke -> do modifyQ (Q.filter filterAllPiece)
+					 modifyQ (Q.push Choke))
+    modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
+    modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
-	Just (e, r) <- gets Q.pop
+	Just (e, r) <- gets (Q.pop . outQueue)
 	let bs = encode e
 	tEvt <- sendPC sqOutCh bs
 	wrapP tEvt (\() -> do log "Dequeued event"
-			      put r)
+			      modify (\s -> s { outQueue = r,
+					        bytesTransferred =
+						    bytesTransferred s + fromIntegral (L.length bs)}))
     filterAllPiece (Piece _ _ _) = True
     filterAllPiece _             = False
     filterPiece n off m =
@@ -159,8 +179,9 @@ peerChildren logC handle pMgrC pieceMgrC fsC pm nPieces = do
     queueC <- channel
     senderC <- channel
     receiverC <- channel
+    sendBWC <- channel
     return [Worker $ senderP logC handle senderC,
-	    Worker $ sendQueueP logC queueC senderC,
+	    Worker $ sendQueueP logC queueC senderC sendBWC,
 	    Worker $ receiverP logC handle receiverC,
 	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC]
 
