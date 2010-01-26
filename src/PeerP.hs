@@ -41,6 +41,7 @@ import Logging
 import FSP hiding (pieceMap)
 import PieceMgrP
 import qualified Queue as Q
+import RateCalc as RC
 import Supervisor
 import Torrent
 import WireProtocol
@@ -183,7 +184,7 @@ peerChildren logC handle pMgrC pieceMgrC fsC pm nPieces = do
     return [Worker $ senderP logC handle senderC,
 	    Worker $ sendQueueP logC queueC senderC sendBWC,
 	    Worker $ receiverP logC handle receiverC,
-	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC]
+	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC sendBWC]
 
 data RPCF = RPCF { rpLogC :: LogChannel
                  , rpMsgC :: Channel (Message, Integer) }
@@ -231,6 +232,7 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 	       , logCh :: LogChannel
 	       , fsCh :: FSPChannel
 	       , peerCh :: PeerChannel
+	       , sendBWCh :: BandwidthChannel
 	       , pieceMap :: PieceMap
 	       }
 
@@ -243,15 +245,17 @@ data PST = PST { weChoke :: Bool
 	       , peerChoke :: Bool
 	       , peerInterested :: Bool
 	       , peerPieces :: [PieceNum]
+	       , upRate :: Rate
+	       , downRate :: Rate
 	       }
 
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
-         -> Channel SendQueueMessage -> Channel (Message, Integer)
+         -> Channel SendQueueMessage -> Channel (Message, Integer) -> BandwidthChannel
 	 -> SupervisorChan -> IO ThreadId
-peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
+peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC supC = do
     ch <- channel
-    spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch pm)
-	   (PST True False S.empty True False [])
+    spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC pm)
+	   (PST True False S.empty True False [] (RC.new 0) (RC.new 0))
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId

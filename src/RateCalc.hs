@@ -1,5 +1,12 @@
 -- | Rate calculation.
-module RateCalc
+module RateCalc (
+    -- * Types
+      Rate
+    -- * Interface
+    , new
+    , update
+    )
+
 where
 
 import Prelude hiding (last)

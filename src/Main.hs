@@ -22,7 +22,6 @@ import qualified PieceMgrP (start, createPieceDb)
 import qualified Process ()
 import qualified ChokeMgrP (start)
 import qualified StatusP
-import RateCalc ()
 import Supervisor
 import qualified TimerP()
 import Torrent
