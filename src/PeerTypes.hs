@@ -4,6 +4,8 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 
+import Data.Time.Clock
+
 import Network
 import Torrent
 
@@ -12,7 +14,7 @@ data Peer = Peer { peerHost :: HostName,
 
 data PeerMessage = ChokePeer
                  | UnchokePeer
-                 | PeerStats (Channel (Double, Bool))
+                 | PeerStats UTCTime (Channel (Double, Double, Bool)) -- Up/Down/Interested
 		 | PieceCompleted PieceNum
 
 type PeerChannel = Channel PeerMessage
