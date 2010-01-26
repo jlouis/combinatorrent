@@ -164,14 +164,15 @@ peerChildren logC handle pMgrC pieceMgrC fsC pm nPieces = do
 	    Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle queueC receiverC]
 
 data RPCF = RPCF { rpLogC :: LogChannel
-                 , rpMsgC :: Channel Message }
+                 , rpMsgC :: Channel (Message, Integer) }
 
 instance Logging RPCF where
   getLogger = rpLogC
 
-receiverP :: LogChannel -> Handle -> Channel Message -> SupervisorChan -> IO ThreadId
-receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
-						       (defaultStopHandler supC))
+receiverP :: LogChannel -> Handle -> Channel (Message, Integer) -> SupervisorChan -> IO ThreadId
+receiverP logC h ch supC = spawnP (RPCF logC ch) h
+	(catchP (foreverP pgm)
+	       (defaultStopHandler supC))
   where
     pgm = do log "Peer waiting for input"
              readHeader ch
@@ -193,7 +194,7 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
 		    case runParser decodeMsg bs of
 			Left _ -> do log "Incorrect parse in receiver, dying!"
                                      stopP
-                        Right msg -> sendPC rpMsgC msg >>= syncP
+                        Right msg -> do sendPC rpMsgC (msg, fromIntegral l) >>= syncP
     conv bs = do
         log $ show $ L.length bs
         case runParser getWord32be bs of
@@ -201,7 +202,7 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h (catchP (foreverP pgm)
                          stopP
           Right i -> return i
 
-data PCF = PCF { inCh :: Channel Message
+data PCF = PCF { inCh :: Channel (Message, Integer)
 	       , outCh :: Channel SendQueueMessage
 	       , peerMgrCh :: MgrChannel
 	       , pieceMgrCh :: PieceMgrChannel
@@ -223,7 +224,7 @@ data PST = PST { weChoke :: Bool
 	       }
 
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
-         -> Channel SendQueueMessage -> Channel Message
+         -> Channel SendQueueMessage -> Channel (Message, Integer)
 	 -> SupervisorChan -> IO ThreadId
 peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
     ch <- channel
@@ -260,7 +261,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound supC = do
 					  syncP =<< sendP retCh (0.0, i)) -- TODO: Fix
 	peerMsgEvent = do
 	    evt <- recvPC inCh
-	    wrapP evt (\msg ->
+	    wrapP evt (\(msg, _) ->
 		case msg of
 		  KeepAlive  -> return ()
 		  Choke      -> do putbackBlocks
