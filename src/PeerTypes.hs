@@ -22,3 +22,6 @@ data MgrMessage = Connect ThreadId (Channel PeerMessage)
                 | Disconnect ThreadId
 
 type MgrChannel = Channel MgrMessage
+
+-- | A Channel type we use for transferring the amount of data we transferred
+type BandwidthChannel = Channel Integer
