@@ -239,6 +239,7 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 	       , peerCh :: PeerChannel
 	       , sendBWCh :: BandwidthChannel
 	       , timerCh :: Channel ()
+	       , statCh :: StatusChan
 	       , pieceMap :: PieceMap
 	       }
 
@@ -262,7 +263,7 @@ peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -
 peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC = do
     ch <- channel
     tch <- channel
-    spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch pm)
+    spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch statC pm)
 	   (PST True False S.empty True False [] (RC.new 0) (RC.new 0))
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
@@ -305,7 +306,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		dr <- gets downRate
 		let (upCnt, nuRate) = RC.extractCount $ ur
 		    (downCnt, ndRate) = RC.extractCount $ dr
-		-- TODO: Sync with statusP
+		(sendPC statCh $ PeerStat { peerUploaded = upCnt
+					  , peerDownloaded = downCnt }) >>= syncP
 		modify (\s -> s { upRate = nuRate, downRate = ndRate }))
 	upRateEvent = do
 	    evt <- recvPC sendBWCh
