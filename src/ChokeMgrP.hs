@@ -122,9 +122,24 @@ type PeerMap = M.Map PeerPid PeerInfo
 -- | Auxilliary data structure. Used in the rechoking process.
 type RechokeData = (PeerPid, PeerInfo)
 
--- | Peers are sorted by their current download rate. We want to keep fast peers around.
-sortPeers :: [RechokeData] -> [RechokeData]
-sortPeers = sortBy (comparing $ pDownRate . snd)
+compareInv :: Ord a => a -> a -> Ordering
+compareInv x y =
+    case compare x y of
+	LT -> GT
+	EQ -> EQ
+	GT -> LT
+
+comparingWith :: Ord a => (a -> a -> Ordering) -> (b -> a) -> b -> b -> Ordering
+comparingWith comp project x y =
+    comp (project x) (project y)
+
+-- | Leechers are sorted by their current download rate. We want to keep fast peers around.
+sortLeech :: [RechokeData] -> [RechokeData]
+sortLeech = sortBy (comparingWith compareInv $ pDownRate . snd)
+
+-- | Seeders are sorted by their current upload rate.
+sortSeeds :: [RechokeData] -> [RechokeData]
+sortSeeds = sortBy (comparingWith compareInv $ pUpRate . snd)
 
 -- | Advance the peer chain to the next peer eligible for optimistic
 --   unchoking. That is, skip peers which are not interested in our pieces
@@ -215,9 +230,8 @@ assignUploadSlots slots downloaderPeers seederPeers =
           0 -> (dSlots, sSlots)
           k -> (min (dSlots + k) (length dPeers), sSlots - k)
 
--- | @selectPeers upRate d s@ selects peers from a list of downloader peers @d@ and a list of seeder
---   peers @s@. The value of @upRate@ defines the upload rate for the client and is used in determining
---   the rate of the slots.
+-- | @selectPeers upSlots d s@ selects peers from a list of downloader peers @d@ and a list of seeder
+--   peers @s@. The value of @upSlots@ defines the number of upload slots available
 selectPeers :: Int -> [RechokeData] -> [RechokeData] -> S.Set PeerPid
 selectPeers uploadSlots downPeers seedPeers = S.union downPids seedPids
     where
@@ -225,8 +239,8 @@ selectPeers uploadSlots downPeers seedPeers = S.union downPids seedPids
                                  uploadSlots
                                  downPeers
                                  seedPeers
-      downPids = S.fromList $ map fst $ take nDownSlots downPeers
-      seedPids = S.fromList $ map fst $ take nSeedSlots seedPeers
+      downPids = S.fromList $ map fst $ take nDownSlots $ sortLeech downPeers
+      seedPids = S.fromList $ map fst $ take nSeedSlots $ sortSeeds seedPeers
 
 -- | This function carries out the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> IO ()
