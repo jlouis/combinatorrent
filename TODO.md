@@ -57,7 +57,6 @@ wish-list.
 Before releasing into the "wild"
 --------------------------------
 
-   - Use the pUpRate for something in the choke manager.
    - The client needs to correctly tell the tracker how many bytes there
      are left and whether we seed or leech. Currently, the values are
      hardcoded into the client.
