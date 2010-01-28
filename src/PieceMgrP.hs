@@ -134,6 +134,7 @@ start logC mgrC fspC chokeC statC db supC =
 					   stopP
 				 Just True -> do completePiece pn
 						 markDone pn
+						 checkFullCompletion
 				 Just False -> putbackPiece pn)
 		PutbackBlocks blks ->
 		    mapM_ putbackBlock blks
@@ -169,6 +170,13 @@ createPieceDb mmap pmap = PieceDB pending done [] M.empty pmap
 completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
                                        donePiece  = pn : donePiece db })
+
+checkFullCompletion :: PieceMgrProcess ()
+checkFullCompletion = do
+    done <- gets pendingPieces
+    ipp  <- gets inProgress
+    when (done == [] && M.null ipp)
+	(do log "Torrent Completed, TODO: Inform processes about this")
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again. Returns the new database.
