@@ -54,6 +54,10 @@ wish-list.
    - When stopping a Peer, put back the Pieces to the Piece Manager.
    - Do not send HAVE messages if the Peer already has the Piece Number.
 
+Known Bugs
+----------
+   - Client reports the wrong amount of "left" bytes to the Tracker.
+
 Before releasing into the "wild"
 --------------------------------
 
