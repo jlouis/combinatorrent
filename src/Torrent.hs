@@ -31,7 +31,7 @@ module Torrent (
       InfoHash
     , PeerId
     , AnnounceURL
-    , TorrentState
+    , TorrentState(..)
     , TorrentInfo(..)
     , PieceNum
     , PieceSize

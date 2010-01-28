@@ -49,6 +49,7 @@ import Control.Concurrent.CML
 import Control.Monad.State
 import Control.Monad.Reader
 
+import Prelude hiding (log)
 import Logging (LogChannel, logMsg)
 import Process
 import Supervisor
@@ -59,12 +60,16 @@ data StatusMsg = TrackerStat { trackIncomplete :: Integer
 	       | CompletedPiece Integer
 	       | PeerStat { peerUploaded :: Integer
 			  , peerDownloaded :: Integer }
+	       | TorrentCompleted
 
 type StatusChan = Channel StatusMsg
 
 data CF  = CF { logCh :: LogChannel
 	      , statusCh :: Channel StatusMsg
 	      , trackerCh :: Channel ST }
+
+instance Logging CF where
+    getLogger = logCh
 
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
@@ -95,5 +100,9 @@ start logC l tState trackerC statusC supC = do
 			   modify (\s -> s { left = (left s) - bytes })
 			PeerStat up down ->
 			   modify (\s -> s { uploaded = (uploaded s) + up,
-					     downloaded = (downloaded s) + down }))
+					     downloaded = (downloaded s) + down })
+			TorrentCompleted -> do
+			   l <- gets left
+			   when (l /= 0) (log "Warning: Left is not 0 upon Torrent Completion")
+			   modify (\s -> s { state = Seeding }))
 		   
