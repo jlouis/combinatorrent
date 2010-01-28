@@ -59,14 +59,14 @@ type ChokeMgrProcess a = Process CF PeerDB a
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: LogChannel -> ChokeMgrChannel -> ChokeInfoChannel -> Int -> SupervisorChan -> IO ThreadId
-start logC ch infoC ur supC = do
+start :: LogChannel -> ChokeMgrChannel -> ChokeInfoChannel -> Int -> Bool -> SupervisorChan -> IO ThreadId
+start logC ch infoC ur weSeed supC = do
     TimerP.register 10 Tick ch
     spawnP (CF logC ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
 	    (catchP (forever pgm)
 	      (defaultStopHandler supC))
   where
-    initPeerDB slots = PeerDB 2 False slots M.empty []
+    initPeerDB slots = PeerDB 2 weSeed slots M.empty []
     pgm = do chooseP [mgrEvent, infoEvent] >>= syncP
     mgrEvent = do
 	  ev <- recvPC mgrCh

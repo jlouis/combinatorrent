@@ -75,6 +75,9 @@ download name = do
 		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
+				    (case clientState of
+					Seeding -> True
+					Leeching -> False)
 		     ] supC
            sync $ receive waitC (const True)
            return ()
