@@ -66,12 +66,17 @@ Before releasing into the "wild"
    - We currently take space proportional to torrent size due to our SHA1
      calculation being slow and not use a file descriptor. Research into a
      faster SHA1 library would be really beneficial.
-   - Correctly change to seeder mode when we have completed the torrent.
+   - Update the code such that information about Seeding is propagated
+     better through the code. The current setup is rather bad.
 
 Items for later (no particular order)
 -------------------------------------
 
    - Add support for multiple torrents at once
+   - The client needs to handle multi-file torrents. It is not as hard as
+     it may sound — the only part of the system that needs to know about
+     files is the code handling the file system. All other parts can just
+     keep on transferring pieces.
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
