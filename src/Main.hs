@@ -61,7 +61,9 @@ download name = do
 	   -- setup StdGen and Peer data
            gen <- getStdGen
            let pid = mkPeerId gen
-           let ti = fromJust $ mkTorrentInfo bc
+               ti = fromJust $ mkTorrentInfo bc
+	       left = bytesLeft haveMap pieceMap
+	       clientState = determineState haveMap
 	   -- Create main supervisor process
 	   allForOne [ Worker $ ConsoleP.start logC waitC
 		     , Worker $ FSP.start h logC pieceMap fspC
@@ -69,11 +71,13 @@ download name = do
 				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
 		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
-		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC statInC
+		     , Worker $ StatusP.start logC left clientState statusC statInC
 		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
+				    (case clientState of
+					Seeding -> True
+					Leeching -> False)
 		     ] supC
            sync $ receive waitC (const True)
-           TrackerP.poison trackerC -- This is probably wrong.
            return ()

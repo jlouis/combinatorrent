@@ -25,7 +25,7 @@ import System.Random
 
 import Logging
 import FSP hiding (start, fspCh)
-import StatusP hiding (start)
+import StatusP as STP hiding (start) 
 import Supervisor
 import Torrent
 import Process
@@ -77,6 +77,7 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 		   -- ^ Get the pieces which are already done
 
 data ChokeInfoMsg = PieceDone PieceNum
+                  | TorrentComplete
 
 type PieceMgrChannel = Channel PieceMgrMsg
 type ChokeInfoChannel = Channel ChokeInfoMsg
@@ -124,7 +125,6 @@ start logC mgrC fspC chokeC statC db supC =
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
-			       markDone pn
 			       pm <- gets infoMap
 			       let l = len $ fromJust $ M.lookup pn pm
 			       sendPC statusCh (CompletedPiece l) >>= syncP
@@ -133,7 +133,9 @@ start logC mgrC fspC chokeC statC db supC =
 				 Nothing ->
 					do log "PieceMgrP: Piece Nonexisting!"
 					   stopP
-				 Just True -> completePiece pn
+				 Just True -> do completePiece pn
+						 markDone pn
+						 checkFullCompletion
 				 Just False -> putbackPiece pn)
 		PutbackBlocks blks ->
 		    mapM_ putbackBlock blks
@@ -169,6 +171,15 @@ createPieceDb mmap pmap = PieceDB pending done [] M.empty pmap
 completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
                                        donePiece  = pn : donePiece db })
+
+checkFullCompletion :: PieceMgrProcess ()
+checkFullCompletion = do
+    done <- gets pendingPieces
+    ipp  <- gets inProgress
+    when (done == [] && M.null ipp)
+	(do log "Torrent Completed"
+	    sendPC statusCh STP.TorrentCompleted >>= syncP
+	    sendPC chokeCh  TorrentComplete >>= syncP)
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again. Returns the new database.

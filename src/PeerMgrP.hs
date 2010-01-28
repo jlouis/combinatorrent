@@ -38,8 +38,7 @@ data State = MkState { peerCh :: Channel [Peer],
                        infoHash :: InfoHash,
                        fsCh :: FSPChannel,
                        peerPool :: SupervisorChan,
-                       logCh :: LogChannel,
-		       weSeeding :: Bool -- ^ True if we are currently seeding the torrent
+                       logCh :: LogChannel
 		       }
 
 start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
@@ -49,7 +48,7 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne [] fakeChan
-       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC False)
+       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC)
   where startup s = Supervisor.defaultStartup supC "PeerMgr" (lp s)
 	lp s = do logMsg logC "Looping PeerMgr"
                   sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
@@ -63,7 +62,7 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
                                Connect tid c -> newPeer s tid c
                                Disconnect tid -> removePeer s tid)
         newPeer s tid c  = do logMsg (logCh s) "Unchoking new peer"
-			      ChokeMgrP.addPeer chokeMgrC tid c (weSeeding s)
+			      ChokeMgrP.addPeer chokeMgrC tid c
                               return s { peers = M.insert tid c (peers s)}
         removePeer s tid = do logMsg (logCh s) "Deleting peer"
 			      ChokeMgrP.removePeer chokeMgrC tid

@@ -26,10 +26,12 @@
 
 -- | The following module is responsible for general types used
 --   throughout the system.
-module Torrent
-    ( InfoHash
+module Torrent (
+    -- * Types
+      InfoHash
     , PeerId
     , AnnounceURL
+    , TorrentState(..)
     , TorrentInfo(..)
     , PieceNum
     , PieceSize
@@ -38,6 +40,8 @@ module Torrent
     , PieceInfo(..)
     , BlockSize
     , Block(..)
+    -- * Interface
+    , determineState
     , bytesLeft
     , defaultBlockSize
     , defaultOptimisticSlots
@@ -78,6 +82,8 @@ data TorrentInfo = TorrentInfo {
       pieceCount  :: Int, -- Number of pieces in torrent
       announceURL :: AnnounceURL } deriving Show
 
+data TorrentState = Seeding | Leeching
+
 -- PIECES
 ----------------------------------------------------------------------
 type PieceNum = Int
@@ -93,6 +99,11 @@ type PieceMap = M.Map PieceNum PieceInfo
 
 -- | The PiecesDoneMap is a map which is true if we have the piece and false otherwise
 type PiecesDoneMap = M.Map PieceNum Bool
+
+-- | Given what pieces that are done, return the current state of the client.
+determineState :: PiecesDoneMap -> TorrentState
+determineState pd | F.all (==True) pd = Seeding
+                  | otherwise         = Leeching
 
 -- | Return the amount of bytes left on a torrent given what pieces are done and the
 --   map of the shape of the torrent in question.
