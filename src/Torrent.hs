@@ -111,8 +111,8 @@ bytesLeft :: PiecesDoneMap -> PieceMap -> Integer
 bytesLeft done pm =
     M.foldWithKey (\k v accu ->
 	case M.lookup k done of
-	       Just True -> (len v) + accu
-	       _         -> accu) 0 pm
+	       Just False -> (len v) + accu
+	       _          -> accu) 0 pm
 
 -- BLOCKS
 ----------------------------------------------------------------------
