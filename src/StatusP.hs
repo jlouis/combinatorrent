@@ -80,8 +80,6 @@ data ST = ST { uploaded :: Integer,
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
---
---  TODO: Write and use some errorhandler code
 start :: LogChannel -> Integer -> TorrentState -> Channel ST
       -> Channel StatusMsg -> SupervisorChan -> IO ThreadId
 start logC l tState trackerC statusC supC = do
