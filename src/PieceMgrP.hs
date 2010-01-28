@@ -25,7 +25,7 @@ import System.Random
 
 import Logging
 import FSP hiding (start, fspCh)
-import StatusP hiding (start)
+import StatusP as STP hiding (start) 
 import Supervisor
 import Torrent
 import Process
@@ -177,7 +177,9 @@ checkFullCompletion = do
     done <- gets pendingPieces
     ipp  <- gets inProgress
     when (done == [] && M.null ipp)
-	(do log "Torrent Completed, TODO: Inform processes about this")
+	(do log "Torrent Completed"
+	    sendPC statusCh STP.TorrentCompleted >>= syncP
+	    sendPC chokeCh  TorrentComplete >>= syncP)
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again. Returns the new database.
