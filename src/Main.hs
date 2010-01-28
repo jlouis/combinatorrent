@@ -76,5 +76,4 @@ download name = do
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
 		     ] supC
            sync $ receive waitC (const True)
-           TrackerP.poison trackerC -- This is probably wrong.
            return ()
