@@ -32,8 +32,7 @@
 --   correctly to tell the tracker what to do
 module StatusP (
     -- * Types
-      TorrentState(..)
-    , StatusMsg(..)
+      StatusMsg(..)
     -- * Channels
     , StatusChan
     -- * State
@@ -51,10 +50,9 @@ import Control.Monad.State
 import Control.Monad.Reader
 
 import Logging (LogChannel, logMsg)
-import Supervisor
 import Process
-
-data TorrentState = Seeding | Leeching
+import Supervisor
+import Torrent
 
 data StatusMsg = TrackerStat { trackIncomplete :: Integer
 			     , trackComplete   :: Integer }
