@@ -124,7 +124,6 @@ start logC mgrC fspC chokeC statC db supC =
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
-			       markDone pn
 			       pm <- gets infoMap
 			       let l = len $ fromJust $ M.lookup pn pm
 			       sendPC statusCh (CompletedPiece l) >>= syncP
@@ -133,7 +132,8 @@ start logC mgrC fspC chokeC statC db supC =
 				 Nothing ->
 					do log "PieceMgrP: Piece Nonexisting!"
 					   stopP
-				 Just True -> completePiece pn
+				 Just True -> do completePiece pn
+						 markDone pn
 				 Just False -> putbackPiece pn)
 		PutbackBlocks blks ->
 		    mapM_ putbackBlock blks
