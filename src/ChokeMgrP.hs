@@ -43,7 +43,7 @@ import TimerP
 
 data ChokeMgrMsg = Tick
 		 | RemovePeer PeerPid
-		 | AddPeer PeerPid PeerChannel Bool
+		 | AddPeer PeerPid PeerChannel
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
 data CF = CF { logCh :: LogChannel
@@ -66,14 +66,16 @@ start logC ch infoC ur supC = do
 	    (catchP (forever pgm)
 	      (defaultStopHandler supC))
   where
-    initPeerDB slots = PeerDB 2 slots M.empty []
+    initPeerDB slots = PeerDB 2 False slots M.empty []
     pgm = do chooseP [mgrEvent, infoEvent] >>= syncP
     mgrEvent = do
 	  ev <- recvPC mgrCh
 	  wrapP ev (\msg -> case msg of
 			Tick                 -> tick
 			RemovePeer t         -> removePeer t
-			AddPeer t pCh weSeed -> addPeer' pCh weSeed t)
+			AddPeer t pCh -> do
+			    weSeed <- gets seeding
+			    addPeer' pCh weSeed t)
     infoEvent = do
 	  ev <- recvPC infoCh
 	  wrapP ev (\(PieceDone pn) -> informDone pn)
@@ -84,8 +86,8 @@ start logC ch infoC ur supC = do
 	      runRechokeRound
     removePeer tid = modify (\db -> db { peerMap = M.delete tid (peerMap db) })
 
-addPeer :: ChokeMgrChannel -> PeerPid -> PeerChannel -> Bool -> IO ()
-addPeer ch pid pch = sync . transmit ch . (AddPeer pid pch)
+addPeer :: ChokeMgrChannel -> PeerPid -> PeerChannel -> IO ()
+addPeer ch pid = sync . transmit ch . (AddPeer pid)
 
 removePeer :: ChokeMgrChannel -> PeerPid -> IO ()
 removePeer ch pid = sync $ transmit ch $ RemovePeer pid
@@ -101,6 +103,7 @@ type PeerPid = ThreadId -- For now, should probably change
 --   far we are in the process of wandering the optimistic unchoke chain.
 data PeerDB = PeerDB
     { chokeRound :: Int       -- ^ Counted down by one from 2. If 0 then we should advance the peer chain.
+    , seeding :: Bool         -- ^ True if we are seeding the torrent. In a multi-torrent world, this has to change.
     , uploadSlots :: Int      -- ^ Current number of upload slots
     , peerMap :: PeerMap      -- ^ Map of peers
     , peerChain ::  [PeerPid] -- ^ The order in which peers are optimistically unchoked
