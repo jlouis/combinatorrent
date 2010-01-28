@@ -62,6 +62,7 @@ download name = do
            gen <- getStdGen
            let pid = mkPeerId gen
            let ti = fromJust $ mkTorrentInfo bc
+	   let left = bytesLeft haveMap pieceMap
 	   -- Create main supervisor process
 	   allForOne [ Worker $ ConsoleP.start logC waitC
 		     , Worker $ FSP.start h logC pieceMap fspC
@@ -69,7 +70,7 @@ download name = do
 				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
 		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
-		     , Worker $ StatusP.start logC 0 StatusP.Leeching statusC statInC
+		     , Worker $ StatusP.start logC left StatusP.Leeching statusC statInC
 		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in Kilobytes
