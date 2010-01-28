@@ -78,7 +78,13 @@ start logC ch infoC ur supC = do
 			    addPeer' pCh weSeed t)
     infoEvent = do
 	  ev <- recvPC infoCh
-	  wrapP ev (\(PieceDone pn) -> informDone pn)
+	  wrapP ev (\m -> case m of
+			    PieceDone pn -> informDone pn
+			    TorrentComplete -> do
+				modify (\s -> s { seeding = True
+						, peerMap =
+						   M.map (\pi -> pi { pAreSeeding = True })
+						         $ peerMap s}))
     tick = do log "Ticked"
 	      ch <- asks mgrCh
 	      liftIO $ TimerP.register 10 Tick ch

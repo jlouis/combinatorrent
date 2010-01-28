@@ -77,6 +77,7 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel [(PieceNum, [Block])])
 		   -- ^ Get the pieces which are already done
 
 data ChokeInfoMsg = PieceDone PieceNum
+                  | TorrentComplete
 
 type PieceMgrChannel = Channel PieceMgrMsg
 type ChokeInfoChannel = Channel ChokeInfoMsg
