@@ -53,10 +53,12 @@ wish-list.
    - Update the Seeder status in PeerMgrP.
    - When stopping a Peer, put back the Pieces to the Piece Manager.
    - Do not send HAVE messages if the Peer already has the Piece Number.
+   - Rewrite the tracker code to use the new monad transformer stack.
 
 Known Bugs
 ----------
-   - Client reports the wrong amount of "left" bytes to the Tracker.
+
+None at the moment.
 
 Before releasing into the "wild"
 --------------------------------
