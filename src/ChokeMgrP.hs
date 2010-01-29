@@ -52,7 +52,7 @@ data CF = CF { logCh :: LogChannel
 	     }
 
 instance Logging CF where
-  getLogger = logCh
+  getLogger cf = ("ChokeMgrP", logCh cf)
 
 type ChokeMgrProcess a = Process CF PeerDB a
 

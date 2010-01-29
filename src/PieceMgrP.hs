@@ -91,7 +91,7 @@ data PieceMgrCfg = PieceMgrCfg
     }
 
 instance Logging PieceMgrCfg where
-  getLogger = logCh
+  getLogger cf = ("PieceMgrP", logCh cf)
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 

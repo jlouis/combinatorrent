@@ -95,7 +95,7 @@ data SPCF = SPCF { spLogCh :: LogChannel
 		 }
 
 instance Logging SPCF where
-   getLogger = spLogCh
+   getLogger cf = ("SenderP", spLogCh cf)
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: LogChannel -> Handle -> Channel L.ByteString -> SupervisorChan -> IO ThreadId
@@ -128,7 +128,7 @@ data SQST = SQST { outQueue :: Q.Queue Message
 		 }
 
 instance Logging SQCF where
-  getLogger = sqLogC
+  getLogger cf = ("SendQueueP", sqLogC cf)
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
@@ -195,7 +195,7 @@ data RPCF = RPCF { rpLogC :: LogChannel
                  , rpMsgC :: Channel (Message, Integer) }
 
 instance Logging RPCF where
-  getLogger = rpLogC
+  getLogger cf = ("ReceiverP", rpLogC cf)
 
 receiverP :: LogChannel -> Handle -> Channel (Message, Integer) -> SupervisorChan -> IO ThreadId
 receiverP logC h ch supC = spawnP (RPCF logC ch) h
@@ -243,7 +243,7 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 	       }
 
 instance Logging PCF where
-  getLogger = logCh
+  getLogger cf = ("PeerP", logCh cf)
 
 data PST = PST { weChoke :: Bool
 	       , weInterested :: Bool

@@ -34,25 +34,26 @@ data LogPriority = Debug -- ^ Fine grained debug info
 
 -- | The class of types where we have a logger inside them somewhere
 class Logging a where
-  getLogger :: a -> LogChannel
+  -- | Returns a channel for logging and an Identifying string to use
+  getLogger :: a -> (String, LogChannel)
 
 instance Logging LogChannel where
-  getLogger = id
+  getLogger ch = ("Unknown", ch)
 
 
 -- TODO: Consider generalizing this to any member of Show
-data LogMsg = Mes LogPriority String
+data LogMsg = Mes LogPriority String String
 
 instance Show LogMsg where
-    show (Mes pri str) = show pri ++ ":\t" ++ str
+    show (Mes pri name str) = show name ++ "(" ++ show pri ++ "):\t" ++ str
 
 type LogChannel = Channel LogMsg
 
 -- | If a process has access to a logging channel, it is able to log messages to the world
 log :: Logging a => LogPriority -> String -> Process a b ()
 log prio msg = do
-    logC <- asks getLogger
-    liftIO $ logMsg' logC prio msg
+    (name, logC) <- asks getLogger
+    liftIO $ logMsg' logC name prio msg
 
 logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
 logInfo  = log Info
@@ -63,8 +64,8 @@ logError = log Error
 
 -- | Log a message to a channel
 logMsg :: LogChannel -> String -> IO ()
-logMsg c = sync . transmit c . Mes Info
+logMsg c m = logMsg' c "Unknown" Info m
 
 -- | Log a message to a channel with a priority
-logMsg' :: LogChannel -> LogPriority -> String -> IO ()
-logMsg' c pri = sync . transmit c . Mes pri
+logMsg' :: LogChannel -> String -> LogPriority -> String -> IO ()
+logMsg' c name pri = sync . transmit c . Mes pri name

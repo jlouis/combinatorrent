@@ -69,7 +69,7 @@ data CF  = CF { logCh :: LogChannel
 	      , trackerCh :: Channel ST }
 
 instance Logging CF where
-    getLogger = logCh
+    getLogger cf = ("StatusP", logCh cf)
 
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
