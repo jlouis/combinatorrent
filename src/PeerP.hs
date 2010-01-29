@@ -95,7 +95,7 @@ data SPCF = SPCF { spLogCh :: LogChannel
 		 }
 
 instance Logging SPCF where
-   getLogger = spLogCh
+   getLogger cf = ("SenderP", spLogCh cf)
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: LogChannel -> Handle -> Channel L.ByteString -> SupervisorChan -> IO ThreadId
@@ -111,7 +111,6 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 	h <- get
 	liftIO $ do L.hPut h m
 	            hFlush h
-	Process.log "Sent and flushed msg"
 
 -- | Messages we can send to the Send Queue
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
@@ -129,7 +128,7 @@ data SQST = SQST { outQueue :: Q.Queue Message
 		 }
 
 instance Logging SQCF where
-  getLogger = sqLogC
+  getLogger cf = ("SendQueueP", sqLogC cf)
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
@@ -157,7 +156,7 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     queueEvent = do
 	ev <- recvPC sqInCh
 	wrapP ev (\m -> case m of
-			SendQMsg msg -> do log "Queueing event for sending"
+			SendQMsg msg -> do logDebug "Queueing event for sending"
 					   modifyQ (Q.push msg)
 			SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
 			SendOChoke -> do modifyQ (Q.filter filterAllPiece)
@@ -168,7 +167,7 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
 	Just (e, r) <- gets (Q.pop . outQueue)
 	let bs = encode e
 	tEvt <- sendPC sqOutCh bs
-	wrapP tEvt (\() -> do log "Dequeued event"
+	wrapP tEvt (\() -> do logDebug "Dequeued event"
 			      modify (\s -> s { outQueue = r,
 					        bytesTransferred =
 						    bytesTransferred s + fromIntegral (L.length bs)}))
@@ -196,20 +195,20 @@ data RPCF = RPCF { rpLogC :: LogChannel
                  , rpMsgC :: Channel (Message, Integer) }
 
 instance Logging RPCF where
-  getLogger = rpLogC
+  getLogger cf = ("ReceiverP", rpLogC cf)
 
 receiverP :: LogChannel -> Handle -> Channel (Message, Integer) -> SupervisorChan -> IO ThreadId
 receiverP logC h ch supC = spawnP (RPCF logC ch) h
 	(catchP (foreverP pgm)
 	       (defaultStopHandler supC))
   where
-    pgm = do log "Peer waiting for input"
+    pgm = do logDebug "Peer waiting for input"
              readHeader ch
     readHeader ch = do
         h <- get
 	feof <- liftIO $ hIsEOF h
 	if feof
-	    then do log "Handle Closed"
+	    then do logDebug "Handle Closed"
 		    stopP
 	    else do bs' <- liftIO $ L.hGet h 4
 		    l <- conv bs'
@@ -217,17 +216,16 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h
     readMessage l ch = do
         if (l == 0)
 	    then return ()
-	    else do log $ "Reading off " ++ show l ++ " bytes"
+	    else do logDebug $ "Reading off " ++ show l ++ " bytes"
 		    h <- get
 		    bs <- liftIO $ L.hGet h (fromIntegral l)
 		    case runParser decodeMsg bs of
-			Left _ -> do log "Incorrect parse in receiver, dying!"
+			Left _ -> do logWarn "Incorrect parse in receiver, dying!"
                                      stopP
                         Right msg -> do sendPC rpMsgC (msg, fromIntegral l) >>= syncP
     conv bs = do
-        log $ show $ L.length bs
         case runParser getWord32be bs of
-          Left err -> do log $ "Incorrent parse in receiver, dying: " ++ show err
+          Left err -> do logWarn $ "Incorrent parse in receiver, dying: " ++ show err
                          stopP
           Right i -> return i
 
@@ -245,7 +243,7 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 	       }
 
 instance Logging PCF where
-  getLogger = logCh
+  getLogger cf = ("PeerP", logCh cf)
 
 data PST = PST { weChoke :: Bool
 	       , weInterested :: Bool
@@ -270,7 +268,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
-	    log "Syncing a connectBack"
+	    logDebug "Syncing a connectBack"
 	    asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect tid ch) >>= syncP
 	    pieces <- getPiecesDone
 	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
@@ -290,16 +288,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	chokeMgrEvent = do
 	    evt <- recvPC peerCh
 	    wrapP evt (\msg -> do
-		log "ChokeMgrEvent"
+		logDebug "ChokeMgrEvent"
 		case msg of
 		    PieceCompleted pn -> do
-			log "PieceCompleted"
 			syncP =<< (sendPC outCh $ SendQMsg $ Have pn)
 		    ChokePeer -> do syncP =<< sendPC outCh SendOChoke
-				    log "ChokePeer"
+				    logDebug "Choke Peer"
 				    modify (\s -> s {weChoke = True})
 		    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
-				      log "UnchokePeer"
+				      logDebug "UnchokePeer"
 				      modify (\s -> s {weChoke = False})
 		    PeerStats t retCh -> do
 			i <- gets peerInterested
@@ -307,13 +304,13 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 			dr <- gets downRate
 			let (up, nur) = RC.extractRate t ur
 			    (down, ndr) = RC.extractRate t dr
-			log $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
+			logInfo $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
 			sendP retCh (up, down, i) >>= syncP
 			modify (\s -> s { upRate = nur , downRate = ndr }))
 	timerEvent = do
 	    evt <- recvPC timerCh
 	    wrapP evt (\() -> do
-		log "TimerEvent"
+		logDebug "TimerEvent"
 	        tch <- asks timerCh
 		liftIO $ TimerP.register 30 () tch
 		ur <- gets upRate
@@ -326,12 +323,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	upRateEvent = do
 	    evt <- recvPC sendBWCh
 	    wrapP evt (\uploaded -> do
-	        log "upRateEvent"
 		modify (\s -> s { upRate = RC.update uploaded $ upRate s}))
 	peerMsgEvent = do
 	    evt <- recvPC inCh
 	    wrapP evt (\(msg, sz) -> do
-		log "PeerMsgEvent"
 		modify (\s -> s { downRate = RC.update sz $ downRate s})
 		case msg of
 		  KeepAlive  -> return ()
@@ -357,7 +352,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    if M.member pn pm
 		then do modify (\s -> s { peerPieces = pn : peerPieces s})
 		        considerInterest
-		else do log "Unknown Piece"
+		else do logWarn "Unknown Piece"
 		        stopP
 	bitfieldMsg bf = do
 	    pieces <- gets peerPieces
@@ -365,7 +360,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	      -- TODO: Don't trust the bitfield
 	      [] -> do modify (\s -> s { peerPieces = createPeerPieces bf})
 		       considerInterest
-	      _  -> do log "Got out of band Bitfield request, dying"
+	      _  -> do logInfo "Got out of band Bitfield request, dying"
 	               stopP
 	requestMsg :: PieceNum -> Block -> Process PCF PST ()
 	requestMsg pn blk = do
@@ -409,9 +404,9 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    let sz = S.size q
 	    when (sz < loMark)
 		(do
-                   log $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
+                   logDebug $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
 		   toQueue <- grabBlocks (hiMark - sz)
-                   log $ "Got " ++ show (length toQueue) ++ " blocks"
+                   logDebug $ "Got " ++ show (length toQueue) ++ " blocks"
                    queuePieces toQueue)
 	queuePieces toQueue = do
 	    mapM_ pushPiece toQueue

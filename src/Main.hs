@@ -44,7 +44,8 @@ download name = do
     case bcoded of
       Left pe -> print pe
       Right bc ->
-        do (h, haveMap, pieceMap) <- openAndCheckFile bc
+        do print bc
+	   (h, haveMap, pieceMap) <- openAndCheckFile bc
            -- setup channels
            trackerC <- channel
            statusC  <- channel

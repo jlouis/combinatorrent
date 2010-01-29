@@ -50,7 +50,7 @@ import Control.Monad.State
 import Control.Monad.Reader
 
 import Prelude hiding (log)
-import Logging (LogChannel, logMsg)
+import Logging
 import Process
 import Supervisor
 import Torrent
@@ -69,7 +69,7 @@ data CF  = CF { logCh :: LogChannel
 	      , trackerCh :: Channel ST }
 
 instance Logging CF where
-    getLogger = logCh
+    getLogger cf = ("StatusP", logCh cf)
 
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
@@ -101,6 +101,6 @@ start logC l tState trackerC statusC supC = do
 					     downloaded = (downloaded s) + down })
 			TorrentCompleted -> do
 			   l <- gets left
-			   when (l /= 0) (log "Warning: Left is not 0 upon Torrent Completion")
+			   when (l /= 0) (logError "Warning: Left is not 0 upon Torrent Completion")
 			   modify (\s -> s { state = Seeding }))
 		   

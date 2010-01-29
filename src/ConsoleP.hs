@@ -72,6 +72,6 @@ readerP logCh = do cmdCh <- channel
   where lp cmdCh = do c <- getLine
                       case c of
                         "quit" -> sync $ transmit cmdCh Quit
-                        cmd    -> do logMsg' logCh Low $ "Unrecognized command: " ++ show cmd
+                        cmd    -> do logMsg' logCh "Console" Info $ "Unrecognized command: " ++ show cmd
                                      lp cmdCh
 
