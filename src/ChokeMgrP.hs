@@ -85,7 +85,7 @@ start logC ch infoC ur weSeed supC = do
 						, peerMap =
 						   M.map (\pi -> pi { pAreSeeding = True })
 						         $ peerMap s}))
-    tick = do log "Ticked"
+    tick = do logDebug "Ticked"
 	      ch <- asks mgrCh
 	      liftIO $ TimerP.register 10 Tick ch
 	      updateDB

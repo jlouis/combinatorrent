@@ -116,9 +116,9 @@ start logC mgrC fspC chokeC statC db supC =
 	    wrapP ev (\msg ->
 	      case msg of
 		GrabBlocks n eligible c ->
-		    do log "Grabbing Blocks"
+		    do logDebug "Grabbing Blocks"
 		       blocks <- grabBlocks' n eligible
-		       log "Grabbed..."
+		       logDebug "Grabbed..."
 		       syncP =<< sendP c blocks
 		StoreBlock pn blk d ->
 		    do storeBlock pn blk d
@@ -131,7 +131,7 @@ start logC mgrC fspC chokeC statC db supC =
 			       pieceOk <- checkPiece pn
 			       case pieceOk of
 				 Nothing ->
-					do log "PieceMgrP: Piece Nonexisting!"
+					do logFatal "PieceMgrP: Piece Nonexisting!"
 					   stopP
 				 Just True -> do completePiece pn
 						 markDone pn
@@ -177,7 +177,7 @@ checkFullCompletion = do
     done <- gets pendingPieces
     ipp  <- gets inProgress
     when (done == [] && M.null ipp)
-	(do log "Torrent Completed"
+	(do logInfo "Torrent Completed"
 	    sendPC statusCh STP.TorrentCompleted >>= syncP
 	    sendPC chokeCh  TorrentComplete >>= syncP)
 
@@ -201,7 +201,7 @@ assertPieceComplete pn = do
     inprog <- gets inProgress
     let ipp = fromJust $ M.lookup pn inprog
     unless (assertComplete ipp)
-      (do log $ "Could not assert completion of the piece with block state " ++ show ipp
+      (do logError $ "Could not assert completion of the piece with block state " ++ show ipp
 	  stopP)
   where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs

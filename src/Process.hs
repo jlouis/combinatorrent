@@ -1,15 +1,13 @@
 -- | Core Process code
 {-# LANGUAGE ExistentialQuantification, FlexibleInstances,
              GeneralizedNewtypeDeriving,
-             MultiParamTypeClasses, TypeSynonymInstances, CPP #-}
+             MultiParamTypeClasses, CPP #-}
 -- required for deriving Typeable
 {-# OPTIONS_GHC -fglasgow-exts #-}
 
 module Process (
-    -- * Classes
-      Logging(..)
     -- * Types
-    , Process
+      Process
     -- * Interface
     , runP
     , spawnP
@@ -25,7 +23,6 @@ module Process (
     , wrapP
     , stopP
     -- * Helpers
-    , log
     , defaultStopHandler
     )
 where
@@ -46,7 +43,6 @@ import Prelude hiding (catch, log)
 
 import System.IO
 
-import Logging
 import Supervisor
 
 
@@ -138,18 +134,4 @@ chooseP events = (sequence events) >>= (return . choose)
 defaultStopHandler supC = do
     t <- liftIO $ myThreadId
     syncP =<< (sendP supC $ IAmDying t)
-
--- | The class of types where we have a logger inside them somewhere
-class Logging a where
-  getLogger :: a -> LogChannel
-
-instance Logging LogChannel where
-  getLogger = id
-
--- | If a process has access to a logging channel, it is able to log messages to the world
-log :: Logging a => String -> Process a b ()
-log msg = do
-    logC <- asks getLogger
-    liftIO $ logMsg logC msg
-
 
