@@ -187,7 +187,7 @@ timerUpdate :: Integer -> Integer -> Process CF ST ()
 timerUpdate timeout minTimeout = do
     t <- tick
     ch <- asks trackerMsgCh
-    liftIO $ TimerP.register timeout (TrackerTick t) ch
+    TimerP.register timeout (TrackerTick t) ch
     logDebug $ "Set timer to: " ++ show timeout
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })
