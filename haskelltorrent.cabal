@@ -1,6 +1,8 @@
 name: HaskellTorrent
 version: 0.0
-cabal-version: >= 1.2
+category: Network
+description: A bittorrent client
+cabal-version: >= 1.6
 
 license: BSD3
 license-file: LICENSE
