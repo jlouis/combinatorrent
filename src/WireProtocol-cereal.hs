@@ -120,38 +120,40 @@ byte w = do
 --   where caps = extensionBasis
 --         sz = length protocolHeader
 
+protocolHeaderSize = length protocolHeader
+
 
 -- | Protocol handshake code. This encodes the protocol handshake part
 protocolHandshake :: L.ByteString
 protocolHandshake = L.fromChunks . map runPut $
-                    [putWord8 $ fromIntegral sz,
+                    [putWord8 $ fromIntegral protocolHeaderSize,
                      mapM_ (putWord8 . fromIntegral . ord) protocolHeader,
                      putWord64be extensionBasis]
-  where sz = length protocolHeader
 
+toBS :: String -> B.ByteString
+toBS = B.pack . map toW8
 
+toW8 :: Char -> Word8
+toW8 = fromIntegral . ord
 
--- 
 -- | Receive the header parts from the other end
--- receiveHeader :: Handle
---               -> Int
---               -> InfoHash
---               -> IO (Either String ([Capabilities], L.ByteString))
--- receiveHeader h sz ih = parseHeader `fmap` L.hGet h sz
---     -- do handshake <- L.hGet h sz
---     --    return $ parseHeader handshake
---   where protocolHeaderSize = length protocolHeader
---         parseHeader = runParser parser
---         parser =
---             do hdSz <- getWord8
---                when (fromIntegral hdSz /= protocolHeaderSize) $ fail "Wrong header size"
---                protoString <- getString protocolHeaderSize
---                when (protoString /= protocolHeader) $ fail "Wrong protocol header"
---                caps <- getWord64be
---                ihR   <- getLazyByteString 20
---                when (ihR /= ih) $ fail "Wrong InfoHash"
---                pid <- getLazyByteString 20
---                return (decodeCapabilities caps, pid)
+receiveHeader :: Handle -> Int -> InfoHash
+              -> IO (Either String ([Capabilities], L.ByteString))
+receiveHeader h sz ih = parseHeader `fmap` B.hGet h sz
+  where parseHeader = runGet (headerParser ih)
+
+headerParser :: InfoHash -> Get ([Capabilities], L.ByteString)
+headerParser ih = do
+    hdSz <- getWord8
+    when (fromIntegral hdSz /= protocolHeaderSize) $ fail "Wrong header size"
+    protoString <- getByteString protocolHeaderSize
+    when (protoString /= toBS protocolHeader) $ fail "Wrong protocol header"
+    caps <- getWord64be
+    ihR   <- getLazyByteString 20
+    when (ihR /= ih) $ fail "Wrong InfoHash"
+    pid <- getLazyByteString 20
+    return (decodeCapabilities caps, pid)
+
 
 data Capabilities = Fast
 -- 
@@ -167,9 +169,9 @@ initiateHandshake logC handle peerid infohash = do
     hFlush handle
     logMsg logC "Receiving handshake from other end"
     receiveHeader handle sz infohash -- TODO: Exceptions
-  where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
-                                          fromLazyByteString infohash,
-                                          putString peerid]
+  where msg = L.fromChunks . map runPut $ [putLazyByteString protocolHandshake,
+                                          putLazyByteString infohash,
+                                          putByteString . toBS $ peerid]
         sz = fromIntegral (L.length msg)
 -- 
 -- -- TESTS
@@ -181,19 +183,21 @@ testDecodeEncodeProp1 m =
          Left _ -> False
          Right m' -> m == m'
 
--- A fairly comprehensive test to use:
 -- Prelude.map testDecodeEncodeProp1 
---  [KeepAlive,
---   Choke,
---   Unchoke,
---   Interested,
---   NotInterested,
---   Have 0,
---   Have 1, =
---   Have 1934729,
---   BitField (Data.ByteString.Lazy.pack [1,2,3]),
---   Request 123 (Block 4 7),
---   Piece 5 7 (Data.ByteString.pack [1,2,3,4,5,6,7,8,9,0]),
---   Cancel 5 (Block 6 7), Port 123]
+testData = [KeepAlive,
+            Choke,
+            Unchoke,
+            Interested,
+            NotInterested,
+            Have 0,
+            Have 1,
+            Have 1934729,
+            BitField (L.pack [1,2,3]),
+            Request 123 (Block 4 7),
+            Piece 5 7 (B.pack [1,2,3,4,5,6,7,8,9,0]),
+            Piece 5 7 (B.pack (concat . replicate 30 $ [minBound..maxBound])),
+            Cancel 5 (Block 6 7),
+            Port 123
+           ]
 -- Currently returns all True
 
