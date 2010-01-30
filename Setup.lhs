@@ -1,3 +1,7 @@
 #!/usr/bin/env runhaskell
-> import Distribution.Simple
-> main = defaultMain
+
+In principle, we could do with a lot less than autoconfUserhooks, but simpleUserHooks
+is not running 'configure'.
+
+>import Distribution.Simple
+>main = defaultMainWithHooks autoconfUserHooks

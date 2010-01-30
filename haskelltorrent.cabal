@@ -10,6 +10,7 @@ maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
 synopsis: A Haskell Bittorrent client
 build-type: Simple
+extra-tmp-files: src/Version.hs
 
 executable HaskellTorrent
   hs-source-dirs: src

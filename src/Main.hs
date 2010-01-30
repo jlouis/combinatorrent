@@ -26,13 +26,15 @@ import Supervisor
 import qualified TimerP()
 import Torrent
 import qualified TrackerP
+import Version
 
 main :: IO ()
 main = getArgs >>= run
 
 
 run :: [String] -> IO ()
-run args =
+run args = do
+    putStrLn $ "This is Haskell-torrent version " ++ version
     case args of
         []       -> putStrLn "*** Usage: haskellTorrent <file.torrent>"
         (name:_) -> download name

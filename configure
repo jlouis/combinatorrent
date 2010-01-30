@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Simple configuration script.
+
+## Git version
+GITHEAD="Unknown/Hackage"
+if test -d "${GIT_DIR:-.git}" ; then
+    GITHEAD=`git describe 2>/dev/null`
+
+    if test -z ${GITHEAD} ; then
+        GITHEAD=`git rev-parse HEAD`
+    fi
+
+    if test -n "`git diff-index -m --name-only HEAD`" ; then
+        GITHEAD="${GITHEAD}-dirty"
+    fi
+fi
+
+sed -e "s/@GITHEAD@/$GITHEAD/g" src/Version.hs.in > src/Version.hs
+
+
