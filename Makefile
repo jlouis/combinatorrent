@@ -6,7 +6,7 @@ clean:
 	runghc Setup.lhs clean
 
 conf:
-	runghc Setup.lhs configure --user
+	runghc Setup.lhs configure --flags=debug --user
 
 rebuild: configure build
 
