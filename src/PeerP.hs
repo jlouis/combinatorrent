@@ -274,7 +274,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
 	    -- Install the StatusP timer
 	    c <- asks timerCh
-	    liftIO $ TimerP.register 30 () c
+	    TimerP.register 30 () c
 	    foreverP (recvEvt >> fillBlocks)
 	cleanup = do
 	    t <- liftIO myThreadId
@@ -312,7 +312,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    wrapP evt (\() -> do
 		logDebug "TimerEvent"
 	        tch <- asks timerCh
-		liftIO $ TimerP.register 30 () tch
+		TimerP.register 30 () tch
 		ur <- gets upRate
 		dr <- gets downRate
 		let (upCnt, nuRate) = RC.extractCount $ ur

@@ -87,7 +87,7 @@ start logC ch infoC ur weSeed supC = do
 						         $ peerMap s}))
     tick = do logDebug "Ticked"
 	      ch <- asks mgrCh
-	      liftIO $ TimerP.register 10 Tick ch
+	      TimerP.register 10 Tick ch
 	      updateDB
 	      runRechokeRound
     removePeer tid = modify (\db -> db { peerMap = M.delete tid (peerMap db) })

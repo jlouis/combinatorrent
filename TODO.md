@@ -59,6 +59,7 @@ wish-list.
    - Make the client ignore log messages beneath a certain log level
    - Make the client be able to select what processes that are allowed to
      log what (perhaps write a DSL for it).
+   - When closing, gracefully tell the tracker about it.
 
 Known Bugs
 ----------

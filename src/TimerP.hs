@@ -47,12 +47,16 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Monad.Trans
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
-register :: Integer -> a -> Channel a -> IO ()
-register secs v tickChan = do spawn timerProcess
-                              return ()
+registerL :: Integer -> a -> Channel a -> IO ()
+registerL secs v tickChan = do spawn timerProcess
+                               return ()
   where timerProcess = do threadDelay $ fromInteger $ secs * 1000000
                           sync $ transmit tickChan v
 
+
+register :: MonadIO m => Integer -> a -> Channel a -> m ()
+register secs v c = liftIO $ registerL secs v c
