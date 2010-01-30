@@ -15,6 +15,8 @@ import qualified Data.Set as S
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Monad
+import Control.Monad.State
+import Control.Monad.Reader
 
 import System.Random
 
@@ -22,6 +24,7 @@ import ChokeMgrP hiding (start)
 import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
+import Process
 import Logging
 import FSP hiding (start)
 import StatusP hiding (start)
@@ -29,17 +32,23 @@ import Supervisor
 import Torrent hiding (infoHash)
 
 
-data State = MkState { peerCh :: Channel [Peer],
-                       pieceMgrCh :: PieceMgrChannel,
-                       peersInQueue  :: [Peer],
-                       mgrCh :: Channel MgrMessage,
-                       peers :: M.Map ThreadId (Channel PeerMessage),
-                       peerId :: PeerId,
-                       infoHash :: InfoHash,
-                       fsCh :: FSPChannel,
-                       peerPool :: SupervisorChan,
-                       logCh :: LogChannel
-		       }
+data CF = CF { peerCh :: Channel [Peer]
+	     , pieceMgrCh :: PieceMgrChannel
+	     , mgrCh :: Channel MgrMessage
+	     , fsCh  :: FSPChannel
+	     , peerPool :: SupervisorChan
+	     , chokeMgrCh :: ChokeMgrChannel
+	     , logCh :: LogChannel
+	     }
+
+instance Logging CF where
+  getLogger cf = ("PeerMgrP", logCh cf)
+
+data ST = ST { peersInQueue  :: [Peer]
+             , peers :: M.Map ThreadId (Channel PeerMessage)
+             , peerId :: PeerId
+             , infoHash :: InfoHash
+	     }
 
 start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
       -> LogChannel -> ChokeMgrChannel -> StatusChan -> Int -> SupervisorChan
@@ -48,33 +57,43 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne [] fakeChan
-       spawn $ startup (MkState ch pieceMgrC [] mgrC M.empty pid ih fsC pool logC)
-  where startup s = Supervisor.defaultStartup supC "PeerMgr" (lp s)
-	lp s = do logMsg logC "Looping PeerMgr"
-                  sync (choose [trackerPeers s, peerEvent s]) >>= fillPeers >>= lp
-        trackerPeers s = wrap (receive (peerCh s) (const True))
-                           (\ps ->
-                                do logMsg (logCh s) "Adding peers to queue"
-                                   return s { peersInQueue = ps ++ peersInQueue s })
-        peerEvent s = wrap (receive (mgrCh s) (const True))
-                        (\msg ->
-                             case msg of
-                               Connect tid c -> newPeer s tid c
-                               Disconnect tid -> removePeer s tid)
-        newPeer s tid c  = do logMsg (logCh s) "Unchoking new peer"
-			      ChokeMgrP.addPeer chokeMgrC tid c
-                              return s { peers = M.insert tid c (peers s)}
-        removePeer s tid = do logMsg (logCh s) "Deleting peer"
-			      ChokeMgrP.removePeer chokeMgrC tid
-                              return s { peers = M.delete tid (peers s) }
-        fillPeers s | M.size (peers s) > 40 = return s
-                    | otherwise =
-                        do let (toAdd, rest) = splitAt (40 - M.size (peers s)) (peersInQueue s)
-                           logMsg (logCh s) $ "Filling with up to " ++ show (40 - M.size (peers s)) ++ " peers"
-                           mapM_ (addPeer s) toAdd
-                           return s { peersInQueue = rest }
-        addPeer s (Peer hn prt) = do
-          logMsg (logCh s) "Adding peer"
-	  PeerP.connect (hn, prt, peerId s, infoHash s, pm) (peerPool s) (pieceMgrCh s) (fsCh s) (logCh s) statC (mgrCh s) nPieces
-          logMsg (logCh s) "... Added"
-
+       spawnP (CF ch pieceMgrC mgrC fsC pool chokeMgrC logC)
+              (ST [] M.empty pid ih) (catchP (forever lp)
+	                               (defaultStopHandler supC))
+  where
+    lp = do chooseP [trackerPeers, peerEvent] >>= syncP
+	    fillPeers
+    trackerPeers = do
+	ev <- recvPC peerCh
+	wrapP ev (\ps ->
+	    do logDebug "Adding peers to queue"
+	       modify (\s -> s { peersInQueue = ps ++ peersInQueue s }))
+    peerEvent = do
+	ev <- recvPC mgrCh
+	wrapP ev (\msg -> case msg of
+			    Connect tid c -> newPeer tid c
+			    Disconnect tid -> removePeer tid)
+    newPeer tid c = do logDebug $ "Adding new peer " ++ show tid
+		       sendPC chokeMgrCh (AddPeer tid c)
+		       modify (\s -> s { peers = M.insert tid c (peers s)})
+    removePeer tid = do logDebug $ "Removing peer " ++ show tid
+		        sendPC chokeMgrCh (RemovePeer tid)
+			modify (\s -> s { peers = M.delete tid (peers s)})
+    numPeers = 40
+    fillPeers = do
+	sz <- liftM M.size $ gets peers
+	when (sz < numPeers)
+	    (do q <- gets peersInQueue
+		let (toAdd, rest) = splitAt (numPeers - sz) q
+		logDebug $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
+		mapM_ addPeer toAdd
+		modify (\s -> s { peersInQueue = rest }))
+    addPeer (Peer hn prt) = do
+	pid <- gets peerId
+	ih  <- gets infoHash
+	pool <- asks peerPool
+	pmC  <- asks pieceMgrCh
+	fsC  <- asks fsCh
+	mgrC <- asks mgrCh
+	logC <- asks logCh
+	liftIO $ PeerP.connect (hn, prt, pid, ih, pm) pool pmC fsC logC statC mgrC nPieces

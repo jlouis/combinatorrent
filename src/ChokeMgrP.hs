@@ -1,11 +1,9 @@
 module ChokeMgrP (
     -- * Types, Channels
       ChokeMgrChannel
+    , ChokeMgrMsg(..)
     -- * Interface
     , start
-    -- * Helper functions
-    , removePeer
-    , addPeer
     )
 where
 
