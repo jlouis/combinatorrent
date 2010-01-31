@@ -13,7 +13,10 @@ import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.ByteString.Parser hiding (isEmpty)
+-- import Data.ByteString.Parser hiding (isEmpty)
+import Data.Serialize
+import Data.Serialize.Get
+
 import qualified Data.Map as M
 import Data.List (sort)
 import Data.Maybe
@@ -72,7 +75,7 @@ senderP logC handle ch = lp
                   Nothing -> return ()
                   Just m  -> do logMsg logC $ "Sending: " ++ show m
                                 let bs = encode m
-                                L.hPut handle bs
+                                B.hPut handle bs
                                 hFlush handle
                                 logMsg logC "Sent and flushed"
                                 lp
@@ -130,23 +133,23 @@ receiverP logC hndl = do ch <- channel
           if feof
             then do logMsg logC "Handle is closed, dying!"
                     return ()
-            else do bs' <- L.hGet hndl 4
+            else do bs' <- B.hGet hndl 4
                     l <- conv bs'
                     readMessage l ch
         readMessage l ch = do
           when (l == 0) (lp ch)
           logMsg logC $ "Reading off " ++ show l ++ " bytes"
-          bs <- L.hGet hndl (fromIntegral l)
-          case runParser decodeMsg bs of
+          bs <- B.hGet hndl (fromIntegral l)
+          case runGet decodeMsg bs of
             Left _ -> do sync $ transmit ch Nothing
                          logMsg logC "Incorrect parse in receiver, dying!"
                          return () -- Die!
             Right msg -> do sync $ transmit ch (Just msg)
                             lp ch
-        conv :: L.ByteString -> IO Word32
+        conv :: B.ByteString -> IO Word32
         conv bs = do
-          logMsg logC $ show $ L.length bs
-          case runParser getWord32be bs of
+          logMsg logC $ show $ B.length bs
+          case runGet getWord32be bs of
                     Left err -> do logMsg logC $ "Incorrent parse in receiver, dying: " ++ show err
                                    error "receiverP: Incorrent length in receiver, dying!"
                     Right i -> return i
