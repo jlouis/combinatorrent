@@ -31,7 +31,7 @@ import PeerTypes
 import PieceMgrP hiding (start)
 import Process
 import Logging
-import FSP hiding (start, State)
+import FSP hiding (start)
 import Supervisor
 import Torrent hiding (infoHash)
 import TimerP

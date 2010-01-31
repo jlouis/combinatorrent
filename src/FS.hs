@@ -84,8 +84,8 @@ writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
-checkPiece :: Handle -> PieceInfo -> IO Bool
-checkPiece h inf = do
+checkPiece :: PieceInfo -> Handle -> IO Bool
+checkPiece inf h = do
   hSeek h AbsoluteSeek (offset inf)
   bs <- L.hGet h (fromInteger . len $ inf)
   return $ D.digest bs == digest inf
@@ -99,7 +99,7 @@ checkFile handle pm = do l <- mapM checkP pieces
                          return $ M.fromList l
     where pieces = M.toAscList pm
           checkP :: (PieceNum, PieceInfo) -> IO (PieceNum, Bool)
-          checkP (pn, pInfo) = do b <- checkPiece handle pInfo
+          checkP (pn, pInfo) = do b <- checkPiece pInfo handle
                                   return (pn, b)
 
 -- | Extract the PieceMap from a bcoded structure
