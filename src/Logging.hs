@@ -21,6 +21,8 @@ where
 import Control.Concurrent.CML
 import Control.Monad.Reader
 
+import Data.Monoid
+
 import Prelude hiding (log)
 
 import Process
@@ -31,15 +33,36 @@ data LogPriority = Debug -- ^ Fine grained debug info
 		 | Info  -- ^ Informational messages, progress reports
 		 | Error -- ^ Errors that are continuable
 		 | Fatal -- ^ Severe errors. Will probably make the application abort
+		 | None  -- ^ No logging at all
 		    deriving (Show, Eq, Ord)
 
+
+-- Logging filters
+type LogFilter = String -> LogPriority
+
+matchP :: String -> LogPriority -> LogFilter
+matchP process prio = \s -> if s == process then prio else None
+
+matchAny :: LogPriority -> LogFilter
+matchAny prio = const prio
+
+matchNone :: LogFilter
+matchNone = const None
+
+instance Monoid LogFilter where
+    mempty = const None
+    mappend f g = \x ->
+		    let fx = f x
+		    in if fx /= None then fx else g x
+
 -- | The level by which we log
-logLevel :: LogPriority
+logLevel :: LogFilter
 #ifdef DEBUG
-logLevel = Debug
+logLevel = matchAny Debug
 #else
-logLevel = Info
+logLevel = matchAny Info
 #endif
+
 
 -- | The class of types where we have a logger inside them somewhere
 class Logging a where
@@ -60,10 +83,10 @@ type LogChannel = Channel LogMsg
 
 -- | If a process has access to a logging channel, it is able to log messages to the world
 log :: Logging a => LogPriority -> String -> Process a b ()
-log prio _   | prio < logLevel = return ()
-log prio msg | otherwise = do
-		(name, logC) <- asks getLogger
-		liftIO $ logMsg' logC name prio msg
+log prio msg = do
+	(name, logC) <- asks getLogger
+	when (prio >= logLevel name)
+		(liftIO $ logMsg' logC name prio msg)
 
 logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
 logInfo  = log Info
@@ -78,5 +101,4 @@ logMsg c m = logMsg' c "Unknown" Info m
 
 -- | Log a message to a channel with a priority
 logMsg' :: LogChannel -> String -> LogPriority -> String -> IO ()
-logMsg' c name pri | pri < logLevel = const $ return ()
-                   | otherwise      = sync . transmit c . Mes pri name
+logMsg' c name pri = sync . transmit c . Mes pri name
