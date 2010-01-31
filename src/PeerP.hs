@@ -39,7 +39,7 @@ import System.IO
 import PeerTypes
 import Process
 import Logging
-import FSP hiding (pieceMap)
+import FSP
 import PieceMgrP
 import qualified Queue as Q
 import RateCalc as RC

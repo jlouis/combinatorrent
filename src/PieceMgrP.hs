@@ -24,7 +24,7 @@ import Prelude hiding (log)
 import System.Random
 
 import Logging
-import FSP hiding (start, fspCh)
+import FSP hiding (start)
 import StatusP as STP hiding (start) 
 import Supervisor
 import Torrent
