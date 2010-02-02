@@ -11,5 +11,6 @@ Main
 *.orig
 /src/Version.hs
 *.swp
+*.swo
 /tags
 /TAGS
