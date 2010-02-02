@@ -56,7 +56,7 @@ start :: Channel [Peer] -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> 
 start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
-       pool <- liftM snd $ oneForOne [] fakeChan
+       pool <- liftM snd $ oneForOne "PeerPool" [] logC fakeChan
        spawnP (CF ch pieceMgrC mgrC fsC pool chokeMgrC logC)
               (ST [] M.empty pid ih) (catchP (forever lp)
 	                               (defaultStopHandler supC))
@@ -70,14 +70,15 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
 	       modify (\s -> s { peersInQueue = ps ++ peersInQueue s }))
     peerEvent = do
 	ev <- recvPC mgrCh
-	wrapP ev (\msg -> case msg of
-			    Connect tid c -> newPeer tid c
-			    Disconnect tid -> removePeer tid)
+	wrapP ev (\msg -> do
+		case msg of
+		    Connect tid c -> newPeer tid c
+		    Disconnect tid -> removePeer tid)
     newPeer tid c = do logDebug $ "Adding new peer " ++ show tid
-		       sendPC chokeMgrCh (AddPeer tid c)
+		       sendPC chokeMgrCh (AddPeer tid c) >>= syncP
 		       modify (\s -> s { peers = M.insert tid c (peers s)})
     removePeer tid = do logDebug $ "Removing peer " ++ show tid
-		        sendPC chokeMgrCh (RemovePeer tid)
+		        sendPC chokeMgrCh (RemovePeer tid) >>= syncP
 			modify (\s -> s { peers = M.delete tid (peers s)})
     numPeers = 40
     fillPeers = do

@@ -20,13 +20,19 @@ module Process (
     , sendPC
     , recvP
     , recvPC
+    , recvWrapPC
     , wrapP
     , stopP
-    -- * Helpers
-    , defaultStopHandler
+    -- * Interface
+    , logInfo
+    , logDebug
+    , logWarn
+    , logFatal
+    , logError
     )
 where
 
+import Data.Monoid
 import Control.Applicative
 
 import Control.Concurrent
@@ -39,11 +45,12 @@ import Control.Monad.State
 
 import Data.Typeable
 
+import LoggingTypes
 import Prelude hiding (catch, log)
 
 import System.IO
 
-import Supervisor
+-- import Supervisor
 
 
 -- | A @Process a b c@ is the type of processes with access to configuration data @a@, state @b@
@@ -75,23 +82,26 @@ spawnP c st p = spawn proc
 
 -- | Run the process monad for its side effect, with a stopHandler if exceptions
 --   are raised in the process
-catchP :: Process a b () -> Process a b () -> Process a b ()
+catchP :: Logging a => Process a b () -> Process a b () -> Process a b ()
 catchP proc stopH = cleanupP proc stopH (return ())
 
 -- | Run the process monad for its side effect. @cleanupP p sh ch@ describes to
 --   run @p@. If @p@ dies by a kill from a supervisor, run @ch@. Otherwise it runs
 --   @ch >> sh@ on death.
-cleanupP :: Process a b () -> Process a b () -> Process a b () -> Process a b ()
+cleanupP :: Logging a => Process a b () -> Process a b () -> Process a b () -> Process a b ()
 cleanupP proc stopH cleanupH = do
   st <- get
   c  <- ask
   (a, s') <- liftIO $ runP c st proc `catches`
 		[ Handler (\ThreadKilled -> do
-		    do runP c st cleanupH)
+		    runP c st ( do logDebug $ "Process Terminating by Supervisor"
+				   cleanupH ))
 		, Handler (\StopException -> 
-		    do runP c st (cleanupH >> stopH)) -- This one is ok
+		     runP c st (do logDebug $ "Process Terminating gracefully"
+				   cleanupH >> stopH)) -- This one is ok
 		, Handler (\(ex :: SomeException) ->
-		    do hPrint stderr ex; runP c st (cleanupH >> stopH))
+		    runP c st (do logFatal $ "Process exiting due to ex: " ++ show ex
+				  cleanupH >> stopH))
 		]
   put s'
   return a
@@ -128,10 +138,58 @@ wrapP ev p = do
     c <- ask
     return $ wrap ev (\(v, s) -> runP c s (p v))
 
+-- Convenience function
+recvWrapPC :: (a -> Channel c) -> (c -> Process a b y) -> Process a b (Event (y, b))
+recvWrapPC sel p = do
+    ev <- recvPC sel
+    wrapP ev p
+
 chooseP :: [Process a b (Event (c, b))] -> Process a b (Event (c, b))
 chooseP events = (sequence events) >>= (return . choose)
 
-defaultStopHandler supC = do
-    t <- liftIO $ myThreadId
-    syncP =<< (sendP supC $ IAmDying t)
+------ LOGGING
 
+
+
+
+-- | If a process has access to a logging channel, it is able to log messages to the world
+log :: Logging a => LogPriority -> String -> Process a b ()
+log prio msg = do
+	(name, logC) <- asks getLogger
+	when (prio >= logLevel name)
+		(liftIO $ logMsg' logC name prio msg)
+  where logMsg' c name pri = sync . transmit c . Mes pri name
+
+logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
+logInfo  = log Info
+
+-- Logging filters
+type LogFilter = String -> LogPriority
+
+matchP :: String -> LogPriority -> LogFilter
+matchP process prio = \s -> if s == process then prio else None
+
+matchAny :: LogPriority -> LogFilter
+matchAny prio = const prio
+
+matchNone :: LogFilter
+matchNone = const None
+
+instance Monoid LogFilter where
+    mempty = const None
+    mappend f g = \x ->
+		let fx = f x
+		in if fx /= None then fx else g x
+
+-- | The level by which we log
+logLevel :: LogFilter
+#ifdef DEBUG
+logLevel = matchAny Debug
+#else
+logLevel = matchAny Info
+#endif
+
+logDebug = log Debug
+logFatal = log Fatal
+logWarn  = log Warn
+logError = log Error

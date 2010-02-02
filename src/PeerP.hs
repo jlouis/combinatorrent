@@ -84,7 +84,7 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
                   do logMsg logC "entering peerP loop code"
 		     supC <- channel -- TODO: Should be linked later on
 		     children <- peerChildren logC h mgrC pieceMgrC fsC statC pm nPieces
-		     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne children)
+		     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children logC)
 		     return ()
 
 -- INTERNAL FUNCTIONS

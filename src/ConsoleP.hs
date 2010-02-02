@@ -36,8 +36,11 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Exception
+import Control.Monad
+import Control.Monad.Reader
 
 import Prelude hiding (catch)
+import Process
 
 import Logging
 import Supervisor
@@ -47,23 +50,26 @@ data Cmd = Quit -- Quit the program
 
 type CmdChannel = Channel Cmd
 
+data CF = CF { cmdCh :: CmdChannel
+	     , logCh :: LogChannel }
+
+instance Logging CF where
+    getLogger cf = ("ConsoleP", logCh cf)
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
 start :: LogChannel -> Channel () -> SupervisorChan -> IO ThreadId
 start logC waitC supC = do
     cmdC <- readerP logC -- We shouldn't be doing this in the long run
-    spawn $ startup cmdC
-  where startup cmdC = logger cmdC `catches`
-	       [Handler (\ThreadKilled -> return ()),
-	        Handler (\(ex :: SomeException) ->
-	          putStrLn $ "Unknown Message to the consoleP: " ++ show ex)]
-	logger cmdC = (sync $ choose [logEvent, quitEvent cmdC]) >> logger cmdC
-	logEvent = wrap (receive logC (const True))
-                      print
-        quitEvent cmdC = wrap (receive cmdC (==Quit))
-		    (\_ -> sync $ transmit waitC ())
-
+    spawnP (CF cmdC logC) () (catchP (forever lp) (defaultStopHandler supC))
+  where
+    lp = syncP =<< quitEvent
+    quitEvent = do
+	ch <- asks cmdCh
+	ev <- recvP ch (==Quit)
+	wrapP ev 
+	    (\_ -> syncP =<< sendP waitC ())
+	
 
 readerP :: LogChannel -> IO CmdChannel
 readerP logCh = do cmdCh <- channel

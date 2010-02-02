@@ -72,6 +72,7 @@ start logC ch infoC ur weSeed supC = do
 			Tick                 -> tick
 			RemovePeer t         -> removePeer t
 			AddPeer t pCh -> do
+			    logDebug $ "Adding peer " ++ show t
 			    weSeed <- gets seeding
 			    addPeer' pCh weSeed t)
     infoEvent = do
@@ -88,13 +89,8 @@ start logC ch infoC ur weSeed supC = do
 	      TimerP.register 10 Tick ch
 	      updateDB
 	      runRechokeRound
-    removePeer tid = modify (\db -> db { peerMap = M.delete tid (peerMap db) })
-
-addPeer :: ChokeMgrChannel -> PeerPid -> PeerChannel -> IO ()
-addPeer ch pid = sync . transmit ch . (AddPeer pid)
-
-removePeer :: ChokeMgrChannel -> PeerPid -> IO ()
-removePeer ch pid = sync $ transmit ch $ RemovePeer pid
+    removePeer tid = do logDebug $ "Removing peer " ++ show tid
+			modify (\db -> db { peerMap = M.delete tid (peerMap db) })
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
