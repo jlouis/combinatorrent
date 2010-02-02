@@ -94,7 +94,7 @@ cleanupP proc stopH cleanupH = do
   c  <- ask
   (a, s') <- liftIO $ runP c st proc `catches`
 		[ Handler (\ThreadKilled -> do
-		    runP c st ( do logDebug $ "Process Terminating by Supervisor"
+		    runP c st ( do logDebug $ "Process Terminated by Supervisor"
 				   cleanupH ))
 		, Handler (\StopException -> 
 		     runP c st (do logDebug $ "Process Terminating gracefully"
