@@ -149,9 +149,6 @@ chooseP events = (sequence events) >>= (return . choose)
 
 ------ LOGGING
 
-
-
-
 -- | If a process has access to a logging channel, it is able to log messages to the world
 log :: Logging a => LogPriority -> String -> Process a b ()
 log prio msg = do
@@ -162,6 +159,10 @@ log prio msg = do
 
 logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
 logInfo  = log Info
+logDebug = log Debug
+logFatal = log Fatal
+logWarn  = log Warn
+logError = log Error
 
 -- Logging filters
 type LogFilter = String -> LogPriority
@@ -175,21 +176,18 @@ matchAny prio = const prio
 matchNone :: LogFilter
 matchNone = const None
 
-instance Monoid LogFilter where
-    mempty = const None
-    mappend f g = \x ->
-		let fx = f x
-		in if fx /= None then fx else g x
+instance Monoid LogPriority where
+    mempty = None
+    mappend None g = g
+    mappend f g    = f
 
 -- | The level by which we log
 logLevel :: LogFilter
 #ifdef DEBUG
-logLevel = matchAny Debug
+logLevel = mconcat [matchP "SendQueueP" Fatal,
+		    matchP "ReceiverP" Fatal,
+		    matchAny Debug]
 #else
 logLevel = matchAny Info
 #endif
 
-logDebug = log Debug
-logFatal = log Fatal
-logWarn  = log Warn
-logError = log Error
