@@ -96,10 +96,10 @@ instance Show TrackerState where
 --   not the data structure we would like to work with. Hence, we parse the structure into
 --   the ADT below.
 data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
-                                    completeR :: Integer,
-                                    incompleteR :: Integer,
+                                    completeR :: Maybe Integer,
+                                    incompleteR :: Maybe Integer,
                                     timeoutInterval :: Integer,
-                                    timeoutMinInterval :: Integer }
+                                    timeoutMinInterval :: Maybe Integer }
                      | ResponseDecodeError B.ByteString
                      | ResponseWarning B.ByteString
                      | ResponseError B.ByteString
@@ -167,23 +167,23 @@ pokeTracker = do
     resp <- trackerRequest uri
     case resp of
 	Left err -> do logInfo $ "Tracker HTTP Error: " ++ err
-		       timerUpdate failTimerInterval failTimerInterval
+		       timerUpdate failTimerInterval $ Just failTimerInterval
 	Right (ResponseWarning wrn) ->
 		    do logInfo $ "Tracker Warning Response: " ++ fromBS wrn
-		       timerUpdate failTimerInterval failTimerInterval
+		       timerUpdate failTimerInterval $ Just failTimerInterval
         Right (ResponseError err) ->
                     do logInfo $ "Tracker Error Response: " ++ fromBS err
-                       timerUpdate failTimerInterval failTimerInterval
+                       timerUpdate failTimerInterval $ Just failTimerInterval
         Right (ResponseDecodeError err) ->
                     do logInfo $ "Response Decode error: " ++ fromBS err
-                       timerUpdate failTimerInterval failTimerInterval
+                       timerUpdate failTimerInterval $ Just failTimerInterval
         Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
 		       let trackerStats = StatusP.TrackerStat { StatusP.trackComplete = completeR bc,
 					                        StatusP.trackIncomplete = incompleteR bc }
 	               sendPC statusPCh trackerStats  >>= syncP
                        timerUpdate (timeoutInterval bc) (timeoutMinInterval bc)
 
-timerUpdate :: Integer -> Integer -> Process CF ST ()
+timerUpdate :: Integer -> Maybe Integer -> Process CF ST ()
 timerUpdate timeout minTimeout = do
     t <- tick
     ch <- asks trackerMsgCh
@@ -206,10 +206,10 @@ processResultDict d =
                                 Just rok -> rok
   where decodeOk =
             ResponseOk <$> (decodeIps <$> BCode.trackerPeers d)
-                       <*> BCode.trackerComplete d
-                       <*> BCode.trackerIncomplete d
-                       <*> BCode.trackerInterval d
-                       <*> BCode.trackerMinInterval d
+                       <*> (pure $ BCode.trackerComplete d)
+                       <*> (pure $ BCode.trackerIncomplete d)
+                       <*> (BCode.trackerInterval d)
+                       <*> (pure $ BCode.trackerMinInterval d)
 
 
 decodeIps :: B.ByteString -> [PeerMgrP.Peer]

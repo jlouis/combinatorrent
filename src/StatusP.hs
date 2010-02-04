@@ -55,8 +55,8 @@ import Process
 import Supervisor
 import Torrent
 
-data StatusMsg = TrackerStat { trackIncomplete :: Integer
-			     , trackComplete   :: Integer }
+data StatusMsg = TrackerStat { trackIncomplete :: Maybe Integer
+			     , trackComplete   :: Maybe Integer }
 	       | CompletedPiece Integer
 	       | PeerStat { peerUploaded :: Integer
 			  , peerDownloaded :: Integer }
@@ -74,8 +74,8 @@ instance Logging CF where
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
                left :: Integer,
-               incomplete :: Integer,
-               complete :: Integer,
+               incomplete :: Maybe Integer,
+               complete :: Maybe Integer,
                state :: TorrentState }
 
 -- | Start a new Status process with an initial torrent state and a
@@ -83,7 +83,7 @@ data ST = ST { uploaded :: Integer,
 start :: LogChannel -> Integer -> TorrentState -> Channel ST
       -> Channel StatusMsg -> SupervisorChan -> IO ThreadId
 start logC l tState trackerC statusC supC = do
-    spawnP (CF logC statusC trackerC) (ST 0 0 l 0 0 tState)
+    spawnP (CF logC statusC trackerC) (ST 0 0 l Nothing Nothing tState)
 	(catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
