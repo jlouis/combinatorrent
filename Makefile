@@ -1,4 +1,4 @@
-.PHONY: build clean rebuild local-install haddock hlint etags ctags conf dist-rebuild
+.PHONY: build clean rebuild local-install haddock hlint etags ctags conf dist-rebuild conf-nodebug
 build:
 	runghc Setup.lhs build
 
@@ -7,6 +7,9 @@ clean:
 
 conf:
 	runghc Setup.lhs configure --flags=debug --user
+
+conf-nodebug:
+	runghc Setup.lhs configure --user
 
 rebuild: configure build
 
