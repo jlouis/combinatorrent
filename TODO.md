@@ -84,11 +84,7 @@ Before releasing into the "wild"
    - We currently take space proportional to torrent size due to our SHA1
      calculation being slow and not use a file descriptor. Research into a
      faster SHA1 library would be really beneficial.
-   - Handle Endgame. Endgame is nasty but necessary.
-     Here is the list of what to do:
-        * Enable handling of CANCEL messages from the ChokeMgr in Peers.
-        * When peer completes a block, broadcast CANCEL messages through
-          ChokeMgrP
+   - Debug the Choke manager code. Something looks rather wrong in there.
 
 Items for later (no particular order)
 -------------------------------------
