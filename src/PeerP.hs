@@ -281,7 +281,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    -- Install the StatusP timer
 	    c <- asks timerCh
 	    TimerP.register 30 () c
-	    foreverP (recvEvt >> fillBlocks)
+	    foreverP (recvEvt)
 	cleanup = do
 	    t <- liftIO myThreadId
 	    syncP =<< sendPC peerMgrCh (Disconnect t)
@@ -341,14 +341,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		  KeepAlive  -> return ()
 		  Choke      -> do putbackBlocks
 		                   modify (\s -> s { peerChoke = True })
-		  Unchoke    -> modify (\s -> s { peerChoke = False })
-                  -- The next two is dependent in the PeerManager being more clever
+		  Unchoke    -> do modify (\s -> s { peerChoke = False })
+		                   fillBlocks
                   Interested -> modify (\s -> s { peerInterested = True })
 		  NotInterested -> modify (\s -> s { peerInterested = False })
 		  Have pn -> haveMsg pn
 		  BitField bf -> bitfieldMsg bf
 		  Request pn blk -> requestMsg pn blk
-		  Piece n os bs -> pieceMsg n os bs
+		  Piece n os bs -> do pieceMsg n os bs
+				      fillBlocks
 		  Cancel pn blk -> cancelMsg pn blk
 		  Port _ -> return ()) -- No DHT yet, silently ignore
 	putbackBlocks = do
