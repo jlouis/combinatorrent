@@ -109,7 +109,10 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       return . M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
+		       let pm = M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
+		       when ( tLen /= (sum $ map len $ M.elems pm) )
+			    (error "PieceMap construction size assertion failed")
+		       return pm
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _    0     _    []       = []
         extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,

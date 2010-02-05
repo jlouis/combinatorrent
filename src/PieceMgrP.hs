@@ -60,7 +60,6 @@ data PieceDB = PieceDB
 --   check operations are then O(1) and probably fairly fast.
 data InProgressPiece = InProgressPiece
     { ipDone  :: Int -- ^ Number of blocks when piece is done
-    , ipSize  :: Int -- ^ Size of the Piece we are downloading
     , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
     , ipPendingBlocks :: [Block] -- ^ Blocks still pending
     } deriving Show
@@ -142,6 +141,10 @@ start logC mgrC fspC chokeC statC db supC =
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
+			       pend <- gets pendingPieces
+			       logInfo $ "Piece #" ++ show pn
+					 ++ " completed, there are " 
+					 ++ (show $ length pend) ++ " left"
 			       pm <- gets infoMap
 			       let l = len $ fromJust $ M.lookup pn pm
 			       sendPC statusCh (CompletedPiece l) >>= syncP
@@ -224,11 +227,14 @@ assertPieceComplete pn = do
     inprog <- gets inProgress
     let ipp = fromJust $ M.lookup pn inprog
     dl <- gets downloading
+    pm <- gets infoMap
+    sz <- return $ (len . fromJust) $ M.lookup pn pm
     unless (assertAllDownloaded dl pn)
       (fail "Could not assert that all pieces were downloaded when completing a piece")
-    unless (assertComplete ipp)
-      (fail $ "Could not assert completion of the piece with block state " ++ show ipp)
-  where assertComplete ip = checkContents 0 (ipSize ip) (S.toAscList (ipHaveBlocks ip))
+    unless (assertComplete ipp sz)
+      (fail $ "Could not assert completion of the piece #" ++ show pn
+		++ " with block state " ++ show ipp)
+  where assertComplete ip sz = checkContents 0 (fromIntegral sz) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs
         checkBlock (offs, left, state) blk = (offs + blockSize blk,
                                               left - blockSize blk,
@@ -241,12 +247,13 @@ assertPieceComplete pn = do
 -- | Update the progress on a Piece. When we get a block from the piece, we will
 --   track this in the Piece Database. This function returns a pair @(complete, nDb)@
 --   where @complete@ is @True@ if the piece is percieved to be complete and @False@
---   otherwise. @nDb@ is the updated Piece Database
+--   otherwise.
 updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
 updateProgress pn blk = do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
-      Nothing -> return False -- XXX: Ignore, this might be wrong
+      Nothing -> do logDebug "updateProgress can't find progress block, error?"
+		    return False
       Just pg ->
           let blkSet = ipHaveBlocks pg
           in if blk `S.member` blkSet
@@ -256,6 +263,7 @@ updateProgress pn blk = do
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = do
 	    modify (\db -> db { inProgress = M.adjust (const pg) pn (inProgress db) })
+	    logDebug $ "Iphave : " ++ show (ipHave pg) ++ " ipDone: " ++ show (ipDone pg)
 	    return (ipHave pg == ipDone pg)
         ipHave = S.size . ipHaveBlocks
 
@@ -314,8 +322,8 @@ grabBlocks' k eligible = do
 	      infMap <- gets infoMap
 	      inProg <- gets inProgress
               blockList <- createBlock h
-              let bSz = fromInteger . len $ fromJust $ M.lookup n infMap
-	          ipp = InProgressPiece 0 bSz S.empty blockList
+              let sz  = length blockList
+	          ipp = InProgressPiece sz S.empty blockList
               modify (\db -> db { pendingPieces = pendingPieces db \\ [h],
                                   inProgress    = M.insert h ipp inProg })
 	      tryGrabProgress n ps captured
@@ -388,6 +396,9 @@ assertPieceDB = assertPending >> assertDone >> assertInProgress >> assertDownloa
 	inProg <- gets inProgress
 	mapM_ checkInProgress $ M.toList inProg
     checkInProgress (pn, ipp) = do
+	when ( (S.size $ ipHaveBlocks ipp) >= ipDone ipp)
+	    (fail $ "Piece in progress " ++ show pn
+		    ++ " has downloaded more blocks than the piece has")
 	done <- gets donePiece
 	when (pn `elem` done)
 	    (fail $ "Piece in progress " ++ show pn ++ " is in the done list")
