@@ -393,8 +393,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    when (S.member e q)
 		(do storeBlock n (Block os sz) bs
 		    modify (\s -> s { blockQueue = S.delete e (blockQueue s)}))
-	    -- When e is not a member, the piece may be stray, so ignore it. Perhaps print something
-	    --   here.
+	    -- When e is not a member, the piece may be stray, so ignore it.
+	    -- Perhaps print something here.
 	cancelMsg n blk =
 	    syncP =<< sendPC outCh (SendQCancel n blk)
 	considerInterest = do
@@ -407,16 +407,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		        syncP =<< sendPC outCh (SendQMsg Interested)
 		else modify (\s -> s { weInterested = False})
         fillBlocks = do
-	    choking <- gets peerChoke
-	    unless choking checkWatermark
+	    choked <- gets peerChoke
+	    unless choked checkWatermark
         checkWatermark = do
 	    q <- gets blockQueue
 	    let sz = S.size q
 	    when (sz < loMark)
 		(do
-                   logDebug $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
 		   toQueue <- grabBlocks (hiMark - sz)
-                   logDebug $ "Got " ++ show (length toQueue) ++ " blocks"
+                   logDebug $ "Got " ++ show (length toQueue) ++ " blocks: " ++ show toQueue
                    queuePieces toQueue)
 	queuePieces toQueue = do
 	    mapM_ pushPiece toQueue

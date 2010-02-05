@@ -135,7 +135,8 @@ start logC mgrC fspC chokeC statC db supC =
 		       logDebug "Grabbed..."
 		       syncP =<< sendP c blocks
 		StoreBlock pn blk d ->
-		    do storeBlock pn blk d
+		    do logDebug $ "Storing block: " ++ show (pn, blk)
+		       storeBlock pn blk d
 		       modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
 		       handleEndGame pn blk
 		       done <- updateProgress pn blk
