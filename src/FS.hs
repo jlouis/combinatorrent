@@ -39,8 +39,9 @@ module FS (PieceInfo(..),
 where
 
 import Control.Monad
+import Control.Monad.State
 
-import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
 import Data.Maybe
@@ -88,7 +89,8 @@ checkPiece :: PieceInfo -> Handle -> IO Bool
 checkPiece inf h = do
   hSeek h AbsoluteSeek (offset inf)
   bs <- L.hGet h (fromInteger . len $ inf)
-  return $ D.digest bs == digest inf
+  dgs <- liftIO $ D.digest bs
+  return (dgs == digest inf)
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing
@@ -117,11 +119,11 @@ mkPieceMap bc = fetchData
         extract _    0     _    []       = []
         extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,
                                                           len = tlen,
-                                                          digest = L.fromChunks  [p] } : extract plen 0 (offst + plen) ps
+                                                          digest = B.unpack p } : extract plen 0 (offst + plen) ps
                                   | otherwise = inf : extract plen (tlen - plen) (offst + plen) ps
                                        where inf = PieceInfo { offset = offst,
                                                                len = plen,
-                                                               digest = L.fromChunks [p] }
+                                                               digest = B.unpack p }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
 
 -- | Predicate function. True if nothing is missing from the map.
