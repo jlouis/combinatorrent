@@ -16,6 +16,7 @@ data PeerMessage = ChokePeer
                  | UnchokePeer
                  | PeerStats UTCTime (Channel (Double, Double, Bool)) -- Up/Down/Interested
 		 | PieceCompleted PieceNum
+		 | CancelBlock PieceNum Block
 
 type PeerChannel = Channel PeerMessage
 

@@ -116,6 +116,7 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
                       | SendQMsg Message           -- ^ We want to send the Message to the peer
                       | SendOChoke                 -- ^ We want to choke the peer
+		      | SendQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
 
 data SQCF = SQCF { sqLogC :: LogChannel
 		 , sqInCh :: Channel SendQueueMessage
@@ -160,7 +161,9 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
 					   modifyQ (Q.push msg)
 			SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
 			SendOChoke -> do modifyQ (Q.filter filterAllPiece)
-					 modifyQ (Q.push Choke))
+					 modifyQ (Q.push Choke)
+			SendQRequestPrune n blk ->
+			    modifyQ (Q.filter (filterRequest n blk)))
     modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
@@ -176,7 +179,9 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     filterPiece n off m =
         case m of Piece n off _ -> False
                   _             -> True
-
+    filterRequest n blk m =
+	case m of Request n blk -> False
+	          _             -> True
 
 peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
 	     -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
@@ -245,14 +250,15 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 instance Logging PCF where
   getLogger cf = ("PeerP", logCh cf)
 
-data PST = PST { weChoke :: Bool
-	       , weInterested :: Bool
-	       , blockQueue :: S.Set (PieceNum, Block)
-	       , peerChoke :: Bool
-	       , peerInterested :: Bool
-	       , peerPieces :: [PieceNum]
-	       , upRate :: Rate
-	       , downRate :: Rate
+data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
+	       , weInterested :: Bool -- ^ True if we are interested in the peer
+	       , blockQueue :: S.Set (PieceNum, Block) -- ^ Blocks queued at the peer
+	       , peerChoke :: Bool -- ^ Is the peer choking us? True if yes
+	       , peerInterested :: Bool -- ^ True if the peer is interested
+	       , peerPieces :: [PieceNum] -- ^ List of pieces the peer has access to
+	       , upRate :: Rate -- ^ Upload rate towards the peer (estimated)
+	       , downRate :: Rate -- ^ Download rate from the peer (estimated)
+	       , runningEndgame :: Bool -- ^ True if we are in endgame
 	       }
 
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
@@ -264,7 +270,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
     tch <- channel
     ct <- getCurrentTime
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch statC pm)
-	   (PST True False S.empty True False [] (RC.new ct) (RC.new ct))
+	   (PST True False S.empty True False [] (RC.new ct) (RC.new ct) False)
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
@@ -275,7 +281,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    -- Install the StatusP timer
 	    c <- asks timerCh
 	    TimerP.register 30 () c
-	    foreverP (recvEvt >> fillBlocks)
+	    foreverP (recvEvt)
 	cleanup = do
 	    t <- liftIO myThreadId
 	    syncP =<< sendPC peerMgrCh (Disconnect t)
@@ -306,7 +312,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 			    (down, ndr) = RC.extractRate t dr
 			logInfo $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
 			sendP retCh (up, down, i) >>= syncP
-			modify (\s -> s { upRate = nur , downRate = ndr }))
+			modify (\s -> s { upRate = nur , downRate = ndr })
+		    CancelBlock pn blk -> do
+			modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
+			syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
 	timerEvent = do
 	    evt <- recvPC timerCh
 	    wrapP evt (\() -> do
@@ -332,14 +341,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		  KeepAlive  -> return ()
 		  Choke      -> do putbackBlocks
 		                   modify (\s -> s { peerChoke = True })
-		  Unchoke    -> modify (\s -> s { peerChoke = False })
-                  -- The next two is dependent in the PeerManager being more clever
+		  Unchoke    -> do modify (\s -> s { peerChoke = False })
+		                   fillBlocks
                   Interested -> modify (\s -> s { peerInterested = True })
 		  NotInterested -> modify (\s -> s { peerInterested = False })
 		  Have pn -> haveMsg pn
 		  BitField bf -> bitfieldMsg bf
 		  Request pn blk -> requestMsg pn blk
-		  Piece n os bs -> pieceMsg n os bs
+		  Piece n os bs -> do pieceMsg n os bs
+				      fillBlocks
 		  Cancel pn blk -> cancelMsg pn blk
 		  Port _ -> return ()) -- No DHT yet, silently ignore
 	putbackBlocks = do
@@ -383,8 +393,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    when (S.member e q)
 		(do storeBlock n (Block os sz) bs
 		    modify (\s -> s { blockQueue = S.delete e (blockQueue s)}))
-	    -- When e is not a member, the piece may be stray, so ignore it. Perhaps print something
-	    --   here.
+	    -- When e is not a member, the piece may be stray, so ignore it.
+	    -- Perhaps print something here.
 	cancelMsg n blk =
 	    syncP =<< sendPC outCh (SendQCancel n blk)
 	considerInterest = do
@@ -397,16 +407,15 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		        syncP =<< sendPC outCh (SendQMsg Interested)
 		else modify (\s -> s { weInterested = False})
         fillBlocks = do
-	    choking <- gets peerChoke
-	    unless choking checkWatermark
+	    choked <- gets peerChoke
+	    unless choked checkWatermark
         checkWatermark = do
 	    q <- gets blockQueue
 	    let sz = S.size q
 	    when (sz < loMark)
 		(do
-                   logDebug $ "Filling with " ++ show (hiMark - sz) ++ " pieces..."
 		   toQueue <- grabBlocks (hiMark - sz)
-                   logDebug $ "Got " ++ show (length toQueue) ++ " blocks"
+                   logDebug $ "Got " ++ show (length toQueue) ++ " blocks: " ++ show toQueue
                    queuePieces toQueue)
 	queuePieces toQueue = do
 	    mapM_ pushPiece toQueue
@@ -414,13 +423,16 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	pushPiece (pn, blk) =
 	    syncP =<< sendPC outCh (SendQMsg $ Request pn blk)
 	storeBlock n blk bs =
-	    syncP =<< sendPC fsCh (WriteBlock n blk bs)
+	    syncP =<< sendPC pieceMgrCh (StoreBlock n blk bs)
 	grabBlocks n = do
 	    c <- liftIO $ channel
 	    ps <- gets peerPieces
 	    syncP =<< sendPC pieceMgrCh (GrabBlocks n ps c)
 	    blks <- syncP =<< recvP c (const True)
-	    return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
+	    case blks of
+		Leech blks -> return blks
+		Endgame blks ->
+		    modify (\s -> s { runningEndgame = True }) >> return blks
         loMark = 10
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
