@@ -49,7 +49,7 @@ data PieceDB = PieceDB
     , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
     , infoMap       :: PieceMap   -- ^ Information about pieces
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
-    }
+    } deriving Show
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
 --   we keep track of blocks which are pending as well as blocks which are done. We
@@ -89,7 +89,7 @@ data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel Blocks)
 data ChokeInfoMsg = PieceDone PieceNum
 		  | BlockComplete PieceNum Block
                   | TorrentComplete
-    deriving Eq
+    deriving (Eq, Show)
 
 type PieceMgrChannel = Channel PieceMgrMsg
 type ChokeInfoChannel = Channel ChokeInfoMsg
@@ -198,9 +198,9 @@ completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
 -- | Handle torrent completion
 checkFullCompletion :: PieceMgrProcess ()
 checkFullCompletion = do
-    done <- gets pendingPieces
-    ipp  <- gets inProgress
-    when (done == [] && M.null ipp)
+    doneP <- gets donePiece
+    im    <- gets infoMap
+    when (M.size im == length doneP)
 	(do logInfo "Torrent Completed"
 	    sendPC statusCh STP.TorrentCompleted >>= syncP
 	    sendPC chokeCh  TorrentComplete >>= syncP)
