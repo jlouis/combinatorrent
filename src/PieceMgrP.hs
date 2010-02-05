@@ -195,6 +195,7 @@ completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
                                        donePiece  = pn : donePiece db })
 
+-- | Handle torrent completion
 checkFullCompletion :: PieceMgrProcess ()
 checkFullCompletion = do
     done <- gets pendingPieces
@@ -287,7 +288,7 @@ grabBlocks' k eligible = do
     if blocks == [] && pend == []
 	then do blks <- grabEndGame k (S.fromList eligible)
 		modify (\db -> db { endGaming = True })
-		logInfo $ "PieceMgr entered endgame."
+		logDebug $ "PieceMgr entered endgame."
 		return $ Endgame blks
 	else do modify (\s -> s { downloading = blocks ++ (downloading s) })
 		return $ Leech blocks
