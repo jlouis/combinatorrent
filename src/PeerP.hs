@@ -116,6 +116,7 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
                       | SendQMsg Message           -- ^ We want to send the Message to the peer
                       | SendOChoke                 -- ^ We want to choke the peer
+		      | SendQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
 
 data SQCF = SQCF { sqLogC :: LogChannel
 		 , sqInCh :: Channel SendQueueMessage
@@ -160,7 +161,9 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
 					   modifyQ (Q.push msg)
 			SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
 			SendOChoke -> do modifyQ (Q.filter filterAllPiece)
-					 modifyQ (Q.push Choke))
+					 modifyQ (Q.push Choke)
+			SendQRequestPrune n blk ->
+			    modifyQ (Q.filter (filterRequest n blk)))
     modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
@@ -176,7 +179,9 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     filterPiece n off m =
         case m of Piece n off _ -> False
                   _             -> True
-
+    filterRequest n blk m =
+	case m of Request n blk -> False
+	          _             -> True
 
 peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
 	     -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
@@ -245,14 +250,15 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 instance Logging PCF where
   getLogger cf = ("PeerP", logCh cf)
 
-data PST = PST { weChoke :: Bool
-	       , weInterested :: Bool
-	       , blockQueue :: S.Set (PieceNum, Block)
-	       , peerChoke :: Bool
-	       , peerInterested :: Bool
-	       , peerPieces :: [PieceNum]
-	       , upRate :: Rate
-	       , downRate :: Rate
+data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
+	       , weInterested :: Bool -- ^ True if we are interested in the peer
+	       , blockQueue :: S.Set (PieceNum, Block) -- ^ Blocks queued at the peer
+	       , peerChoke :: Bool -- ^ Is the peer choking us? True if yes
+	       , peerInterested :: Bool -- ^ True if the peer is interested
+	       , peerPieces :: [PieceNum] -- ^ List of pieces the peer has access to
+	       , upRate :: Rate -- ^ Upload rate towards the peer (estimated)
+	       , downRate :: Rate -- ^ Download rate from the peer (estimated)
+	       , runningEndgame :: Bool -- ^ True if we are in endgame
 	       }
 
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> LogChannel -> Int -> Handle
@@ -264,7 +270,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
     tch <- channel
     ct <- getCurrentTime
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch statC pm)
-	   (PST True False S.empty True False [] (RC.new ct) (RC.new ct))
+	   (PST True False S.empty True False [] (RC.new ct) (RC.new ct) False)
 	   (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
 	    tid <- liftIO $ myThreadId
@@ -306,7 +312,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 			    (down, ndr) = RC.extractRate t dr
 			logInfo $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
 			sendP retCh (up, down, i) >>= syncP
-			modify (\s -> s { upRate = nur , downRate = ndr }))
+			modify (\s -> s { upRate = nur , downRate = ndr })
+		    CancelBlock pn blk -> do
+			modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
+			syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
 	timerEvent = do
 	    evt <- recvPC timerCh
 	    wrapP evt (\() -> do
@@ -420,7 +429,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    ps <- gets peerPieces
 	    syncP =<< sendPC pieceMgrCh (GrabBlocks n ps c)
 	    blks <- syncP =<< recvP c (const True)
-	    return [(pn, b) | (pn, blklst) <- blks, b <- blklst]
+	    case blks of
+		Leech blks -> return blks
+		Endgame blks ->
+		    modify (\s -> s { runningEndgame = True }) >> return blks
         loMark = 10
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 

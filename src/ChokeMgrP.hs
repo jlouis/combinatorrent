@@ -78,6 +78,7 @@ start logC ch infoC ur weSeed supC = do
     infoEvent = do
 	  ev <- recvPC infoCh
 	  wrapP ev (\m -> case m of
+			    BlockComplete pn blk -> informBlockComplete pn blk
 			    PieceDone pn -> informDone pn
 			    TorrentComplete -> do
 				modify (\s -> s { seeding = True
@@ -312,6 +313,21 @@ informDone pn = do
 	return a
     proc pi = do
 	(sendP (pChannel pi) $ PieceCompleted pn) >>= syncP
+
+informBlockComplete :: PieceNum -> Block -> ChokeMgrProcess ()
+informBlockComplete pn blk = do
+    T.mapM sendComp =<< gets peerMap
+    return ()
+  where
+    sendComp pi = do
+	st <- get
+	c  <- ask
+	(a, s') <- liftIO $ runP c st (proc pi) `catches`
+	    [ Handler (\BlockedOnDeadMVar -> return ((), st)) ] -- Peer dead, ignore it
+	put s'
+	return a
+    proc pi = do
+	(sendP (pChannel pi) $ CancelBlock pn blk) >>= syncP
 
 updateDB :: ChokeMgrProcess ()
 updateDB = do
