@@ -42,7 +42,7 @@ executable HaskellTorrent
   if flag(debug)
       cpp-options: "-DDEBUG"
   else
-      cpp-options: "-NDEBUG"
+      cpp-options: "-DNDEBUG"
 
 source-repository head
   type: git
