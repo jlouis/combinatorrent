@@ -423,7 +423,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	pushPiece (pn, blk) =
 	    syncP =<< sendPC outCh (SendQMsg $ Request pn blk)
 	storeBlock n blk bs =
-	    syncP =<< sendPC fsCh (WriteBlock n blk bs)
+	    syncP =<< sendPC pieceMgrCh (StoreBlock n blk bs)
 	grabBlocks n = do
 	    c <- liftIO $ channel
 	    ps <- gets peerPieces
