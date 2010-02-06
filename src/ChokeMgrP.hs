@@ -150,10 +150,15 @@ sortSeeds = sortBy (comparingWith compareInv $ pUpRate . snd)
 --   and peers which are not choking us. The former we can't send any data to,
 --   so we can't get better speeds at them. The latter are already sending us data,
 --   so we know how good they are as peers.
-advancePeerChain :: [PeerPid] -> PeerMap -> [PeerPid]
-advancePeerChain [] mp = []
-advancePeerChain peers mp = back ++ front
-  where (front, back) = break (\p -> isInterested p mp && isChokingUs p mp) peers
+advancePeerChain :: [PeerPid] -> PeerMap -> ChokeMgrProcess [PeerPid]
+advancePeerChain peers mp = do
+    lPeers <- T.mapM (lookupPeer mp) peers
+    let (front, back) = break (\(_, p) -> pInterestedInUs p && pChokingUs p) lPeers
+    return $ map fst $ back ++ front
+  where
+    lookupPeer mp peer = case M.lookup peer mp of
+			    Nothing -> fail "Could not look up peer in map"
+			    Just p -> return (peer, p)
 
 -- | Add a peer to the Peer Database
 addPeer' :: PeerChannel -> Bool -> PeerPid -> ChokeMgrProcess ()
@@ -178,14 +183,6 @@ addPeerChain pid = do
     pt <- liftIO $ getStdRandom (\gen -> randomR (0, length ls - 1) gen)
     let (front, back) = splitAt pt ls
     modify (\db -> db { peerChain = (front ++ pid : back) })
-
--- | Predicate. Is the peer interested in any of our pieces?
-isInterested :: PeerPid -> PeerMap -> Bool
-isInterested p = pInterestedInUs . fromJust . M.lookup p
-
--- | Predicate. Is the peer choking us?
-isChokingUs :: PeerPid -> PeerMap -> Bool
-isChokingUs p = pChokingUs . fromJust . M.lookup p
 
 -- | Calculate the amount of upload slots we have available. If the
 --   number of slots is explicitly given, use that. Otherwise we
@@ -287,8 +284,10 @@ buildRechokeData :: ChokeMgrProcess [RechokeData]
 buildRechokeData = do
     chain <- gets peerChain
     pm    <- gets peerMap
-    return $ map (cPeer pm) chain
-  where cPeer pm pid = (pid, fromJust $ M.lookup pid pm)
+    T.mapM (cPeer pm) chain
+  where cPeer pm pid = case M.lookup pid pm of
+			    Nothing -> fail "buildRechokeData: Couldn't lookup pid"
+			    Just x -> return (pid, x)
 
 rechoke :: ChokeMgrProcess ()
 rechoke = do
@@ -357,7 +356,8 @@ runRechokeRound = do
     if (cRound == 0)
 	then do chain <- gets peerChain
 		pm    <- gets peerMap
+		nChain <- advancePeerChain chain pm
 	        modify (\db -> db { chokeRound = 2,
-				    peerChain = advancePeerChain chain pm })
+				    peerChain = nChain })
 	else modify (\db -> db { chokeRound = (chokeRound db) - 1 })
     rechoke

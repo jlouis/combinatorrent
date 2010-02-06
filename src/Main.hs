@@ -65,8 +65,10 @@ download name = do
            putStrLn "Created channels"
 	   -- setup StdGen and Peer data
            gen <- getStdGen
+	   ti <- case mkTorrentInfo bc of
+		    Nothing -> fail "Could not create TorrentInfo from torrent file."
+		    Just x  -> return x
            let pid = mkPeerId gen
-               ti = fromJust $ mkTorrentInfo bc
 	       left = bytesLeft haveMap pieceMap
 	       clientState = determineState haveMap
 	   -- Create main supervisor process

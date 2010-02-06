@@ -75,13 +75,16 @@ readBlock pn blk handle mp =
 --   to the file pointed to by handle at the correct position in the file. If the
 --   block is of a wrong length, the call will fail.
 writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
-writeBlock h n blk pm blkData = do hSeek h AbsoluteSeek pos
+writeBlock h n blk pm blkData = do pInfo <- pInfoLookup n pm
+				   hSeek h AbsoluteSeek (position pInfo)
                                    when lenFail $ fail "Writing block of wrong length"
                                    B.hPut h blkData
                                    hFlush h
                                    return ()
-  where pos = offset (fromJust $ M.lookup n pm) + fromIntegral (blockOffset blk)
-        lenFail = B.length blkData /= blockSize blk
+  where
+    position :: PieceInfo -> Integer
+    position pinfo = (offset pinfo) + fromIntegral (blockOffset blk)
+    lenFail = B.length blkData /= blockSize blk
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.

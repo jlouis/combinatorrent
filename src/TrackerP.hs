@@ -46,7 +46,6 @@ import Control.Monad.State
 
 import Data.Char (ord, chr)
 import Data.List (intersperse)
-import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -158,7 +157,7 @@ loop = do
 pokeTracker :: Process CF ST ()
 pokeTracker = do
     upDownLeft <- syncP =<< recvPC statusCh
-    url <- buildRequestUrl upDownLeft
+    url <- buildRequestURL upDownLeft
     logDebug $ "Request URL: " ++ url
     uri <- case parseURI url of
 	    Nothing -> do logFatal $ "Could not parse the url " ++ url
@@ -238,7 +237,9 @@ trackerRequest uri =
                (3,_,_) ->
                    case findHeader HdrLocation r of
                      Nothing -> return $ Left (show r)
-                     Just newUrl -> trackerRequest (fromJust $ parseURI newUrl)
+                     Just newURL -> case parseURI newURL of
+					Nothing -> return $ Left (show newURL)
+					Just uri -> trackerRequest uri
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
@@ -246,8 +247,8 @@ trackerRequest uri =
                            rqBody = ""}
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestUrl :: StatusP.ST -> Process CF ST String
-buildRequestUrl ss = do ti <- gets torrentInfo
+buildRequestURL :: StatusP.ST -> Process CF ST String
+buildRequestURL ss = do ti <- gets torrentInfo
 		        hdrs <- headers
 			let hl = concat $ hlist hdrs
 			return $ concat [fromBS $ announceURL ti, "?", hl]
@@ -272,7 +273,7 @@ buildRequestUrl ss = do ti <- gets torrentInfo
                      _ -> do logFatal "Unknown port type"
 			     stopP
 
--- Carry out Url-encoding of a string. Note that the clients seems to do it the wrong way
+-- Carry out URL-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.
 rfc1738Encode :: String -> String
 rfc1738Encode = concatMap (\c -> if unreserved c then [c] else encode c)

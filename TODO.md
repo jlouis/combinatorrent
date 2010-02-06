@@ -68,6 +68,8 @@ wish-list.
    - Let Piece Sets be S.Set PieceNum rather than [PieceNum]. They are
      larger than 1000 for some large torrents, so it makes sense to shift to
      a better representation.
+   - Cleanup the code around ChokeMgrP.advancePeerChain. It currently does a
+     lot of stuff it doesn't have to do.
 
 Known Bugs
 ----------

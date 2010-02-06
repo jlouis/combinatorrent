@@ -145,8 +145,10 @@ start logC mgrC fspC chokeC statC db supC =
 			       logInfo $ "Piece #" ++ show pn
 					 ++ " completed, there are " 
 					 ++ (show $ length pend) ++ " left"
-			       pm <- gets infoMap
-			       let l = len $ fromJust $ M.lookup pn pm
+			       l <- gets infoMap >>=
+				    (\pm -> case M.lookup pn pm of
+						    Nothing -> fail "Storeblock: M.lookup"
+						    Just x -> return $ len x)
 			       sendPC statusCh (CompletedPiece l) >>= syncP
 			       pieceOk <- checkPiece pn
 			       case pieceOk of
@@ -226,10 +228,14 @@ putbackBlock (pn, blk) = modify (\db -> db { inProgress = ndb (inProgress db)
 assertPieceComplete :: PieceNum -> PieceMgrProcess ()
 assertPieceComplete pn = do
     inprog <- gets inProgress
-    let ipp = fromJust $ M.lookup pn inprog
+    ipp <- case M.lookup pn inprog of
+		Nothing -> fail "assertPieceComplete: Could not lookup piece number"
+		Just x -> return x
     dl <- gets downloading
     pm <- gets infoMap
-    sz <- return $ (len . fromJust) $ M.lookup pn pm
+    sz <- case M.lookup pn pm of
+	    Nothing -> fail "assertPieceComplete: Could not lookup piece in piecemap"
+	    Just x -> return $ len x
     unless (assertAllDownloaded dl pn)
       (fail "Could not assert that all pieces were downloaded when completing a piece")
     unless (assertComplete ipp sz)
@@ -304,8 +310,10 @@ grabBlocks' k eligible = do
     -- The Piece @p@ was found, grab it
     grabFromProgress n ps p captured = do
         inprog <- gets inProgress
-        let ipp = fromJust $ M.lookup p inprog
-            (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
+	ipp <- case M.lookup p inprog of
+		  Nothing -> fail "grabFromProgress: could not lookup piece"
+		  Just x -> return x
+        let (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
             nIpp = ipp { ipPendingBlocks = rest }
         -- This rather ugly piece of code should be substituted with something better
         if grabbed == []
@@ -337,11 +345,11 @@ grabBlocks' k eligible = do
 	n <- liftIO $ getStdRandom (\gen -> randomR (0, length pieces - 1) gen)
 	return $ pieces !! n
     createBlock :: Int -> PieceMgrProcess [Block]
-    createBlock pn =
-	let cBlock = blockPiece
-                        defaultBlockSize . fromInteger . len . fromJust . M.lookup pn . infoMap
-	in
-	    get >>= return . cBlock
+    createBlock pn = do
+	gets infoMap >>= (\im -> case M.lookup pn im of
+				    Nothing -> fail "createBlock: could not lookup piece"
+				    Just ipp -> return $ cBlock ipp)
+            where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 assertPieceDB :: PieceMgrProcess ()
 assertPieceDB = assertPending >> assertDone >> assertInProgress >> assertDownloading

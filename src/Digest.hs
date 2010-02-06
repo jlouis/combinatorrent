@@ -17,7 +17,10 @@ import qualified OpenSSL.EVP.Digest as D
 type Digest = String
 
 sha1Digest :: IO D.Digest
-sha1Digest = liftM fromJust $ D.getDigestByName "SHA1"
+sha1Digest = do dig <- D.getDigestByName "SHA1"
+		case dig of
+		    Nothing -> fail "No such digest, SHA1"
+		    Just d -> return d
 
 digest :: L.ByteString -> IO Digest
 digest bs =
