@@ -89,6 +89,7 @@ Before releasing into the "wild"
    - Perform an audit of the ChokeMgr code.
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
+   - When we complete a torrent, tell the tracker.
 
 Items for later (no particular order)
 -------------------------------------
