@@ -84,7 +84,11 @@ Before releasing into the "wild"
    - We currently take space proportional to torrent size due to our SHA1
      calculation being slow and not use a file descriptor. Research into a
      faster SHA1 library would be really beneficial.
-   - Debug the Choke manager code. Something looks rather wrong in there.
+   - Eliminate fromJust from the code. There is something wrong at some
+     place.
+   - Perform an audit of the ChokeMgr code.
+   - Make sure we actually seed when the torrent finishes.
+   - Check that the tracker is told about what happened.
 
 Items for later (no particular order)
 -------------------------------------
