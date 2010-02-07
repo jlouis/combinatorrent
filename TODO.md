@@ -92,6 +92,8 @@ Before releasing into the "wild"
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
    - When we complete a torrent, tell the tracker.
+   - What about reentrancy and FFI OpenSSL calls?
+   - When entering the endgame, change the strategy for filling up pieces.
 
 Items for later (no particular order)
 -------------------------------------
