@@ -315,7 +315,7 @@ rechoke :: ChokeMgrProcess ()
 rechoke = do
     peers <- buildRechokeData
     us <- gets uploadSlots
-    let (down, seed) = splitSeedLeech peers
+    let (seed, down) = splitSeedLeech peers
     electedPeers <- selectPeers us down seed
     performChokingUnchoking electedPeers peers
 
