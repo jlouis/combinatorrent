@@ -40,7 +40,8 @@ executable HaskellTorrent
     cml,
     HTTP,
     HsOpenSSL,
-    time
+    time,
+    directory
 
   if flag(debug)
       cpp-options: "-DDEBUG"

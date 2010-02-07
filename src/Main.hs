@@ -48,7 +48,7 @@ download name = do
       Left pe -> print pe
       Right bc ->
         do print bc
-	   (h, haveMap, pieceMap) <- openAndCheckFile bc
+	   (handles, haveMap, pieceMap) <- openAndCheckFile bc
 	   logC <- channel
 	   Logging.startLogger logC
            -- setup channels
@@ -74,7 +74,7 @@ download name = do
 	   -- Create main supervisor process
 	   allForOne "MainSup"
 		     [ Worker $ ConsoleP.start logC waitC
-		     , Worker $ FSP.start h logC pieceMap fspC
+		     , Worker $ FSP.start handles logC pieceMap fspC
 		     , Worker $ PeerMgrP.start pmC pid (infoHash ti)
 				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
 		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
