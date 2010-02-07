@@ -45,6 +45,7 @@ module BCode
               infoPieceLength,
               infoPieces,
               numberPieces,
+              infoFiles,
               prettyPrint,
 
               trackerComplete,
@@ -270,8 +271,15 @@ infoPieceLength bc = do BInt i <- search [toPS "info", toPS "piece length"] bc
                         return i
 
 infoLength :: BCode -> Maybe Integer
-infoLength bc = do BInt i <- search [toPS "info", toPS "length"] bc
+infoLength bc = maybe length2 Just length1
+    where
+      -- |info/length key for single-file torrent
+      length1 = do BInt i <- search [toPS "info", toPS "length"] bc
                    return i
+      -- |length summed from files of multi-file torrent
+      length2 = sum `fmap`
+                map snd `fmap`
+                infoFiles bc
 
 infoPieces :: BCode -> Maybe [B.ByteString]
 infoPieces b = do t <- searchInfo "pieces" b
@@ -284,6 +292,28 @@ infoPieces b = do t <- searchInfo "pieces" b
 
 numberPieces :: BCode -> Maybe Int
 numberPieces = fmap length . infoPieces
+
+infoFiles :: BCode -> Maybe [([String], Integer)]  -- ^[(filePath, fileLength)]
+infoFiles bc = let mbFpath = fromBS `fmap` infoName bc
+                   mbLength = infoLength bc
+                   mbFiles = do BArray fileList <- searchInfo "files" bc
+                                return $ do fileDict@(BDict _) <- fileList
+                                            let Just (BInt length) = search [toPS "length"] fileDict
+                                                Just (BArray path) = search [toPS "path"] fileDict
+                                                path' = map (\(BString s) -> fromBS s) path
+                                            return (path', length)
+               in case (mbFpath, mbLength, mbFiles) of
+                    (Just fpath, _, Just files) ->
+                        Just $
+                        map (\(path, length) ->
+                                 (fpath:path, length)
+                            ) files
+                    (Just fpath, Just length, _) ->
+                        Just [([fpath], length)]
+                    (_, _, Just files) ->
+                        Just files
+                    _ ->
+                        Nothing
 
 pp :: BCode -> Doc
 pp bc =

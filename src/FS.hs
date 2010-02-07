@@ -28,6 +28,7 @@
 --   manipulating files in the filesystem.
 module FS (PieceInfo(..),
            PieceMap,
+           Handles,
            readPiece,
            readBlock,
            writeBlock,
@@ -46,41 +47,102 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
 import Data.Maybe
 import System.IO
+import System.Directory (createDirectoryIfMissing)
+import Data.List (intercalate)
 
 import BCode
 import qualified Digest as D
 import Torrent
+
+-- | For multi-file torrents we've got to maintain multiple file
+--   handles. The data structure may as well be a Map Range Handle,
+--   but that's detailto only @projectHandles@. More importantly,
+--   functions operating on the files must be aware that a
+--   piece/block can span multiple files.
+--
+--   FIXME: Replace this with a handle cache later. Many peers & many
+--          tiny files will make us overstep the fd limit (usually
+--          1024).
+newtype Handles = Handles [(Handle, Integer)]  -- ^[(fileHandle, fileLength)]
+
+projectHandles :: Handles
+               -> Integer    -- ^Torrent offset
+               -> Integer    -- ^Torrent size
+               -> [(Handle   -- ^File handle
+                   ,Integer  -- ^File chunk offset
+                   ,Integer  -- ^File chunk size
+                   )]
+{-
+projectHandles handles offset size = let r = projectHandles' handles offset size
+                                     in trace ("projectHandles " ++
+                                               show handles ++ " " ++
+                                               show offset ++ " " ++
+                                               show size ++ " = " ++
+                                               show r
+                                              ) $
+                                        r
+-}
+projectHandles (Handles handles@((h1, length1):handles')) offset size
+    | size <= 0 =
+        fail "FS: Should have already stopped projection"
+    | null handles =
+        fail "FS: Attempt to read beyond torrent length"
+    | offset >= length1 =
+        projectHandles (Handles handles') (offset - length1) size
+    | otherwise =
+        let size1 = length1 - offset  -- ^How much of h1 to take?
+        in if size1 >= size
+           then [(h1, offset, size)]
+           else (h1, offset, size1) :
+                projectHandles (Handles handles') 0 (size - size1)
 
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
 pInfoLookup pn mp = case M.lookup pn mp of
                       Nothing -> fail "FS: Error lookup in PieceMap"
                       Just i -> return i
 
-readPiece :: PieceNum -> Handle -> PieceMap -> IO L.ByteString
-readPiece pn handle mp =
+-- | FIXME: minor code duplication with @readBlock@
+readPiece :: PieceNum -> Handles -> PieceMap -> IO L.ByteString
+readPiece pn handles mp =
     do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo)
-       bs <- L.hGet handle (fromInteger . len $ pInfo)
+       bs <- L.concat `fmap`
+             forM (projectHandles handles (offset pInfo) (len pInfo))
+                      (\(h, offset, size) ->
+                           do hSeek h AbsoluteSeek offset
+                              L.hGet h (fromInteger size)
+                      )
        if L.length bs == (fromInteger . len $ pInfo)
           then return bs
           else fail "FS: Wrong number of bytes read"
 
-readBlock :: PieceNum -> Block -> Handle -> PieceMap -> IO B.ByteString
-readBlock pn blk handle mp =
+-- | FIXME: concatenating strict ByteStrings may turn out
+--   expensive. Returning lazy ones may be more appropriate.
+readBlock :: PieceNum -> Block -> Handles -> PieceMap -> IO B.ByteString
+readBlock pn blk handles mp =
     do pInfo <- pInfoLookup pn mp
-       hSeek handle AbsoluteSeek (offset pInfo + (fromIntegral $ blockOffset blk))
-       B.hGet handle (blockSize blk)
+       B.concat `fmap`
+        forM (projectHandles handles (offset pInfo + (fromIntegral $ blockOffset blk))
+                                 (fromIntegral $ blockSize blk))
+                 (\(h, offset, size) ->
+                      do hSeek h AbsoluteSeek offset
+                         B.hGet h $ fromInteger size
+                 )
 
 -- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
 --   to the file pointed to by handle at the correct position in the file. If the
 --   block is of a wrong length, the call will fail.
-writeBlock :: Handle -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
-writeBlock h n blk pm blkData = do pInfo <- pInfoLookup n pm
-				   hSeek h AbsoluteSeek (position pInfo)
-                                   when lenFail $ fail "Writing block of wrong length"
-                                   B.hPut h blkData
-                                   hFlush h
-                                   return ()
+writeBlock :: Handles -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
+writeBlock handles n blk pm blkData =
+    do when lenFail $ fail "Writing block of wrong length"
+       pInfo <- pInfoLookup n pm
+       foldM_ (\blkData (h, offset, size) ->
+                   do let size' = fromInteger size
+                      hSeek h AbsoluteSeek offset
+                      B.hPut h $ B.take size' blkData
+                      hFlush h
+                      return $ B.drop size' blkData
+              ) blkData (projectHandles handles (position pInfo) (fromIntegral $ B.length blkData))
+       return ()
   where
     position :: PieceInfo -> Integer
     position pinfo = (offset pinfo) + fromIntegral (blockOffset blk)
@@ -88,10 +150,14 @@ writeBlock h n blk pm blkData = do pInfo <- pInfoLookup n pm
 
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
-checkPiece :: PieceInfo -> Handle -> IO Bool
-checkPiece inf h = do
-  hSeek h AbsoluteSeek (offset inf)
-  bs <- L.hGet h (fromInteger . len $ inf)
+checkPiece :: PieceInfo -> Handles -> IO Bool
+checkPiece inf handles = do
+  bs <- L.concat `fmap`
+        forM (projectHandles handles (offset inf) (fromInteger $ len inf))
+                 (\(h, offset, size) ->
+                      do hSeek h AbsoluteSeek offset
+                         L.hGet h (fromInteger size)
+                 )
   dgs <- liftIO $ D.digest bs
   return (dgs == digest inf)
 
@@ -99,12 +165,12 @@ checkPiece inf h = do
 --   the file and then check it against the digest. It will create a map of what we are missing
 --   in the file as a missing map. We could alternatively choose a list of pieces missing rather
 --   then creating the data structure here. This is perhaps better in the long run.
-checkFile :: Handle -> PieceMap -> IO PiecesDoneMap
-checkFile handle pm = do l <- mapM checkP pieces
-                         return $ M.fromList l
+checkFile :: Handles -> PieceMap -> IO PiecesDoneMap
+checkFile handles pm = do l <- mapM checkP pieces
+                          return $ M.fromList l
     where pieces = M.toAscList pm
           checkP :: (PieceNum, PieceInfo) -> IO (PieceNum, Bool)
-          checkP (pn, pInfo) = do b <- checkPiece pInfo handle
+          checkP (pn, pInfo) = do b <- checkPiece pInfo handles
                                   return (pn, b)
 
 -- | Extract the PieceMap from a bcoded structure
@@ -133,17 +199,27 @@ mkPieceMap bc = fetchData
 canSeed :: PiecesDoneMap -> Bool
 canSeed = M.fold (&&) True
 
--- | Process a BCoded torrent file. Open the file in question, check it and return a handle
---   plus a haveMap for the file
-openAndCheckFile :: BCode -> IO (Handle, PiecesDoneMap, PieceMap)
+-- | Process a BCoded torrent file. Create directories, open the files
+--   in question, check it and return Handles plus a haveMap for the
+--   file
+openAndCheckFile :: BCode -> IO (Handles, PiecesDoneMap, PieceMap)
 openAndCheckFile bc =
     do
-       h <- openBinaryFile fpath ReadWriteMode
-       have <- checkFile h pieceMap
-       return (h, have, pieceMap)
-  where Just fpath = BCode.fromBS `fmap` BCode.infoName bc
+       handles <- Handles `fmap`
+                  forM files
+                           (\(path, length) ->
+                                do let dir = joinPath $ init path
+                                   when (dir /= "") $
+                                        createDirectoryIfMissing True dir
+                                   let fpath = joinPath path
+                                   h <- openBinaryFile fpath ReadWriteMode
+                                   return (h, length)
+                           )
+       have <- checkFile handles pieceMap
+       return (handles, have, pieceMap)
+  where Just files = BCode.infoFiles bc
         Just pieceMap = mkPieceMap bc
-
+        joinPath = intercalate "/"
 
 
 
