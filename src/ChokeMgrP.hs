@@ -295,11 +295,11 @@ performChokingUnchoking elected peers =
 -- | Function to split peers into those where we are seeding and those were we are leeching.
 --   also prunes the list for peers which are not interesting.
 --   TODO: Snubbed peers
---   FIXME: Think about this one, I am positive it is wrong :)
 splitSeedLeech :: [RechokeData] -> ([RechokeData], [RechokeData])
 splitSeedLeech ps = partition (pAreSeeding . snd) $ filter picker ps
   where
-    picker (_, pi) = not (pIsASeeder pi) || pInterestedInUs pi
+    -- TODO: pIsASeeder is always false at the moment
+    picker (_, pi) = not (pIsASeeder pi) && pInterestedInUs pi
 
 
 buildRechokeData :: ChokeMgrProcess [RechokeData]
