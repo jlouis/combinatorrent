@@ -94,6 +94,9 @@ Before releasing into the "wild"
    - When we complete a torrent, tell the tracker.
    - What about reentrancy and FFI OpenSSL calls?
    - When entering the endgame, change the strategy for filling up pieces.
+   - Handle the following bug:
+            "The 'impossible' happened, are you implementing endgame?"
+     in PieceMgrP. We basically want to figure out what should happen.
 
 Items for later (no particular order)
 -------------------------------------
