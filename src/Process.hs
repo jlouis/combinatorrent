@@ -23,7 +23,9 @@ module Process (
     , recvWrapPC
     , wrapP
     , stopP
-    -- * Interface
+    , catchIgnoreBlock   -- This and ignoreProcessBlock ought to be renamed
+    , ignoreProcessBlock
+    -- * Log Interface
     , logInfo
     , logDebug
     , logWarn
@@ -147,6 +149,37 @@ recvWrapPC sel p = do
 chooseP :: [Process a b (Event (c, b))] -> Process a b (Event (c, b))
 chooseP events = (sequence events) >>= (return . choose)
 
+-- VERSION SPECIFIC PROCESS ORIENTED FUNCTIONS
+
+-- | @ignoreProcessBlock err thnk@ runs a process action, ignoring blocks on dead
+--   MVars. If the MVar is blocked, return the default value @err@.
+ignoreProcessBlock :: c -> Process a b c -> Process a b c
+ignoreProcessBlock err thnk = do
+    st <- get
+    c  <- ask
+    (a, s') <-  liftIO $ runP c st thnk `catches`
+    -- Peer dead, ignore
+#if (__GLASGOW_HASKELL__ == 610)
+        [ Handler (\BlockedOnDeadMVar -> return (err, st)) ]
+#elif (__GLASGOW_HASKELL__ == 612)
+	[ Handler (\BlockedIndefinitelyOnMVar -> return (err, st)) ]
+#else
+#error Unknown GHC version
+#endif
+    put s'
+    return a
+
+-- | Run an IO-action for side effect and catch eventual blocks on Dead MVars
+catchIgnoreBlock :: IO () -> IO ()
+catchIgnoreBlock thnk =
+    thnk `catch`
+#if (__GLASGOW_HASKELL__ == 610)
+	(\BlockedOnDeadMVar -> return ())
+#elif (__GLASGOW_HASKELL__ == 612)
+	(\BlockedIndefinitelyOnMVar -> return ())
+#else
+#error Unknown GHC revision
+#endif
 ------ LOGGING
 
 -- | If a process has access to a logging channel, it is able to log messages to the world
