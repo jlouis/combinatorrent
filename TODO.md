@@ -88,7 +88,6 @@ Before releasing into the "wild"
      faster SHA1 library would be really beneficial.
    - Eliminate fromJust from the code. There is something wrong at some
      place.
-   - Perform an audit of the ChokeMgr code.
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
    - When we complete a torrent, tell the tracker.
