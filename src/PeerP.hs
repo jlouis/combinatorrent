@@ -5,8 +5,6 @@ module PeerP (
       PeerMessage(..)
     -- * Interface
     , connect
-    , unchokePeer
-    , chokePeer
     )
 where
 
@@ -52,15 +50,6 @@ import WireProtocol
 -- INTERFACE
 ----------------------------------------------------------------------
 
--- | Send a choke message to the peer process at PeerChannel. May raise
---   exceptions if the peer is not running anymore.
-chokePeer :: PeerChannel -> IO ()
-chokePeer ch = sync $ transmit ch ChokePeer
-
--- | Send an unchoke message to the peer process at PeerChannel. May raise
---   exceptions if the peer is not running anymore.
-unchokePeer :: PeerChannel -> IO ()
-unchokePeer ch = sync $ transmit ch UnchokePeer
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
 

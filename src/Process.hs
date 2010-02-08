@@ -23,8 +23,7 @@ module Process (
     , recvWrapPC
     , wrapP
     , stopP
-    , catchIgnoreBlock   -- This and ignoreProcessBlock ought to be renamed
-    , ignoreProcessBlock
+    , ignoreProcessBlock -- This ought to be renamed
     -- * Log Interface
     , logInfo
     , logDebug
@@ -169,17 +168,6 @@ ignoreProcessBlock err thnk = do
     put s'
     return a
 
--- | Run an IO-action for side effect and catch eventual blocks on Dead MVars
-catchIgnoreBlock :: IO () -> IO ()
-catchIgnoreBlock thnk =
-    thnk `catch`
-#if (__GLASGOW_HASKELL__ == 610)
-	(\BlockedOnDeadMVar -> return ())
-#elif (__GLASGOW_HASKELL__ == 612)
-	(\BlockedIndefinitelyOnMVar -> return ())
-#else
-#error Unknown GHC revision
-#endif
 ------ LOGGING
 
 -- | If a process has access to a logging channel, it is able to log messages to the world
