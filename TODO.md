@@ -79,15 +79,9 @@ None known at the moment.
 Before releasing into the "wild"
 --------------------------------
 
-   - The client needs to handle multi-file torrents. It is not as hard as
-     it may sound - the only part of the system that needs to know about
-     files is the code handling the file system. All other parts can just
-     keep on transferring pieces.
    - We currently take space proportional to torrent size due to our SHA1
      calculation being slow and not use a file descriptor. Research into a
      faster SHA1 library would be really beneficial.
-   - Eliminate fromJust from the code. There is something wrong at some
-     place.
    - Perform an audit of the ChokeMgr code.
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.

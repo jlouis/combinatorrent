@@ -72,7 +72,7 @@ instance Logging CF where
   getLogger cf = ("FSP", logCh cf)
 
 data ST = ST
-      { fileHandle :: Handle -- ^ The file we are working on
+      { fileHandles :: FS.Handles -- ^ The file we are working on
       , pieceMap :: FS.PieceMap -- ^ Map of where the pieces reside
       }
 
@@ -80,9 +80,9 @@ data ST = ST
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Handle -> LogChannel -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
-start handle logC pm fspC supC =
-    spawnP (CF fspC logC) (ST handle pm) (catchP (forever lp) (defaultStopHandler supC))
+start :: FS.Handles -> LogChannel -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
+start handles logC pm fspC supC =
+    spawnP (CF fspC logC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
   where
     lp = msgEvent >>= syncP
     msgEvent = do
@@ -93,18 +93,18 @@ start handle logC pm fspC supC =
 		    pm <- gets pieceMap
 		    case M.lookup n pm of
 			Nothing -> sendP ch Nothing >>= syncP
-			Just pi -> do r <- gets fileHandle >>= (liftIO . FS.checkPiece pi)
+			Just pi -> do r <- gets fileHandles >>= (liftIO . FS.checkPiece pi)
 				      sendP ch (Just r) >>= syncP
 		ReadBlock n blk ch -> do
 		    logDebug $ "Reading block #" ++ show n
 			    ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
 		    -- TODO: Protection, either here or in the Peer code
-		    h  <- gets fileHandle
+		    h  <- gets fileHandles
 		    bs <- gets pieceMap >>= (liftIO . FS.readBlock n blk h)
 		    sendP ch bs >>= syncP
 		WriteBlock pn blk bs -> do
                     -- TODO: Protection, either here or in the Peer code
-		    fh <- gets fileHandle
+		    fh <- gets fileHandles
 		    pm <- gets pieceMap
 		    liftIO $ FS.writeBlock fh pn blk pm bs)
 
