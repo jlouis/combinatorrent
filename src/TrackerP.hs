@@ -256,7 +256,7 @@ buildRequestURL ss = do ti <- gets torrentInfo
           headers = do
 	    s <- get
 	    p <- prt
-	    return [("info_hash", rfc1738Encode $ unpackInfoHash s),
+	    return [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
                      ("peer_id",   rfc1738Encode $ peerId s),
                      ("uploaded", show $ StatusP.uploaded ss),
                      ("downloaded", show $ StatusP.downloaded ss),
@@ -264,8 +264,6 @@ buildRequestURL ss = do ti <- gets torrentInfo
                      ("port", show p),
                      ("compact", "1"),
                      ("event", show $ state s)]
-          unpackInfoHash = dec . L.unpack . infoHash . torrentInfo
-          dec = map (chr . fromIntegral)
           prt :: Process CF ST Integer
           prt = do lp <- gets localPort
 		   case lp of

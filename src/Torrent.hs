@@ -64,10 +64,11 @@ import Numeric
 import System.Random
 
 import BCode
+import Digest
 
 -- | The type of Infohashes as used in torrents. These are identifiers
 --   of torrents
-type InfoHash = L.ByteString
+type InfoHash = Digest
 
 -- | The peerId is the ID of a client. It is used to identify clients
 --   from each other
@@ -139,12 +140,17 @@ haskellTorrentVersion = "d001"
 
 -- | Convert a BCode block into its corresponding TorrentInfo block, perhaps
 --   failing in the process.
-mkTorrentInfo :: BCode -> Maybe TorrentInfo
-mkTorrentInfo bc =
-    do ann <- announce bc
-       ih  <- hashInfoDict bc
-       np  <- numberPieces bc
-       return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
+mkTorrentInfo :: BCode -> IO TorrentInfo
+mkTorrentInfo bc = do
+    (ann, np) <- case queryInfo bc of Nothing -> fail "Could not create torrent info"
+				      Just x -> return x
+    ih  <- hashInfoDict bc
+    return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
+  where
+    queryInfo bc =
+      do ann <- announce bc
+         np  <- numberPieces bc
+         return (ann, np)
 
 -- | Create a new PeerId for this client
 mkPeerId :: StdGen -> PeerId

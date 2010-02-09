@@ -9,6 +9,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Builder
 import Data.ByteString.Parser
+import Data.Char
 import Data.Word
 import System.IO
 
@@ -135,7 +136,7 @@ receiveHeader h sz ih = parseHeader `fmap` L.hGet h sz
                protoString <- getString protocolHeaderSize
                when (protoString /= protocolHeader) $ fail "Wrong protocol header"
                caps <- getWord64be
-               ihR   <- getLazyByteString 20
+               ihR   <- getString 20
                when (ihR /= ih) $ fail "Wrong InfoHash"
                pid <- getLazyByteString 20
                return (decodeCapabilities caps, pid)
@@ -156,7 +157,7 @@ initiateHandshake logC handle peerid infohash = do
     logMsg logC "Receiving handshake from other end"
     receiveHeader handle sz infohash -- TODO: Exceptions
   where msg = toLazyByteString $ mconcat [fromLazyByteString protocolHandshake,
-                                          fromLazyByteString infohash,
+                                          fromLazyByteString $ L.pack $ map (fromIntegral . ord) infohash,
                                           putString peerid]
         sz = fromIntegral (L.length msg)
 

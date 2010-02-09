@@ -34,7 +34,6 @@ executable HaskellTorrent
     parsec,
     containers,
     bytestring,
-    SHA,
     random,
     network,
     cml,
