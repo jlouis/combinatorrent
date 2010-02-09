@@ -41,6 +41,7 @@ executable HaskellTorrent
     HTTP,
     HsOpenSSL,
     time,
+    random-shuffle,
     directory
 
   if flag(debug)
