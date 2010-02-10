@@ -23,16 +23,11 @@ wish-list.
    - Do not connect to ourselves :)
    - Write an installation and compilation guide.
    - Write a small introduction to git bisect we can point people towards.
-   - Add support for multiple files
    - (thomaschrstnsn) Implement a creator for torrent files
-   - (axman) Turn the logging system into a better framework, add log levels,
-     add process names so we can see who is doing what.
    - If we get a wrong URI, the code currently deadlocks since the tracker
      dies. Handle this problem gracefully.
    - (axman) Cleanup the BCode module, while keeping the interface somewhat
      stable. The code is an utter mess as it stands right now.
-   - (axman) Improve the cabal file for the project, check with GHC 6.12.1,
-     provide correct versions of needed packages.
    - When we grab pieces from the Piece Manager, let it provide us with a
      pruned set of pieces we can ask with later. This way, we only need to
      consider pieces we already have once and we get a faster system.
@@ -56,12 +51,8 @@ wish-list.
    - Update the Seeder status in PeerMgrP.
    - When stopping a Peer, put back the Pieces to the Piece Manager.
    - Do not send HAVE messages if the Peer already has the Piece Number.
-   - Rewrite the tracker code to use the new monad transformer stack.
    - Improve on the command line parser. We will certainly need full-fledged
      CL parsing at some point.
-   - Make the client ignore log messages beneath a certain log level
-   - Make the client be able to select what processes that are allowed to
-     log what (perhaps write a DSL for it).
    - When closing, gracefully tell the tracker about it.
    - Let Piece Sets be S.Set PieceNum rather than [PieceNum]. They are
      larger than 1000 for some large torrents, so it makes sense to shift to
@@ -83,6 +74,8 @@ Before releasing into the "wild"
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
    - When we complete a torrent, tell the tracker.
+     In general, improve the reporting to the tracker to make it more
+     correct.
    - What about reentrancy and FFI OpenSSL calls?
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"
@@ -92,10 +85,6 @@ Items for later (no particular order)
 -------------------------------------
 
    - Add support for multiple torrents at once
-   - The client needs to handle multi-file torrents. It is not as hard as
-     it may sound — the only part of the system that needs to know about
-     files is the code handling the file system. All other parts can just
-     keep on transferring pieces.
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
@@ -115,8 +104,5 @@ Items for later (no particular order)
    - We need to accept incoming connections. The system only connects
      outward at the moment
    - Write a fuzzing framework for bittorrent.
-   - Consider David Himmelstrups work in the packages bencode, torrent
-     In the long run it would be beneficial. Short term, there is less need
-     for the integration.
 
 # vim: filetype=none tw=76 expandtab
