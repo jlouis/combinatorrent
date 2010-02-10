@@ -13,7 +13,7 @@ author: Jesper Louis Andersen
 maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
 synopsis: A Haskell Bittorrent client
-build-type: Simple
+build-type: Configure
 extra-tmp-files: src/Version.hs
 
 flag debug
