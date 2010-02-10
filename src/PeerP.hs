@@ -400,8 +400,10 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    unless choked checkWatermark
         checkWatermark = do
 	    q <- gets blockQueue
+	    eg <- gets runningEndgame
 	    let sz = S.size q
-	    when (sz < loMark)
+	        mark = if eg then endgameLoMark else loMark
+	    when (sz < mark)
 		(do
 		   toQueue <- grabBlocks (hiMark - sz)
                    logDebug $ "Got " ++ show (length toQueue) ++ " blocks: " ++ show toQueue
@@ -423,6 +425,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		Endgame blks ->
 		    modify (\s -> s { runningEndgame = True }) >> return blks
         loMark = 10
+	endgameLoMark = 1
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
 createPeerPieces :: L.ByteString -> [PieceNum]

@@ -34,13 +34,13 @@ executable HaskellTorrent
     parsec,
     containers,
     bytestring,
-    SHA,
     random,
     network,
     cml,
     HTTP,
     HsOpenSSL,
     time,
+    random-shuffle,
     directory
 
   if flag(debug)

@@ -23,6 +23,7 @@ import qualified Data.Set as S
 import Prelude hiding (log)
 
 import System.Random
+import System.Random.Shuffle
 
 import Logging
 import FSP hiding (start)
@@ -338,9 +339,9 @@ grabBlocks' k eligible = do
 	      tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
 	dls <- liftM (filter (\(p, _) -> S.member p ps)) $ gets downloading
-	let shuffled = dls -- TODO: Shuffle this list
+	g <- liftIO newStdGen
+        let shuffled = shuffle' dls (length dls) g
 	return $ take n shuffled
-
     pickRandom pieces = do
 	n <- liftIO $ getStdRandom (\gen -> randomR (0, length pieces - 1) gen)
 	return $ pieces !! n

@@ -67,7 +67,6 @@ import qualified Data.ByteString as B
 import Data.Char
 import Data.Word
 import Data.Int
-import Data.Digest.Pure.SHA
 import Data.List
 import Data.Maybe
 import qualified Data.Map as M
@@ -77,6 +76,7 @@ import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
 
+import Digest
 
 -- | BCode represents the structure of a bencoded file
 data BCode = BInt Integer                       -- ^ An integer
@@ -201,11 +201,13 @@ getCharG = fromW8 <$> getWord8
 -- BCode helper functions
 
 -- | Return the hash of the info-dict in a torrent file
-hashInfoDict :: BCode -> Maybe L.ByteString
+hashInfoDict :: BCode -> IO Digest
 hashInfoDict bc =
-    do ih <- info bc
+    do ih <- case info bc of
+		Nothing -> fail "Could not find infoHash"
+		Just x  -> return x
        let encoded = encode ih
-       return . bytestringDigest . sha1 . L.fromChunks $ [encoded]
+       digest $ L.fromChunks $ [encoded]
 
 
 toPS :: String -> Path

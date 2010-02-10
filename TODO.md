@@ -63,8 +63,6 @@ wish-list.
    - Make the client be able to select what processes that are allowed to
      log what (perhaps write a DSL for it).
    - When closing, gracefully tell the tracker about it.
-   - When running the endgame, shuffle the returned blocks so different
-     peers are likely to download different blocks.
    - Let Piece Sets be S.Set PieceNum rather than [PieceNum]. They are
      larger than 1000 for some large torrents, so it makes sense to shift to
      a better representation.
@@ -86,7 +84,6 @@ Before releasing into the "wild"
    - Check that the tracker is told about what happened.
    - When we complete a torrent, tell the tracker.
    - What about reentrancy and FFI OpenSSL calls?
-   - When entering the endgame, change the strategy for filling up pieces.
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"
      in PieceMgrP. We basically want to figure out what should happen.

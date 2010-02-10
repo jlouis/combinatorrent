@@ -65,9 +65,7 @@ download name = do
            putStrLn "Created channels"
 	   -- setup StdGen and Peer data
            gen <- getStdGen
-	   ti <- case mkTorrentInfo bc of
-		    Nothing -> fail "Could not create TorrentInfo from torrent file."
-		    Just x  -> return x
+	   ti <- mkTorrentInfo bc
            let pid = mkPeerId gen
 	       left = bytesLeft haveMap pieceMap
 	       clientState = determineState haveMap
