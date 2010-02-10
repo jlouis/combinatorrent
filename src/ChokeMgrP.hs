@@ -92,7 +92,8 @@ start logC ch infoC ur weSeed supC = do
 	      updateDB
 	      runRechokeRound
     removePeer tid = do logDebug $ "Removing peer " ++ show tid
-			modify (\db -> db { peerMap = M.delete tid (peerMap db) })
+			modify (\db -> db { peerMap = M.delete tid (peerMap db),
+					    peerChain = (peerChain db) \\ [tid] })
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
