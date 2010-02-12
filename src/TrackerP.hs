@@ -136,20 +136,18 @@ start ti pid port logC sc statusC msgC pc supC =
 			(defaultStopHandler supC)) -- TODO: Gracefully close down here!
 
 loop :: Process CF ST ()
-loop = do
-    syncP =<< trackerEvt
-  where trackerEvt = do
-	    ev <- recvPC trackerMsgCh
-	    wrapP ev (\msg -> do logDebug $ "Got tracker event"
-				 case msg of
-				    TrackerTick x -> do t <- gets nextTick
-						        when (x+1 == t) talkTracker
-				    Stop     ->
-					modify (\s -> s { state = Stopped }) >> talkTracker
-				    Start    ->
-					modify (\s -> s { state = Started }) >> talkTracker
-				    Complete ->
-					modify (\s -> s { state = Completed }) >> talkTracker)
+loop = do msg <- recvPC trackerMsgCh >>= syncP
+	  logDebug $ "Got tracker event"
+	  case msg of
+	    TrackerTick x -> do t <- gets nextTick
+				when (x+1 == t) talkTracker
+	    Stop     ->
+		modify (\s -> s { state = Stopped }) >> talkTracker
+	    Start    ->
+		modify (\s -> s { state = Started }) >> talkTracker
+	    Complete ->
+		  modify (\s -> s { state = Completed }) >> talkTracker
+  where
         talkTracker = pokeTracker >>= timerUpdate
 
 eventTransition :: Process CF ST ()
