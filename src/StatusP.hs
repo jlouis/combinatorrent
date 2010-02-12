@@ -94,12 +94,15 @@ start logC l tState trackerC statusC supC = do
 		    case m of
 			TrackerStat ic c ->
 			   modify (\s -> s { incomplete = ic, complete = c })
-		        CompletedPiece bytes ->
-			   modify (\s -> s { left = (left s) - bytes })
-			PeerStat up down ->
+		        CompletedPiece bytes -> do
+			    logDebug "StatusProcess updated left"
+			    modify (\s -> s { left = (left s) - bytes })
+			PeerStat up down -> do
+			   logDebug "StatusProcess updated Up/Downloaded"
 			   modify (\s -> s { uploaded = (uploaded s) + up,
 					     downloaded = (downloaded s) + down })
 			TorrentCompleted -> do
+			   logDebug "TorrentCompletion at StatusP"
 			   l <- gets left
 			   when (l /= 0) (logError "Warning: Left is not 0 upon Torrent Completion")
 			   modify (\s -> s { state = Seeding }))

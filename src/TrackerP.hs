@@ -143,7 +143,7 @@ loop = do
 	    wrapP ev (\msg -> do logDebug $ "Got tracker event"
 				 case msg of
 				    TrackerTick x -> do t <- gets nextTick
-						        when (x == t) talkTracker
+						        when (x+1 == t) talkTracker
 				    Stop     ->
 					modify (\s -> s { state = Stopped }) >> talkTracker
 				    Start    ->
