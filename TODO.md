@@ -59,6 +59,11 @@ wish-list.
      a better representation.
    - Cleanup the code around ChokeMgrP.advancePeerChain. It currently does a
      lot of stuff it doesn't have to do.
+   - The status reporting code needs some help. It only transfers up/down
+     rates once every 30 seconds. If a peer is living for less than 30
+     seconds, then no upload/download will be reported for that peer. The
+     fix is to contact the StatusP when a peer closes if it has something to
+     transfer.
 
 Known Bugs
 ----------
@@ -77,7 +82,6 @@ Before releasing into the "wild"
      started, stopped or completes, we should message the tracker with the
      update right away. The tracker code already supports this, but the rest
      of the code must do the right thing.
-   - We don't update the Status Process correctly from the peers. Why?
    - What about reentrancy and FFI OpenSSL calls?
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"

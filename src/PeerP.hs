@@ -315,6 +315,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 		dr <- gets downRate
 		let (upCnt, nuRate) = RC.extractCount $ ur
 		    (downCnt, ndRate) = RC.extractCount $ dr
+		logDebug $ "Sending peerStats: " ++ show upCnt ++ ", " ++ show downCnt
 		(sendPC statCh $ PeerStat { peerUploaded = upCnt
 					  , peerDownloaded = downCnt }) >>= syncP
 		modify (\s -> s { upRate = nuRate, downRate = ndRate }))

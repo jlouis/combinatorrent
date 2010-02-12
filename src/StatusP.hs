@@ -103,9 +103,11 @@ start logC l tState trackerC statusC trackerC1 supC = do
 			    logDebug "StatusProcess updated left"
 			    modify (\s -> s { left = (left s) - bytes })
 			PeerStat up down -> do
-			   logDebug "StatusProcess updated Up/Downloaded"
 			   modify (\s -> s { uploaded = (uploaded s) + up,
 					     downloaded = (downloaded s) + down })
+			   u <- gets uploaded
+			   d <- gets downloaded
+			   logDebug $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
 			TorrentCompleted -> do
 			   logDebug "TorrentCompletion at StatusP"
 			   l <- gets left
