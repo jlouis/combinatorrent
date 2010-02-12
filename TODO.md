@@ -77,6 +77,7 @@ Before releasing into the "wild"
      started, stopped or completes, we should message the tracker with the
      update right away. The tracker code already supports this, but the rest
      of the code must do the right thing.
+   - We don't update the Status Process correctly from the peers. Why?
    - What about reentrancy and FFI OpenSSL calls?
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"
@@ -85,6 +86,7 @@ Before releasing into the "wild"
 Items for later (no particular order)
 -------------------------------------
 
+   - Improve parallel execution. We are currently extremely synchronous.
    - Add support for multiple torrents at once
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
