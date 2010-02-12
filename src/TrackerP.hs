@@ -131,10 +131,7 @@ start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
-       -- Install a timer which triggers in 1 seconds
-       TimerP.register 1 (TrackerTick 0) msgC
-       logMsg logC "Timer in 1 seconds"
-       spawnP (CF logC sc statusC msgC pc) (ST ti pid Started port tm 0)
+       spawnP (CF logC sc statusC msgC pc) (ST ti pid Stopped port tm 0)
 		   (catchP (forever loop)
 			(defaultStopHandler supC)) -- TODO: Gracefully close down here!
 

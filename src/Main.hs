@@ -85,5 +85,6 @@ download name = do
 					Seeding -> True
 					Leeching -> False)
 		     ] logC supC
+	   sync $ transmit trackerC TrackerP.Start
            sync $ receive waitC (const True)
            return ()
