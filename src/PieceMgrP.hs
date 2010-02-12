@@ -143,9 +143,11 @@ start logC mgrC fspC chokeC statC db supC =
 		       when done
 			   (do assertPieceComplete pn
 			       pend <- gets pendingPieces
+			       iprog <- gets inProgress
 			       logInfo $ "Piece #" ++ show pn
 					 ++ " completed, there are " 
-					 ++ (show $ length pend) ++ " left"
+					 ++ (show $ length pend) ++ " pending "
+					 ++ (show $ M.size iprog) ++ " in progress"
 			       l <- gets infoMap >>=
 				    (\pm -> case M.lookup pn pm of
 						    Nothing -> fail "Storeblock: M.lookup"

@@ -64,6 +64,9 @@ wish-list.
      seconds, then no upload/download will be reported for that peer. The
      fix is to contact the StatusP when a peer closes if it has something to
      transfer.
+   - Make sure we actually seed when the torrent finishes.
+     Rather hard to check with the current construction in the PeerMgr. The
+     PeerMgr needs more work before this is possible.
 
 Known Bugs
 ----------
@@ -76,7 +79,6 @@ Before releasing into the "wild"
    - We currently take space proportional to torrent size due to our SHA1
      calculation being slow and not use a file descriptor. Research into a
      faster SHA1 library would be really beneficial.
-   - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
    - Introduce status update messages to the tracker. When the torrent is
      started, stopped or completes, we should message the tracker with the

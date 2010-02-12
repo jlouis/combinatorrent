@@ -105,7 +105,8 @@ type PeerPid = ThreadId -- For now, should probably change
 --   which peers are interesting to keep uploading to and which are slow. It also keeps track of how
 --   far we are in the process of wandering the optimistic unchoke chain.
 data PeerDB = PeerDB
-    { chokeRound :: Int       -- ^ Counted down by one from 2. If 0 then we should advance the peer chain.
+    { chokeRound :: Int       -- ^ Counted down by one from 2. If 0 then we should
+			      --   advance the peer chain.
     , seeding :: Bool         -- ^ True if we are seeding the torrent.
 			      --   In a multi-torrent world, this has to change.
     , uploadSlots :: Int      -- ^ Current number of upload slots
