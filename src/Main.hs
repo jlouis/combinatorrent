@@ -77,7 +77,7 @@ download name = do
 				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
 		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
 					(PieceMgrP.createPieceDb haveMap pieceMap)
-		     , Worker $ StatusP.start logC left clientState statusC statInC
+		     , Worker $ StatusP.start logC left clientState statusC statInC trackerC
 		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
 		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
@@ -85,6 +85,6 @@ download name = do
 					Seeding -> True
 					Leeching -> False)
 		     ] logC supC
-	   sync $ transmit trackerC TrackerP.Start
+	   sync $ transmit trackerC StatusP.Start
            sync $ receive waitC (const True)
            return ()

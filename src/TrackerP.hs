@@ -84,8 +84,6 @@ import Torrent
 data TrackerEvent = Started | Stopped | Completed | Running
     deriving Eq
 
--- | TrackerChannel is the channel of the tracker
-data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 
 
 -- | The tracker will in general respond with a BCoded dictionary. In our world, this is
@@ -109,7 +107,7 @@ data CF = CF {
 	logCh :: LogChannel
       , statusCh :: Channel StatusP.ST
       , statusPCh :: Channel StatusP.StatusMsg
-      , trackerMsgCh :: Channel TrackerMsg
+      , trackerMsgCh :: Channel StatusP.TrackerMsg
       , peerMgrCh :: Channel [PeerMgrP.Peer]
       }
 
@@ -127,7 +125,7 @@ data ST = ST {
       }
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
-      -> Channel StatusP.StatusMsg -> Channel TrackerMsg -> Channel [PeerMgrP.Peer]
+      -> Channel StatusP.StatusMsg -> Channel StatusP.TrackerMsg -> Channel [PeerMgrP.Peer]
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
@@ -139,13 +137,14 @@ loop :: Process CF ST ()
 loop = do msg <- recvPC trackerMsgCh >>= syncP
 	  logDebug $ "Got tracker event"
 	  case msg of
-	    TrackerTick x -> do t <- gets nextTick
-				when (x+1 == t) talkTracker
-	    Stop     ->
+	    StatusP.TrackerTick x ->
+		do t <- gets nextTick
+		   when (x+1 == t) talkTracker
+	    StatusP.Stop     ->
 		modify (\s -> s { state = Stopped }) >> talkTracker
-	    Start    ->
+	    StatusP.Start    ->
 		modify (\s -> s { state = Started }) >> talkTracker
-	    Complete ->
+	    StatusP.Complete ->
 		  modify (\s -> s { state = Completed }) >> talkTracker
   where
         talkTracker = pokeTracker >>= timerUpdate
@@ -197,7 +196,7 @@ timerUpdate (timeout, minTimeout) = do
     when (st == Running)
 	(do t <- tick
 	    ch <- asks trackerMsgCh
-            TimerP.register timeout (TrackerTick t) ch
+            TimerP.register timeout (StatusP.TrackerTick t) ch
             logDebug $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })

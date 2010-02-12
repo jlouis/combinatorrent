@@ -33,6 +33,7 @@
 module StatusP (
     -- * Types
       StatusMsg(..)
+    , TrackerMsg(..)
     -- * Channels
     , StatusChan
     -- * State
@@ -64,8 +65,12 @@ data StatusMsg = TrackerStat { trackIncomplete :: Maybe Integer
 
 type StatusChan = Channel StatusMsg
 
+-- | TrackerChannel is the channel of the tracker
+data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
+
 data CF  = CF { logCh :: LogChannel
 	      , statusCh :: Channel StatusMsg
+	      , trackerCh1 :: Channel TrackerMsg
 	      , trackerCh :: Channel ST }
 
 instance Logging CF where
@@ -81,9 +86,9 @@ data ST = ST { uploaded :: Integer,
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
 start :: LogChannel -> Integer -> TorrentState -> Channel ST
-      -> Channel StatusMsg -> SupervisorChan -> IO ThreadId
-start logC l tState trackerC statusC supC = do
-    spawnP (CF logC statusC trackerC) (ST 0 0 l Nothing Nothing tState)
+      -> Channel StatusMsg -> Channel TrackerMsg -> SupervisorChan -> IO ThreadId
+start logC l tState trackerC statusC trackerC1 supC = do
+    spawnP (CF logC statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
 	(catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
