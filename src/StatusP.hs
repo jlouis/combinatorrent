@@ -104,6 +104,6 @@ start logC l tState trackerC statusC supC = do
 			TorrentCompleted -> do
 			   logDebug "TorrentCompletion at StatusP"
 			   l <- gets left
-			   when (l /= 0) (logError "Warning: Left is not 0 upon Torrent Completion")
+			   when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
 			   modify (\s -> s { state = Seeding }))
 		   
