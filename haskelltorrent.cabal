@@ -43,6 +43,7 @@ executable HaskellTorrent
     random-shuffle,
     directory
 
+  ghc-options: -threaded
   if flag(debug)
       cpp-options: "-DDEBUG"
   else

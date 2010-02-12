@@ -5,6 +5,7 @@ module Digest
   )
 where
 
+import Control.Concurrent
 import Control.Monad
 
 import Data.Maybe
@@ -24,6 +25,7 @@ sha1Digest = do dig <- D.getDigestByName "SHA1"
 
 digest :: L.ByteString -> IO Digest
 digest bs =
+  runInBoundThread $ -- I don't think this is needed strictly
     withOpenSSL $
 	do sha1 <- sha1Digest
 	   return $ D.digestLBS sha1 bs
