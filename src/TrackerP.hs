@@ -81,15 +81,12 @@ import Torrent
 --
 --   the 'Completed' entry is used once in the lifetime of a torrent. It
 --   explains to the tracker that we completed the torrent in question.
-data TrackerState = Started | Stopped | Completed
+data TrackerEvent = Started | Stopped | Completed | Running
+    deriving Eq
 
 -- | TrackerChannel is the channel of the tracker
-data TrackerMsg = Stop | TrackerTick Integer
+data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 
-instance Show TrackerState where
-    show Started = "started"
-    show Stopped = "stopped"
-    show Completed = "completed"
 
 -- | The tracker will in general respond with a BCoded dictionary. In our world, this is
 --   not the data structure we would like to work with. Hence, we parse the structure into
@@ -123,7 +120,7 @@ instance Logging CF where
 data ST = ST {
         torrentInfo :: TorrentInfo
       , peerId :: PeerId
-      , state :: TrackerState
+      , state :: TrackerEvent
       , localPort :: PortID
       , nextContactTime :: POSIXTime
       , nextTick :: Integer
@@ -148,13 +145,29 @@ loop = do
 	    ev <- recvPC trackerMsgCh
 	    wrapP ev (\msg -> do logDebug $ "Got tracker event"
 				 case msg of
-				    TrackerTick version -> do t <- gets nextTick
-							      when (version == t)
-								pokeTracker
-                                    Stop -> do modify (\s -> s { state = Stopped })
-					       pokeTracker)
+				    TrackerTick x -> do t <- gets nextTick
+						        when (x == t) talkTracker
+				    Stop     ->
+					modify (\s -> s { state = Stopped }) >> talkTracker
+				    Start    ->
+					modify (\s -> s { state = Started }) >> talkTracker
+				    Complete ->
+					modify (\s -> s { state = Completed }) >> talkTracker)
+        talkTracker = pokeTracker >>= timerUpdate
 
-pokeTracker :: Process CF ST ()
+eventTransition :: Process CF ST ()
+eventTransition = do
+    st <- gets state
+    modify (\s -> s { state = newS st})
+  where newS st =
+         case st of
+	    Running -> Running
+	    Stopped -> Stopped
+	    Completed -> Running
+	    Started -> Running
+
+-- | Poke the tracker. It returns the new timer intervals to use
+pokeTracker :: Process CF ST (Integer, Maybe Integer)
 pokeTracker = do
     upDownLeft <- syncP =<< recvPC statusCh
     url <- buildRequestURL upDownLeft
@@ -166,32 +179,34 @@ pokeTracker = do
     resp <- trackerRequest uri
     case resp of
 	Left err -> do logInfo $ "Tracker HTTP Error: " ++ err
-		       timerUpdate failTimerInterval $ Just failTimerInterval
+		       return (failTimerInterval, Just failTimerInterval)
 	Right (ResponseWarning wrn) ->
 		    do logInfo $ "Tracker Warning Response: " ++ fromBS wrn
-		       timerUpdate failTimerInterval $ Just failTimerInterval
+		       return (failTimerInterval, Just failTimerInterval)
         Right (ResponseError err) ->
                     do logInfo $ "Tracker Error Response: " ++ fromBS err
-                       timerUpdate failTimerInterval $ Just failTimerInterval
+		       return (failTimerInterval, Just failTimerInterval)
         Right (ResponseDecodeError err) ->
                     do logInfo $ "Response Decode error: " ++ fromBS err
-                       timerUpdate failTimerInterval $ Just failTimerInterval
+		       return (failTimerInterval, Just failTimerInterval)
         Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
 		       let trackerStats = StatusP.TrackerStat { StatusP.trackComplete = completeR bc,
 					                        StatusP.trackIncomplete = incompleteR bc }
 	               sendPC statusPCh trackerStats  >>= syncP
-                       timerUpdate (timeoutInterval bc) (timeoutMinInterval bc)
+		       eventTransition
+		       return (timeoutInterval bc, timeoutMinInterval bc)
 
-timerUpdate :: Integer -> Maybe Integer -> Process CF ST ()
-timerUpdate timeout minTimeout = do
-    t <- tick
-    ch <- asks trackerMsgCh
-    TimerP.register timeout (TrackerTick t) ch
-    logDebug $ "Set timer to: " ++ show timeout
+timerUpdate :: (Integer, Maybe Integer) -> Process CF ST ()
+timerUpdate (timeout, minTimeout) = do
+    st <- gets state
+    when (st == Running)
+	(do t <- tick
+	    ch <- asks trackerMsgCh
+            TimerP.register timeout (TrackerTick t) ch
+            logDebug $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })
-		  return t
-
+                  return t
 
 -- Process a result dict into a tracker response object.
 processResultDict :: BCode -> TrackerResponse
@@ -256,20 +271,26 @@ buildRequestURL ss = do ti <- gets torrentInfo
           headers = do
 	    s <- get
 	    p <- prt
-	    return [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
-                     ("peer_id",   rfc1738Encode $ peerId s),
-                     ("uploaded", show $ StatusP.uploaded ss),
-                     ("downloaded", show $ StatusP.downloaded ss),
-                     ("left", show $ StatusP.left ss),
-                     ("port", show p),
-                     ("compact", "1"),
-                     ("event", show $ state s)]
+	    return $ [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
+                      ("peer_id",   rfc1738Encode $ peerId s),
+                      ("uploaded", show $ StatusP.uploaded ss),
+                      ("downloaded", show $ StatusP.downloaded ss),
+                      ("left", show $ StatusP.left ss),
+                      ("port", show p),
+                      ("compact", "1")] ++
+		      (trackerfyEvent $ state s)
           prt :: Process CF ST Integer
           prt = do lp <- gets localPort
 		   case lp of
 		     PortNumber pnum -> return $ fromIntegral pnum
                      _ -> do logFatal "Unknown port type"
 			     stopP
+	  trackerfyEvent ev =
+	        case ev of
+		    Running   -> []
+		    Completed -> [("event", "completed")]
+		    Started   -> [("event", "started")]
+		    Stopped   -> [("event", "stopped")]
 
 -- Carry out URL-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.

@@ -73,9 +73,10 @@ Before releasing into the "wild"
      faster SHA1 library would be really beneficial.
    - Make sure we actually seed when the torrent finishes.
    - Check that the tracker is told about what happened.
-   - When we complete a torrent, tell the tracker.
-     In general, improve the reporting to the tracker to make it more
-     correct.
+   - Introduce status update messages to the tracker. When the torrent is
+     started, stopped or completes, we should message the tracker with the
+     update right away. The tracker code already supports this, but the rest
+     of the code must do the right thing.
    - What about reentrancy and FFI OpenSSL calls?
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"
