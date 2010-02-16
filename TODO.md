@@ -88,11 +88,13 @@ Before releasing into the "wild"
    - Handle the following bug:
             "The 'impossible' happened, are you implementing endgame?"
      in PieceMgrP. We basically want to figure out what should happen.
+   - Look at the Choke Manager code when seeding.
 
 Items for later (no particular order)
 -------------------------------------
 
    - Improve parallel execution. We are currently extremely synchronous.
+   - Reduce CPU load and memory load.
    - Add support for multiple torrents at once
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
