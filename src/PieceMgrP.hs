@@ -138,7 +138,7 @@ start logC mgrC fspC chokeC statC db supC =
 		    do logDebug $ "Storing block: " ++ show (pn, blk)
 		       storeBlock pn blk d
 		       modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
-		       handleEndGame pn blk
+		       endgameBroadcast pn blk
 		       done <- updateProgress pn blk
 		       when done
 			   (do assertPieceComplete pn
@@ -174,7 +174,7 @@ start logC mgrC fspC chokeC statC db supC =
 		                   $ S.union inProg pend 
 		    syncP =<< sendP retC (not i))
 	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
-	handleEndGame pn blk =
+	endgameBroadcast pn blk =
 	    gets endGaming >>=
 	      flip when (modify (\db -> db { donePush = (BlockComplete pn blk) : donePush db }))
 	markDone pn = do
