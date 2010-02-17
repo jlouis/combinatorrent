@@ -219,11 +219,14 @@ putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
 -- | Put back a block for downloading.
 --   TODO: This is rather slow, due to the (\\) call, but hopefully happens rarely.
 putbackBlock :: (PieceNum, Block) -> PieceMgrProcess ()
-putbackBlock (pn, blk) = modify (\db -> db { inProgress = ndb (inProgress db)
-					   , downloading = downloading db \\ [(pn, blk)]})
+putbackBlock (pn, blk) = do
+    done <- gets donePieces
+    unless (pn `elem` done) -- Happens at endgame, stray block
+      modify (\db -> db { inProgress = ndb (inProgress db)
+		        , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
         -- The first of these might happen in the endgame
-        f Nothing     = error "The 'impossible' happened, are you implementing endgame?"
+        f Nothing     = fail "The 'impossible' happened"
         f (Just ipp) = Just ipp { ipPendingBlocks = blk : ipPendingBlocks ipp }
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
