@@ -81,13 +81,10 @@ Before releasing into the "wild"
      update right away. The tracker code already supports this, but the rest
      of the code must do the right thing.
 
-     The rest of the code ought to be nice, but I have not seen it do the
+     The rest of the code ought to be written, but I have not seen it do the
      right thing "In the Wild".
    - The code violates a PieceMgr Assertion (The last one present in
      checkDownload). Investigate.
-   - Handle the following bug:
-            "The 'impossible' happened, are you implementing endgame?"
-     in PieceMgrP. We basically want to figure out what should happen.
    - Look at the Choke Manager code when seeding.
 
 Items for later (no particular order)

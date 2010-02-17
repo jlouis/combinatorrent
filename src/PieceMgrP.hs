@@ -171,7 +171,7 @@ start logC mgrC fspC chokeC statC db supC =
 		    pend   <- liftM S.fromList $ gets pendingPieces
 		    -- @i@ is the intersection with with we need and the peer has.
 		    let i = S.null $ S.intersection (S.fromList pieces)
-		                   $ S.union inProg pend 
+		                   $ S.union inProg pend
 		    syncP =<< sendP retC (not i))
 	storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
 	endgameBroadcast pn blk =
@@ -195,7 +195,6 @@ createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False
 ----------------------------------------------------------------------
 
 -- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
---   and return the updated Piece Database.
 completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
                                        donePiece  = pn : donePiece db })
@@ -211,7 +210,7 @@ checkFullCompletion = do
 	    sendPC chokeCh  TorrentComplete >>= syncP)
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
---   and put it back into the download queue again. Returns the new database.
+--   and put it back into the download queue again.
 putbackPiece :: PieceNum -> PieceMgrProcess ()
 putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
                                       pendingPieces = pn : pendingPieces db })
