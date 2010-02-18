@@ -4,10 +4,7 @@ where
 import Control.Concurrent.CML
 import Control.Monad
 
-import Data.Maybe
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
-
 
 import System.Environment
 import System.Random

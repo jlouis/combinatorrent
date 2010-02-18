@@ -54,7 +54,6 @@ where
 
 import qualified Data.Foldable as F
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Data.List
 import qualified Data.Map as M
 

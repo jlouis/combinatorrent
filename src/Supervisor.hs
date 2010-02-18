@@ -21,12 +21,8 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Exception
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Reader
-
-import Data.List
 
 import Prelude hiding (catch)
 

@@ -8,11 +8,8 @@ module PeerP (
     )
 where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Exception
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -23,7 +20,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Parser hiding (isEmpty)
 import qualified Data.Map as M
-import Data.List (sort)
 import Data.Maybe
 
 import Data.Set as S hiding (map)

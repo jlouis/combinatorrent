@@ -39,7 +39,6 @@ module FS (PieceInfo(..),
            canSeed)
 where
 
-import Control.Monad
 import Control.Monad.State
 
 import qualified Data.ByteString.Char8 as B

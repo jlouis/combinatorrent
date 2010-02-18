@@ -43,7 +43,6 @@ module StatusP (
     )
 where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML
 

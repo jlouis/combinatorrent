@@ -12,10 +12,8 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Monad
 import Control.Monad.State
 import Data.List
-import Data.Maybe
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Set as S
