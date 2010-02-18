@@ -35,8 +35,6 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Exception
-import Control.Monad
 import Control.Monad.Reader
 
 import Prelude hiding (catch)

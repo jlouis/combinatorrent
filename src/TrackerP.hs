@@ -44,11 +44,10 @@ import Control.Concurrent.CML
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Data.Char (ord, chr)
+import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 
 import Network
 import Network.HTTP hiding (port)

@@ -8,17 +8,12 @@ where
 
 import Data.List
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Ord
-import qualified Data.Set as S
 
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Reader
-
-import System.Random
 
 import ChokeMgrP hiding (start)
 import PeerP

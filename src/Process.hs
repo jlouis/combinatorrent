@@ -34,13 +34,11 @@ module Process (
 where
 
 import Data.Monoid
-import Control.Applicative
 
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Exception
 
-import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
 

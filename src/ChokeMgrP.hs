@@ -10,14 +10,11 @@ where
 import Data.Time.Clock
 import Data.List
 import qualified Data.Map as M
-import Data.Maybe
-import Data.Ord
 import qualified Data.Set as S
 import Data.Traversable as T
 
 import Control.Concurrent
 import Control.Concurrent.CML
-import Control.Exception
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -26,12 +23,10 @@ import Prelude hiding (catch, log)
 
 import System.Random
 
-import PeerP
 import PeerTypes
 import PieceMgrP hiding (start)
 import Process
 import Logging
-import FSP hiding (start)
 import Supervisor
 import Torrent hiding (infoHash)
 import TimerP

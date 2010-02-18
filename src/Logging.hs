@@ -18,8 +18,6 @@ import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Monad.Reader
 
-import Data.Monoid
-
 import LoggingTypes
 import Prelude hiding (log)
 
