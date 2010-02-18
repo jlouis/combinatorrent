@@ -81,7 +81,7 @@ instance Serialize Message where
     put (Cancel pn (Block os sz))
                         = p8 8 *> mapM_ p32be [pn,os,sz]
     put (Port p)        = p8 9 *> (putWord16be . fromIntegral $ p)
-    
+
     get =  getKA      <|> getChoke
        <|> getUnchoke <|> getIntr
        <|> getNI      <|> getHave
@@ -115,17 +115,9 @@ byte w = do
         then getWord8
         else fail $ "Expected byte: " ++ show w ++ " got: " ++ show x
 
-
--- | Protocol handshake code. This encodes the protocol handshake part
--- protocolHandshake :: L.ByteString
--- protocolHandshake = toLazyByteString $ mconcat [putWord8 $ fromIntegral sz,
---                                                 putString protocolHeader,
---                                                 putWord64be caps]
---   where caps = extensionBasis
---         sz = length protocolHeader
-
+-- | Size of the protocol header
+protocolHeaderSize :: Int
 protocolHeaderSize = length protocolHeader
-
 
 -- | Protocol handshake code. This encodes the protocol handshake part
 protocolHandshake :: L.ByteString
@@ -163,7 +155,6 @@ headerParser ih = do
 
 
 data Capabilities = Fast
--- 
 decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities _ = []
 
