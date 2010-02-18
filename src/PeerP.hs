@@ -21,7 +21,10 @@ import Prelude hiding (catch, log)
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.ByteString.Parser hiding (isEmpty)
+-- import Data.ByteString.Parser hiding (isEmpty)
+import qualified Data.Serialize as S
+import qualified Data.Serialize.Get as G
+
 import qualified Data.Map as M
 import Data.List (sort)
 import Data.Maybe
@@ -80,14 +83,14 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
 ----------------------------------------------------------------------
 
 data SPCF = SPCF { spLogCh :: LogChannel
-		 , spMsgCh :: Channel L.ByteString
+		 , spMsgCh :: Channel B.ByteString
 		 }
 
 instance Logging SPCF where
    getLogger cf = ("SenderP", spLogCh cf)
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: LogChannel -> Handle -> Channel L.ByteString -> SupervisorChan -> IO ThreadId
+senderP :: LogChannel -> Handle -> Channel B.ByteString -> SupervisorChan -> IO ThreadId
 senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 						    (do t <- liftIO $ myThreadId
 							syncP =<< (sendP supC $ IAmDying t)
@@ -98,7 +101,7 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
 	c <- ask
 	m <- syncP =<< recvPC spMsgCh
 	h <- get
-	liftIO $ do L.hPut h m
+	liftIO $ do B.hPut h m
 	            hFlush h
 
 -- | Messages we can send to the Send Queue
@@ -109,7 +112,7 @@ data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we c
 
 data SQCF = SQCF { sqLogC :: LogChannel
 		 , sqInCh :: Channel SendQueueMessage
-		 , sqOutCh :: Channel L.ByteString
+		 , sqOutCh :: Channel B.ByteString
 		 , bandwidthCh :: BandwidthChannel
 		 }
 
@@ -122,7 +125,7 @@ instance Logging SQCF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel L.ByteString -> BandwidthChannel 
+sendQueueP :: LogChannel -> Channel SendQueueMessage -> Channel B.ByteString -> BandwidthChannel 
 	   -> SupervisorChan
 	   -> IO ThreadId
 sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST Q.empty 0)
@@ -157,12 +160,12 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
 	Just (e, r) <- gets (Q.pop . outQueue)
-	let bs = encode e
+	let bs = S.encode e
 	tEvt <- sendPC sqOutCh bs
 	wrapP tEvt (\() -> do logDebug "Dequeued event"
 			      modify (\s -> s { outQueue = r,
 					        bytesTransferred =
-						    bytesTransferred s + fromIntegral (L.length bs)}))
+						    bytesTransferred s + fromIntegral (B.length bs)}))
     filterAllPiece (Piece _ _ _) = True
     filterAllPiece _             = False
     filterPiece n off m =
@@ -204,7 +207,7 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h
 	if feof
 	    then do logDebug "Handle Closed"
 		    stopP
-	    else do bs' <- liftIO $ L.hGet h 4
+	    else do bs' <- liftIO $ B.hGet h 4
 		    l <- conv bs'
 		    readMessage l ch
     readMessage l ch = do
@@ -212,13 +215,13 @@ receiverP logC h ch supC = spawnP (RPCF logC ch) h
 	    then return ()
 	    else do logDebug $ "Reading off " ++ show l ++ " bytes"
 		    h <- get
-		    bs <- liftIO $ L.hGet h (fromIntegral l)
-		    case runParser decodeMsg bs of
+		    bs <- liftIO $ B.hGet h (fromIntegral l)
+		    case G.runGet decodeMsg bs of
 			Left _ -> do logWarn "Incorrect parse in receiver, dying!"
                                      stopP
                         Right msg -> do sendPC rpMsgC (msg, fromIntegral l) >>= syncP
     conv bs = do
-        case runParser getWord32be bs of
+        case G.runGet G.getWord32be bs of
           Left err -> do logWarn $ "Incorrent parse in receiver, dying: " ++ show err
                          stopP
           Right i -> return i

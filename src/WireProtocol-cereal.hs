@@ -91,9 +91,7 @@ getNI      = byte 3 *> return NotInterested
 getHave    = byte 4 *> (Have <$> gw32)
 getBF      = byte 5 *> (BitField <$> (remaining >>= getLazyByteString . fromIntegral))
 getReq     = byte 6 *> (Request  <$> gw32 <*> (Block <$> gw32 <*> gw32))
-getPiece   = byte 7 *> (Piece    <$> gw32
-                                 <*> gw32
-                                 <*> (remaining >>= getByteString))
+getPiece   = byte 7 *> (Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString))
 getCancel  = byte 8 *> (Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32))
 getPort    = byte 9 *> (Port . fromIntegral <$> getWord16be)
 getKA      = do
@@ -104,12 +102,13 @@ getKA      = do
 
 gw32 :: Integral a => Get a
 gw32 = fromIntegral <$> getWord32be
+
 byte :: Word8 -> Get Word8
 byte w = do
     x <- lookAhead getWord8
     if x == w
         then getWord8
-        else fail $ "Expected byte: '" ++ show w ++ "' got: '" ++ show x ++ "'"
+        else fail $ "Expected byte: " ++ show w ++ " got: " ++ show x
 
 
 -- | Protocol handshake code. This encodes the protocol handshake part
