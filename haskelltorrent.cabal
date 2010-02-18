@@ -14,7 +14,10 @@ maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
 synopsis: A Haskell Bittorrent client
 build-type: Configure
+
 extra-tmp-files: src/Version.hs
+extra-source-files: src/Version.hs.in, configure
+data-files: AUTHORS, README.md
 
 flag debug
   description: Enable debug support
@@ -23,6 +26,7 @@ flag debug
 executable HaskellTorrent
   hs-source-dirs: src
   main-is: Main.hs
+  other-modules: BCode, ChokeMgrP, ConsoleP, Digest, FS, FSP, ListenP, Logging, LoggingTypes, PeerMgrP, PeerP, PeerTypes, PieceMgrP, Process, Queue, RateCalc, StatusP, Supervisor, TimerP, Torrent, TrackerP, WireProtocol
   extensions: CPP
 
   build-depends:
