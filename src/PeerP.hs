@@ -160,7 +160,7 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
 	Just (e, r) <- gets (Q.pop . outQueue)
-	let bs = S.encode e
+	let bs = encodePacket e
 	tEvt <- sendPC sqOutCh bs
 	wrapP tEvt (\() -> do logDebug "Dequeued event"
 			      modify (\s -> s { outQueue = r,

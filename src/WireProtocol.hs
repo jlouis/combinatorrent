@@ -67,6 +67,12 @@ p32be = putWord32be . fromIntegral
 decodeMsg :: Get Message
 decodeMsg = get
 
+encodePacket :: Message -> B.ByteString
+encodePacket m = mconcat [szEnc, mEnc]
+  where mEnc  = encode m
+	sz    = B.length mEnc
+	szEnc = runPut . p32be $ sz
+
 instance Serialize Message where
     put KeepAlive       = return ()
     put Choke           = p8 0
