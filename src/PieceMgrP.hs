@@ -219,10 +219,10 @@ putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
 --   TODO: This is rather slow, due to the (\\) call, but hopefully happens rarely.
 putbackBlock :: (PieceNum, Block) -> PieceMgrProcess ()
 putbackBlock (pn, blk) = do
-    done <- gets donePieces
+    done <- gets donePiece
     unless (pn `elem` done) -- Happens at endgame, stray block
-      modify (\db -> db { inProgress = ndb (inProgress db)
-		        , downloading = downloading db \\ [(pn, blk)]})
+      $ modify (\db -> db { inProgress = ndb (inProgress db)
+		          , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
         -- The first of these might happen in the endgame
         f Nothing     = fail "The 'impossible' happened"
