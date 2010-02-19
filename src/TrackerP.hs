@@ -62,7 +62,7 @@ import qualified PeerMgrP
 import Process
 import qualified StatusP
 import Supervisor
-import qualified TimerP
+import qualified Process.Timer as Timer
 import Torrent
 
 
@@ -195,7 +195,7 @@ timerUpdate (timeout, minTimeout) = do
     when (st == Running)
 	(do t <- tick
 	    ch <- asks trackerMsgCh
-            TimerP.register timeout (StatusP.TrackerTick t) ch
+            Timer.register timeout (StatusP.TrackerTick t) ch
             logDebug $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })

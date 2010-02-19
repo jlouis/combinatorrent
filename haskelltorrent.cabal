@@ -28,7 +28,7 @@ executable HaskellTorrent
   main-is: HaskellTorrent.hs
   other-modules: Protocol.BCode, ChokeMgrP, ConsoleP, Digest, FS, FSP, ListenP, Logging,
     LoggingTypes, PeerMgrP, PeerP, PeerTypes, PieceMgrP, Process, Data.Queue, RateCalc,
-    StatusP, Supervisor, TimerP, Torrent, TrackerP, Protocol.Wire
+    StatusP, Supervisor, Process.Timer, Torrent, TrackerP, Protocol.Wire
   extensions: CPP
 
   build-depends:

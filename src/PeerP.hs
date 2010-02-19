@@ -40,7 +40,7 @@ import qualified Data.Queue as Q
 import RateCalc as RC
 import StatusP
 import Supervisor
-import TimerP
+import Process.Timer as Timer
 import Torrent
 import Protocol.Wire
 
@@ -266,7 +266,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
 	    -- Install the StatusP timer
 	    c <- asks timerCh
-	    TimerP.register 30 () c
+	    Timer.register 30 () c
 	    foreverP (recvEvt)
 	cleanup = do
 	    t <- liftIO myThreadId
@@ -307,7 +307,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
 	    wrapP evt (\() -> do
 		logDebug "TimerEvent"
 	        tch <- asks timerCh
-		TimerP.register 30 () tch
+		Timer.register 30 () tch
 		ur <- gets upRate
 		dr <- gets downRate
 		let (upCnt, nuRate) = RC.extractCount $ ur

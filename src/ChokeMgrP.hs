@@ -29,7 +29,7 @@ import Process
 import Logging
 import Supervisor
 import Torrent hiding (infoHash)
-import TimerP
+import Process.Timer as Timer
 
 -- DATA STRUCTURES
 ----------------------------------------------------------------------
@@ -55,7 +55,7 @@ type ChokeMgrProcess a = Process CF PeerDB a
 start :: LogChannel -> ChokeMgrChannel -> ChokeInfoChannel -> Int -> Bool -> SupervisorChan
       -> IO ThreadId
 start logC ch infoC ur weSeed supC = do
-    TimerP.register 10 Tick ch
+    Timer.register 10 Tick ch
     spawnP (CF logC ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
 	    (catchP (forever pgm)
 	      (defaultStopHandler supC))
@@ -83,7 +83,7 @@ start logC ch infoC ur weSeed supC = do
 					         $ peerMap s}))
     tick = do logDebug "Ticked"
 	      ch <- asks mgrCh
-	      TimerP.register 10 Tick ch
+	      Timer.register 10 Tick ch
 	      updateDB
 	      runRechokeRound
     removePeer tid = do logDebug $ "Removing peer " ++ show tid

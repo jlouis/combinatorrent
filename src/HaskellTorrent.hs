@@ -21,7 +21,6 @@ import qualified ChokeMgrP (start)
 import Logging
 import qualified StatusP
 import Supervisor
-import qualified TimerP()
 import Torrent
 import qualified TrackerP
 import Version

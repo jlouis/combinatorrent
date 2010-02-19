@@ -46,6 +46,12 @@ Haskell-torrent will probably never support these BEPs:
 Source code Hierarchy
 ---------------------
 
+   - **Data**: Data structures.
+      - **Queue**: Functional queues. Standard variant with two lists.
+
+   - **Process**: Process definitions for the different processes comprising Haskell Torrent
+      - **Timer**: Timer events.
+
    - **Protocol**: Modules for interacting with the various bittorrent protocols.
       - **BCode**: The bittorrent BCode coding. Used by several protocols.
       - **Wire**: The protocol used for communication between peers.
