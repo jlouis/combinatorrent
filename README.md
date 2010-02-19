@@ -43,6 +43,16 @@ Haskell-torrent will probably never support these BEPs:
 
    - 016, 017, 019
 
+Source code Hierarchy
+---------------------
+
+   - **Protocol**: Modules for interacting with the various bittorrent protocols.
+      - **BCode**: The bittorrent BCode coding. Used by several protocols.
+      - **Wire**: The protocol used for communication between peers.
+
+   - **Top Level**:
+      - **HaskellTorrent**: Main entry point to the code. Sets up processes.
+
 Odd bugs
 --------
 
