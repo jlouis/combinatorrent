@@ -1,5 +1,5 @@
 -- | Simple Functional queues based on a double list. This usually achieves good amortized bounds
-module Queue (
+module Data.Queue (
               -- * Types
               Queue,
               -- * Functions
@@ -7,7 +7,7 @@ module Queue (
               isEmpty,
               push,
               pop,
-              Queue.filter)
+              Data.Queue.filter)
 where
 
 import qualified Data.List as Lst

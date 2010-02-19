@@ -36,7 +36,7 @@ import Process
 import Logging
 import FSP
 import PieceMgrP
-import qualified Queue as Q
+import qualified Data.Queue as Q
 import RateCalc as RC
 import StatusP
 import Supervisor
