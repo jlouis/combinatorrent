@@ -1,29 +1,3 @@
--- Haskell Torrent
--- Copyright (c) 2009, Jesper Louis Andersen,
--- All rights reserved.
---
--- Redistribution and use in source and binary forms, with or without
--- modification, are permitted provided that the following conditions are
--- met:
---
---  * Redistributions of source code must retain the above copyright
---    notice, this list of conditions and the following disclaimer.
---  * Redistributions in binary form must reproduce the above copyright
---    notice, this list of conditions and the following disclaimer in the
---    documentation and/or other materials provided with the distribution.
---
--- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
--- IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
--- THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
--- PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
--- CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
--- EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
--- PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
--- PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
--- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
--- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
--- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 -- | The TrackerP module is responsible for keeping in touch with the Tracker of a torrent.
 --   The tracker is contacted periodically, and we exchange information with it. Specifically,
 --   we tell the tracker how much we have downloaded, uploaded and what is left. We also
@@ -33,9 +7,7 @@
 --   torrent in question. It may also respond with an error in which case we should present
 --   it to the user.
 --
---   TODO List: HTTP Client requests.
---              Timeout handling
-module TrackerP
+module Process.Tracker
 where
 
 import Control.Applicative
@@ -58,12 +30,12 @@ import Numeric (showHex)
 
 import Protocol.BCode as BCode hiding (encode)
 import Logging
-import qualified PeerMgrP
 import Process
-import qualified StatusP
 import Supervisor
-import qualified Process.Timer as Timer
 import Torrent
+import qualified Process.Status as Status
+import qualified Process.PeerMgr as PeerMgr
+import qualified Process.Timer as Timer
 
 
 
@@ -88,7 +60,7 @@ data TrackerEvent = Started | Stopped | Completed | Running
 -- | The tracker will in general respond with a BCoded dictionary. In our world, this is
 --   not the data structure we would like to work with. Hence, we parse the structure into
 --   the ADT below.
-data TrackerResponse = ResponseOk { newPeers :: [PeerMgrP.Peer],
+data TrackerResponse = ResponseOk { newPeers :: [PeerMgr.Peer],
                                     completeR :: Maybe Integer,
                                     incompleteR :: Maybe Integer,
                                     timeoutInterval :: Integer,
@@ -104,10 +76,10 @@ failTimerInterval = 15 * 60
 -- | Configuration of the tracker process
 data CF = CF {
 	logCh :: LogChannel
-      , statusCh :: Channel StatusP.ST
-      , statusPCh :: Channel StatusP.StatusMsg
-      , trackerMsgCh :: Channel StatusP.TrackerMsg
-      , peerMgrCh :: Channel [PeerMgrP.Peer]
+      , statusCh :: Channel Status.ST
+      , statusPCh :: Channel Status.StatusMsg
+      , trackerMsgCh :: Channel Status.TrackerMsg
+      , peerMgrCh :: Channel [PeerMgr.Peer]
       }
 
 instance Logging CF where
@@ -123,8 +95,8 @@ data ST = ST {
       , nextTick :: Integer
       }
 
-start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel StatusP.ST
-      -> Channel StatusP.StatusMsg -> Channel StatusP.TrackerMsg -> Channel [PeerMgrP.Peer]
+start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
+      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> Channel [PeerMgr.Peer]
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
@@ -136,14 +108,14 @@ loop :: Process CF ST ()
 loop = do msg <- recvPC trackerMsgCh >>= syncP
 	  logDebug $ "Got tracker event"
 	  case msg of
-	    StatusP.TrackerTick x ->
+	    Status.TrackerTick x ->
 		do t <- gets nextTick
 		   when (x+1 == t) talkTracker
-	    StatusP.Stop     ->
+	    Status.Stop     ->
 		modify (\s -> s { state = Stopped }) >> talkTracker
-	    StatusP.Start    ->
+	    Status.Start    ->
 		modify (\s -> s { state = Started }) >> talkTracker
-	    StatusP.Complete ->
+	    Status.Complete ->
 		  modify (\s -> s { state = Completed }) >> talkTracker
   where
         talkTracker = pokeTracker >>= timerUpdate
@@ -183,8 +155,8 @@ pokeTracker = do
                     do logInfo $ "Response Decode error: " ++ fromBS err
 		       return (failTimerInterval, Just failTimerInterval)
         Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
-		       let trackerStats = StatusP.TrackerStat { StatusP.trackComplete = completeR bc,
-					                        StatusP.trackIncomplete = incompleteR bc }
+		       let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
+					                       Status.trackIncomplete = incompleteR bc }
 	               sendPC statusPCh trackerStats  >>= syncP
 		       eventTransition
 		       return (timeoutInterval bc, timeoutMinInterval bc)
@@ -195,7 +167,7 @@ timerUpdate (timeout, minTimeout) = do
     when (st == Running)
 	(do t <- tick
 	    ch <- asks trackerMsgCh
-            Timer.register timeout (StatusP.TrackerTick t) ch
+            Timer.register timeout (Status.TrackerTick t) ch
             logDebug $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })
@@ -219,13 +191,13 @@ processResultDict d =
                        <*> (pure $ BCode.trackerMinInterval d)
 
 
-decodeIps :: B.ByteString -> [PeerMgrP.Peer]
+decodeIps :: B.ByteString -> [PeerMgr.Peer]
 decodeIps = decodeIps' . fromBS
 
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
-decodeIps' :: String -> [PeerMgrP.Peer]
+decodeIps' :: String -> [PeerMgr.Peer]
 decodeIps' [] = []
-decodeIps' (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgrP.Peer ip port : decodeIps' rest
+decodeIps' (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgr.Peer ip port : decodeIps' rest
   where ip = concat . intersperse "." . map (show . ord) $ [b1, b2, b3, b4]
         port = PortNumber . fromIntegral $ ord p1 * 256 + ord p2
 decodeIps' xs = error $ "decodeIps': invalid IPs: " ++ xs -- Quench all other cases
@@ -255,7 +227,7 @@ trackerRequest uri =
                            rqBody = ""}
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestURL :: StatusP.ST -> Process CF ST String
+buildRequestURL :: Status.ST -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
 		        hdrs <- headers
 			let hl = concat $ hlist hdrs
@@ -266,9 +238,9 @@ buildRequestURL ss = do ti <- gets torrentInfo
 	    p <- prt
 	    return $ [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
                       ("peer_id",   rfc1738Encode $ peerId s),
-                      ("uploaded", show $ StatusP.uploaded ss),
-                      ("downloaded", show $ StatusP.downloaded ss),
-                      ("left", show $ StatusP.left ss),
+                      ("uploaded", show $ Status.uploaded ss),
+                      ("downloaded", show $ Status.downloaded ss),
+                      ("left", show $ Status.left ss),
                       ("port", show p),
                       ("compact", "1")] ++
 		      (trackerfyEvent $ state s)

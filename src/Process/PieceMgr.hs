@@ -1,4 +1,4 @@
-module PieceMgrP
+module Process.PieceMgr
     ( PieceMgrMsg(..)
     , PieceMgrChannel
     , ChokeInfoChannel
@@ -24,8 +24,8 @@ import System.Random
 import System.Random.Shuffle
 
 import Logging
-import FSP hiding (start)
-import StatusP as STP hiding (start) 
+import Process.FS hiding (start)
+import Process.Status as STP hiding (start) 
 import Supervisor
 import Torrent
 import Process

@@ -1,6 +1,6 @@
 -- | Peer proceeses
 {-# LANGUAGE ScopedTypeVariables #-}
-module PeerP (
+module Process.Peer (
     -- * Types
       PeerMessage(..)
     -- * Interface
@@ -34,11 +34,11 @@ import System.IO
 import PeerTypes
 import Process
 import Logging
-import FSP
-import PieceMgrP
+import Process.FS
+import Process.PieceMgr
 import qualified Data.Queue as Q
 import RateCalc as RC
-import StatusP
+import Process.Status
 import Supervisor
 import Process.Timer as Timer
 import Torrent

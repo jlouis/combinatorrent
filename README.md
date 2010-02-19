@@ -50,14 +50,37 @@ Source code Hierarchy
       - **Queue**: Functional queues. Standard variant with two lists.
 
    - **Process**: Process definitions for the different processes comprising Haskell Torrent
+      - **ChokeMgr**: Manages choking and unchoking of peers, based upon the current speed of the peer
+        and its current state. Global for multiple torrents.
+      - **Console**: Simple console process. Only responds to 'quit' at the moment.
+      - **FS**: Process managing the file system.
+      - **Listen**: Not used at the moment. Step towards listening sockets.
+      - **Peer**: Several process definitions for handling peers. Two for sending, one for receiving
+        and one for controlling the peer and handle the state.
+      - **PeerMgr**: Management of a set of peers for a single torrent.
+      - **PieceMgr**: Keeps track of what pieces have been downloaded and what are missing. Also hands
+        out blocks for downloading to the peers.
+      - **Status**: Keeps track of uploaded/downloaded/left bytes for a single torrent. Could be globalized.
       - **Timer**: Timer events.
+      - **Tracker**: Communication with the tracker.
 
    - **Protocol**: Modules for interacting with the various bittorrent protocols.
       - **BCode**: The bittorrent BCode coding. Used by several protocols.
       - **Wire**: The protocol used for communication between peers.
 
    - **Top Level**:
+      - **Digest**: SHA1 digests as used in the bittorrent protocol.
+      - **FS**: Low level Filesystem code. Interacts with files.
       - **HaskellTorrent**: Main entry point to the code. Sets up processes.
+      - **Logging**: Logging interface.
+      - **LoggingTypes**: Types and instances used by the Logging framework.
+      - **PeerTypes**: Types used by peers.
+      - **Process**: Code for Erlang-inspired processes.
+      - **RateCalc**: Rate calculations for a network socket. We use this to keep track of the
+	current speed of a peer in one direction.
+      - **Supervisor**: Erlang-inspired Supervisor processes.
+      - **Torrent**: Various helpers and types for Torrents.
+      - **Version.hs.in**: Generates **Version.hs** via the configure script.
 
 Odd bugs
 --------

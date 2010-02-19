@@ -11,18 +11,17 @@ import System.Random
 
 
 import qualified Protocol.BCode as BCode
-import qualified ConsoleP
-import FS
-import qualified FSP
-import qualified PeerMgrP
-import qualified PieceMgrP (start, createPieceDb)
-import qualified Process ()
-import qualified ChokeMgrP (start)
+import qualified Process.Console as Console
+import qualified Process.FS as FSP
+import qualified Process.PeerMgr as PeerMgr
+import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
+import qualified Process.ChokeMgr as ChokeMgr (start)
+import qualified Process.Status as Status
+import qualified Process.Tracker as Tracker
 import Logging
-import qualified StatusP
+import FS
 import Supervisor
 import Torrent
-import qualified TrackerP
 import Version
 
 main :: IO ()
@@ -67,20 +66,20 @@ download name = do
 	       clientState = determineState haveMap
 	   -- Create main supervisor process
 	   allForOne "MainSup"
-		     [ Worker $ ConsoleP.start logC waitC
+		     [ Worker $ Console.start logC waitC
 		     , Worker $ FSP.start handles logC pieceMap fspC
-		     , Worker $ PeerMgrP.start pmC pid (infoHash ti)
+		     , Worker $ PeerMgr.start pmC pid (infoHash ti)
 				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
-		     , Worker $ PieceMgrP.start logC pieceMgrC fspC chokeInfoC statInC
-					(PieceMgrP.createPieceDb haveMap pieceMap)
-		     , Worker $ StatusP.start logC left clientState statusC statInC trackerC
-		     , Worker $ TrackerP.start ti pid defaultPort logC statusC statInC
+		     , Worker $ PieceMgr.start logC pieceMgrC fspC chokeInfoC statInC
+					(PieceMgr.createPieceDb haveMap pieceMap)
+		     , Worker $ Status.start logC left clientState statusC statInC trackerC
+		     , Worker $ Tracker.start ti pid defaultPort logC statusC statInC
 					trackerC pmC
-		     , Worker $ ChokeMgrP.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
+		     , Worker $ ChokeMgr.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
 				    (case clientState of
 					Seeding -> True
 					Leeching -> False)
 		     ] logC supC
-	   sync $ transmit trackerC StatusP.Start
+	   sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
            return ()

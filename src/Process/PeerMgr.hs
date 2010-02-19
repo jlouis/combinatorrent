@@ -1,4 +1,4 @@
-module PeerMgrP (
+module Process.PeerMgr (
    -- * Types
      Peer(..)
    -- * Interface
@@ -15,14 +15,14 @@ import Control.Concurrent.CML
 import Control.Monad.State
 import Control.Monad.Reader
 
-import ChokeMgrP hiding (start)
-import PeerP
 import PeerTypes
-import PieceMgrP hiding (start)
 import Process
 import Logging
-import FSP hiding (start)
-import StatusP hiding (start)
+import Process.Peer as Peer
+import Process.ChokeMgr hiding (start)
+import Process.FS hiding (start)
+import Process.PieceMgr hiding (start)
+import Process.Status hiding (start)
 import Supervisor
 import Torrent hiding (infoHash)
 
@@ -92,4 +92,4 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
 	fsC  <- asks fsCh
 	mgrC <- asks mgrCh
 	logC <- asks logCh
-	liftIO $ PeerP.connect (hn, prt, pid, ih, pm) pool pmC fsC logC statC mgrC nPieces
+	liftIO $ Peer.connect (hn, prt, pid, ih, pm) pool pmC fsC logC statC mgrC nPieces

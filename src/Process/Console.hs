@@ -28,7 +28,7 @@
 --   interface with the user and it is our first simple logging device
 --   for what happens inside the system.
 {-# LANGUAGE ScopedTypeVariables #-}
-module ConsoleP
+module Process.Console
     ( start
     )
 where

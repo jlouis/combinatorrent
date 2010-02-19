@@ -30,7 +30,7 @@
 --   information about data uploaded, downloaded and how much is
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
-module StatusP (
+module Process.Status (
     -- * Types
       StatusMsg(..)
     , TrackerMsg(..)

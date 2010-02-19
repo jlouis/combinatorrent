@@ -29,7 +29,7 @@
 --   fairly easy to add Multi-file torrents by altering this file and
 --   the FS module.
 {-# LANGUAGE ScopedTypeVariables #-}
-module FSP
+module Process.FS
     ( FSPChannel
     , FSPMsg(..)
     , start

@@ -1,4 +1,4 @@
-module ChokeMgrP (
+module Process.ChokeMgr (
     -- * Types, Channels
       ChokeMgrChannel
     , ChokeMgrMsg(..)
@@ -24,7 +24,7 @@ import Prelude hiding (catch, log)
 import System.Random
 
 import PeerTypes
-import PieceMgrP hiding (start)
+import Process.PieceMgr hiding (start)
 import Process
 import Logging
 import Supervisor
