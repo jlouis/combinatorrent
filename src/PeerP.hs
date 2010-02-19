@@ -18,8 +18,6 @@ import Prelude hiding (catch, log)
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
--- import Data.ByteString.Parser hiding (isEmpty)
-import qualified Data.Serialize as S
 import qualified Data.Serialize.Get as G
 
 import qualified Data.Map as M
