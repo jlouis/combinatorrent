@@ -4,7 +4,7 @@
 -}
 
 
-module WireProtocol
+module Protocol.Wire
 where
 
 import Control.Applicative hiding (empty)

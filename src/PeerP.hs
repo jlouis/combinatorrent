@@ -44,7 +44,7 @@ import StatusP
 import Supervisor
 import TimerP
 import Torrent
-import WireProtocol
+import Protocol.Wire
 
 -- INTERFACE
 ----------------------------------------------------------------------

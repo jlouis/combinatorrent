@@ -56,7 +56,7 @@ import Network.URI hiding (unreserved)
 import Numeric (showHex)
 
 
-import BCode hiding (encode)
+import Protocol.BCode as BCode hiding (encode)
 import Logging
 import qualified PeerMgrP
 import Process

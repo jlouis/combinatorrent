@@ -62,7 +62,7 @@ import Numeric
 
 import System.Random
 
-import BCode
+import Protocol.BCode
 import Digest
 
 -- | The type of Infohashes as used in torrents. These are identifiers

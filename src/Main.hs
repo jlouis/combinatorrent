@@ -10,7 +10,7 @@ import System.Environment
 import System.Random
 
 
-import qualified BCode
+import qualified Protocol.BCode as BCode
 import qualified ConsoleP
 import FS
 import qualified FSP

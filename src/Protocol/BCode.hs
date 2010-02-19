@@ -27,7 +27,7 @@
 
 -- | Add a module description here
 --   also add descriptions to each function.
-module BCode 
+module Protocol.BCode 
 (
               BCode,
               Path(..),
@@ -57,7 +57,6 @@ module BCode
               trackerError,
               toBS,
               fromBS )
-
 where
 
 import Control.Monad

@@ -26,7 +26,9 @@ flag debug
 executable HaskellTorrent
   hs-source-dirs: src
   main-is: Main.hs
-  other-modules: BCode, ChokeMgrP, ConsoleP, Digest, FS, FSP, ListenP, Logging, LoggingTypes, PeerMgrP, PeerP, PeerTypes, PieceMgrP, Process, Queue, RateCalc, StatusP, Supervisor, TimerP, Torrent, TrackerP, WireProtocol
+  other-modules: Protocol.BCode, ChokeMgrP, ConsoleP, Digest, FS, FSP, ListenP, Logging,
+    LoggingTypes, PeerMgrP, PeerP, PeerTypes, PieceMgrP, Process, Queue, RateCalc,
+    StatusP, Supervisor, TimerP, Torrent, TrackerP, Protocol.Wire
   extensions: CPP
 
   build-depends:

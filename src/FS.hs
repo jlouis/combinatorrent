@@ -49,7 +49,7 @@ import System.IO
 import System.Directory (createDirectoryIfMissing)
 import Data.List (intercalate)
 
-import BCode
+import Protocol.BCode as BCode
 import qualified Digest as D
 import Torrent
 
