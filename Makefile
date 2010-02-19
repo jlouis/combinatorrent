@@ -22,7 +22,7 @@ haddock:
 	runghc Setup.lhs haddock --executables
 
 hlint:
-	hlint src/*.hs
+	hlint src
 
 tags:
 	hasktags --both $$(find src -type f -name '*.*hs')
