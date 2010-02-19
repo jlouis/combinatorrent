@@ -82,10 +82,11 @@ Source code Hierarchy
       - **Torrent**: Various helpers and types for Torrents.
       - **Version.hs.in**: Generates **Version.hs** via the configure script.
 
-Odd bugs
---------
+Known bugs
+----------
 
-None at the moment.
+   - I have seen the system violating an assertion in the Piece Manager. I think I got it,
+     nailed, but it may show up again.
 
 
 

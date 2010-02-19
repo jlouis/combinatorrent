@@ -26,8 +26,6 @@ wish-list.
    - (thomaschrstnsn) Implement a creator for torrent files
    - If we get a wrong URI, the code currently deadlocks since the tracker
      dies. Handle this problem gracefully.
-   - (axman) Cleanup the BCode module, while keeping the interface somewhat
-     stable. The code is an utter mess as it stands right now.
    - When we grab pieces from the Piece Manager, let it provide us with a
      pruned set of pieces we can ask with later. This way, we only need to
      consider pieces we already have once and we get a faster system.
@@ -67,25 +65,6 @@ wish-list.
    - Make sure we actually seed when the torrent finishes.
      Rather hard to check with the current construction in the PeerMgr. The
      PeerMgr needs more work before this is possible.
-
-Known Bugs
-----------
-
-None known at the moment.
-
-Before releasing into the "wild"
---------------------------------
-
-   - Introduce status update messages to the tracker. When the torrent is
-     started, stopped or completes, we should message the tracker with the
-     update right away. The tracker code already supports this, but the rest
-     of the code must do the right thing.
-
-     The rest of the code ought to be written, but I have not seen it do the
-     right thing "In the Wild".
-   - The code violates a PieceMgr Assertion (The last one present in
-     checkDownload). Investigate.
-   - Look at the Choke Manager code when seeding.
 
 Items for later (no particular order)
 -------------------------------------
