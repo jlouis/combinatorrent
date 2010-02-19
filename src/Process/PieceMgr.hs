@@ -154,8 +154,7 @@ start logC mgrC fspC chokeC statC db supC =
 			       pieceOk <- checkPiece pn
 			       case pieceOk of
 				 Nothing ->
-					do logFatal "PieceMgrP: Piece Nonexisting!"
-					   stopP
+					do fail "PieceMgrP: Piece Nonexisting!"
 				 Just True -> do completePiece pn
 						 markDone pn
 						 checkFullCompletion

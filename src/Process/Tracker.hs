@@ -138,8 +138,7 @@ pokeTracker = do
     url <- buildRequestURL upDownLeft
     logDebug $ "Request URL: " ++ url
     uri <- case parseURI url of
-	    Nothing -> do logFatal $ "Could not parse the url " ++ url
-			  stopP
+	    Nothing -> fail $ "Could not parse the url " ++ url
 	    Just u  -> return u
     resp <- trackerRequest uri
     case resp of
@@ -248,8 +247,7 @@ buildRequestURL ss = do ti <- gets torrentInfo
           prt = do lp <- gets localPort
 		   case lp of
 		     PortNumber pnum -> return $ fromIntegral pnum
-                     _ -> do logFatal "Unknown port type"
-			     stopP
+                     _ -> do fail "Unknown port type"
 	  trackerfyEvent ev =
 	        case ev of
 		    Running   -> []
