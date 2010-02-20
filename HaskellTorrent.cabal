@@ -1,9 +1,14 @@
 name: HaskellTorrent
-description: A Haskell Bittorrent client
 category: Network
 version: 0.0
 category: Network
-description: A bittorrent client
+description:   HaskellTorrent provides a BitTorrent client, based on the CML library
+               for concurrency. This is an early preview release which is capable of
+               downloading files from various torrent trackers, but have not yet
+               demonstrated to be correct in all aspects.
+
+               It is expected that the package currently contains numerous and even
+               grave bugs. Patches to fix any problem are welcome!
 cabal-version: >= 1.6
 
 license: BSD3
@@ -12,7 +17,7 @@ copyright: (c) 2009 Jesper Louis Andersen
 author: Jesper Louis Andersen
 maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
-synopsis: A Haskell Bittorrent client
+synopsis: A concurrent bittorrent client
 build-type: Configure
 
 extra-tmp-files: src/Version.hs
