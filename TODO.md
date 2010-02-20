@@ -31,15 +31,7 @@ wish-list.
      consider pieces we already have once and we get a faster system.
 
      When doing this, only prune pieces which are done and checked.
-
-   - The StatusP process is always fed static data. Feed it the correct data
-     based on the current status: Are we a leecher or a seeder? And how much
-     data is there left to download before we have the full file?
-
-     (Hint: grep for canSeed and use the missingMap and pieceMap for the 'left'
-      data)
    - Send keepalives every two minutes as per the spec.
-   - Make git.md into a markdown document
    - For the histogram code, look at
      [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
       Hinze has a paper on that at [Hinze, R., A Simple Implementation
@@ -47,7 +39,6 @@ wish-list.
    - Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
      of the PeerMgr code.
    - Update the Seeder status in PeerMgrP.
-   - When stopping a Peer, put back the Pieces to the Piece Manager.
    - Do not send HAVE messages if the Peer already has the Piece Number.
    - Improve on the command line parser. We will certainly need full-fledged
      CL parsing at some point.
@@ -55,8 +46,6 @@ wish-list.
    - Let Piece Sets be S.Set PieceNum rather than [PieceNum]. They are
      larger than 1000 for some large torrents, so it makes sense to shift to
      a better representation.
-   - Cleanup the code around ChokeMgrP.advancePeerChain. It currently does a
-     lot of stuff it doesn't have to do.
    - The status reporting code needs some help. It only transfers up/down
      rates once every 30 seconds. If a peer is living for less than 30
      seconds, then no upload/download will be reported for that peer. The
