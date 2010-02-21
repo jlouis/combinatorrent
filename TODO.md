@@ -54,6 +54,7 @@ wish-list.
    - Make sure we actually seed when the torrent finishes.
      Rather hard to check with the current construction in the PeerMgr. The
      PeerMgr needs more work before this is possible.
+   - Use an mmap() based interface for file I/O.
 
 Items for later (no particular order)
 -------------------------------------
