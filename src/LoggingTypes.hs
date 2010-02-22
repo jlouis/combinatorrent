@@ -11,12 +11,12 @@ import Control.Concurrent.CML
 
 
 data LogPriority = Debug -- ^ Fine grained debug info
-		 | Warn  -- ^ Potentially harmful situations
-		 | Info  -- ^ Informational messages, progress reports
-		 | Error -- ^ Errors that are continuable
-		 | Fatal -- ^ Severe errors. Will probably make the application abort
-		 | None  -- ^ No logging at all
-		    deriving (Show, Eq, Ord)
+                 | Warn  -- ^ Potentially harmful situations
+                 | Info  -- ^ Informational messages, progress reports
+                 | Error -- ^ Errors that are continuable
+                 | Fatal -- ^ Severe errors. Will probably make the application abort
+                 | None  -- ^ No logging at all
+                    deriving (Show, Eq, Ord)
 --
 -- | The class of types where we have a logger inside them somewhere
 class Logging a where

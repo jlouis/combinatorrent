@@ -201,8 +201,8 @@ getCharG = fromW8 <$> getWord8
 hashInfoDict :: BCode -> IO Digest
 hashInfoDict bc =
     do ih <- case info bc of
-		Nothing -> fail "Could not find infoHash"
-		Just x  -> return x
+                Nothing -> fail "Could not find infoHash"
+                Just x  -> return x
        let encoded = encode ih
        digest $ L.fromChunks $ [encoded]
 

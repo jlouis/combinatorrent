@@ -110,9 +110,9 @@ determineState pd | F.all (==True) pd = Seeding
 bytesLeft :: PiecesDoneMap -> PieceMap -> Integer
 bytesLeft done pm =
     M.foldWithKey (\k v accu ->
-	case M.lookup k done of
-	       Just False -> (len v) + accu
-	       _          -> accu) 0 pm
+        case M.lookup k done of
+               Just False -> (len v) + accu
+               _          -> accu) 0 pm
 
 -- BLOCKS
 ----------------------------------------------------------------------
@@ -142,7 +142,7 @@ haskellTorrentVersion = "d001"
 mkTorrentInfo :: BCode -> IO TorrentInfo
 mkTorrentInfo bc = do
     (ann, np) <- case queryInfo bc of Nothing -> fail "Could not create torrent info"
-				      Just x -> return x
+                                      Just x -> return x
     ih  <- hashInfoDict bc
     return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
   where

@@ -55,11 +55,11 @@ import Supervisor
 import Torrent
 
 data StatusMsg = TrackerStat { trackIncomplete :: Maybe Integer
-			     , trackComplete   :: Maybe Integer }
-	       | CompletedPiece Integer
-	       | PeerStat { peerUploaded :: Integer
-			  , peerDownloaded :: Integer }
-	       | TorrentCompleted
+                             , trackComplete   :: Maybe Integer }
+               | CompletedPiece Integer
+               | PeerStat { peerUploaded :: Integer
+                          , peerDownloaded :: Integer }
+               | TorrentCompleted
 
 type StatusChan = Channel StatusMsg
 
@@ -67,9 +67,9 @@ type StatusChan = Channel StatusMsg
 data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 
 data CF  = CF { logCh :: LogChannel
-	      , statusCh :: Channel StatusMsg
-	      , trackerCh1 :: Channel TrackerMsg
-	      , trackerCh :: Channel ST }
+              , statusCh :: Channel StatusMsg
+              , trackerCh1 :: Channel TrackerMsg
+              , trackerCh :: Channel ST }
 
 instance Logging CF where
     getLogger cf = ("StatusP", logCh cf)
@@ -87,29 +87,29 @@ start :: LogChannel -> Integer -> TorrentState -> Channel ST
       -> Channel StatusMsg -> Channel TrackerMsg -> SupervisorChan -> IO ThreadId
 start logC l tState trackerC statusC trackerC1 supC = do
     spawnP (CF logC statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
-	(catchP (foreverP pgm) (defaultStopHandler supC))
+        (catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
-	     syncP ev
+             syncP ev
     sendEvent = get >>= sendPC trackerCh
     recvEvent = do evt <- recvPC statusCh
-		   wrapP evt (\m ->
-		    case m of
-			TrackerStat ic c ->
-			   modify (\s -> s { incomplete = ic, complete = c })
-		        CompletedPiece bytes -> do
-			    logDebug "StatusProcess updated left"
-			    modify (\s -> s { left = (left s) - bytes })
-			PeerStat up down -> do
-			   modify (\s -> s { uploaded = (uploaded s) + up,
-					     downloaded = (downloaded s) + down })
-			   u <- gets uploaded
-			   d <- gets downloaded
-			   logDebug $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
-			TorrentCompleted -> do
-			   logDebug "TorrentCompletion at StatusP"
-			   l <- gets left
-			   when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
-			   syncP =<< sendPC trackerCh1 Complete
-			   modify (\s -> s { state = Seeding }))
-		   
+                   wrapP evt (\m ->
+                    case m of
+                        TrackerStat ic c ->
+                           modify (\s -> s { incomplete = ic, complete = c })
+                        CompletedPiece bytes -> do
+                            logDebug "StatusProcess updated left"
+                            modify (\s -> s { left = (left s) - bytes })
+                        PeerStat up down -> do
+                           modify (\s -> s { uploaded = (uploaded s) + up,
+                                             downloaded = (downloaded s) + down })
+                           u <- gets uploaded
+                           d <- gets downloaded
+                           logDebug $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
+                        TorrentCompleted -> do
+                           logDebug "TorrentCompletion at StatusP"
+                           l <- gets left
+                           when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
+                           syncP =<< sendPC trackerCh1 Complete
+                           modify (\s -> s { state = Seeding }))
+                   

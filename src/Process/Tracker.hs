@@ -77,7 +77,7 @@ failTimerInterval = 15 * 60
 
 -- | Configuration of the tracker process
 data CF = CF {
-	logCh :: LogChannel
+        logCh :: LogChannel
       , statusCh :: Channel Status.ST
       , statusPCh :: Channel Status.StatusMsg
       , trackerMsgCh :: Channel Status.TrackerMsg
@@ -103,22 +103,22 @@ start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
        spawnP (CF logC sc statusC msgC pc) (ST ti pid Stopped port tm 0)
-		   (catchP (forever loop)
-			(defaultStopHandler supC)) -- TODO: Gracefully close down here!
+                   (catchP (forever loop)
+                        (defaultStopHandler supC)) -- TODO: Gracefully close down here!
 
 loop :: Process CF ST ()
 loop = do msg <- recvPC trackerMsgCh >>= syncP
-	  logDebug $ "Got tracker event"
-	  case msg of
-	    Status.TrackerTick x ->
-		do t <- gets nextTick
-		   when (x+1 == t) talkTracker
-	    Status.Stop     ->
-		modify (\s -> s { state = Stopped }) >> talkTracker
-	    Status.Start    ->
-		modify (\s -> s { state = Started }) >> talkTracker
-	    Status.Complete ->
-		  modify (\s -> s { state = Completed }) >> talkTracker
+          logDebug $ "Got tracker event"
+          case msg of
+            Status.TrackerTick x ->
+                do t <- gets nextTick
+                   when (x+1 == t) talkTracker
+            Status.Stop     ->
+                modify (\s -> s { state = Stopped }) >> talkTracker
+            Status.Start    ->
+                modify (\s -> s { state = Started }) >> talkTracker
+            Status.Complete ->
+                  modify (\s -> s { state = Completed }) >> talkTracker
   where
         talkTracker = pokeTracker >>= timerUpdate
 
@@ -128,10 +128,10 @@ eventTransition = do
     modify (\s -> s { state = newS st})
   where newS st =
          case st of
-	    Running -> Running
-	    Stopped -> Stopped
-	    Completed -> Running
-	    Started -> Running
+            Running -> Running
+            Stopped -> Stopped
+            Completed -> Running
+            Started -> Running
 
 -- | Poke the tracker. It returns the new timer intervals to use
 pokeTracker :: Process CF ST (Integer, Maybe Integer)
@@ -140,34 +140,34 @@ pokeTracker = do
     url <- buildRequestURL upDownLeft
     logDebug $ "Request URL: " ++ url
     uri <- case parseURI url of
-	    Nothing -> fail $ "Could not parse the url " ++ url
-	    Just u  -> return u
+            Nothing -> fail $ "Could not parse the url " ++ url
+            Just u  -> return u
     resp <- trackerRequest uri
     case resp of
-	Left err -> do logInfo $ "Tracker HTTP Error: " ++ err
-		       return (failTimerInterval, Just failTimerInterval)
-	Right (ResponseWarning wrn) ->
-		    do logInfo $ "Tracker Warning Response: " ++ fromBS wrn
-		       return (failTimerInterval, Just failTimerInterval)
+        Left err -> do logInfo $ "Tracker HTTP Error: " ++ err
+                       return (failTimerInterval, Just failTimerInterval)
+        Right (ResponseWarning wrn) ->
+                    do logInfo $ "Tracker Warning Response: " ++ fromBS wrn
+                       return (failTimerInterval, Just failTimerInterval)
         Right (ResponseError err) ->
                     do logInfo $ "Tracker Error Response: " ++ fromBS err
-		       return (failTimerInterval, Just failTimerInterval)
+                       return (failTimerInterval, Just failTimerInterval)
         Right (ResponseDecodeError err) ->
                     do logInfo $ "Response Decode error: " ++ fromBS err
-		       return (failTimerInterval, Just failTimerInterval)
+                       return (failTimerInterval, Just failTimerInterval)
         Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
-		       let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
-					                       Status.trackIncomplete = incompleteR bc }
-	               sendPC statusPCh trackerStats  >>= syncP
-		       eventTransition
-		       return (timeoutInterval bc, timeoutMinInterval bc)
+                       let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
+                                                               Status.trackIncomplete = incompleteR bc }
+                       sendPC statusPCh trackerStats  >>= syncP
+                       eventTransition
+                       return (timeoutInterval bc, timeoutMinInterval bc)
 
 timerUpdate :: (Integer, Maybe Integer) -> Process CF ST ()
 timerUpdate (timeout, minTimeout) = do
     st <- gets state
     when (st == Running)
-	(do t <- tick
-	    ch <- asks trackerMsgCh
+        (do t <- tick
+            ch <- asks trackerMsgCh
             Timer.register timeout (Status.TrackerTick t) ch
             logDebug $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
@@ -219,8 +219,8 @@ trackerRequest uri =
                    case findHeader HdrLocation r of
                      Nothing -> return $ Left (show r)
                      Just newURL -> case parseURI newURL of
-					Nothing -> return $ Left (show newURL)
-					Just uri -> trackerRequest uri
+                                        Nothing -> return $ Left (show newURL)
+                                        Just uri -> trackerRequest uri
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
@@ -230,32 +230,32 @@ trackerRequest uri =
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestURL :: Status.ST -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
-		        hdrs <- headers
-			let hl = concat $ hlist hdrs
-			return $ concat [fromBS $ announceURL ti, "?", hl]
+                        hdrs <- headers
+                        let hl = concat $ hlist hdrs
+                        return $ concat [fromBS $ announceURL ti, "?", hl]
     where hlist x = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) x
           headers = do
-	    s <- get
-	    p <- prt
-	    return $ [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
+            s <- get
+            p <- prt
+            return $ [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
                       ("peer_id",   rfc1738Encode $ peerId s),
                       ("uploaded", show $ Status.uploaded ss),
                       ("downloaded", show $ Status.downloaded ss),
                       ("left", show $ Status.left ss),
                       ("port", show p),
                       ("compact", "1")] ++
-		      (trackerfyEvent $ state s)
+                      (trackerfyEvent $ state s)
           prt :: Process CF ST Integer
           prt = do lp <- gets localPort
-		   case lp of
-		     PortNumber pnum -> return $ fromIntegral pnum
+                   case lp of
+                     PortNumber pnum -> return $ fromIntegral pnum
                      _ -> do fail "Unknown port type"
-	  trackerfyEvent ev =
-	        case ev of
-		    Running   -> []
-		    Completed -> [("event", "completed")]
-		    Started   -> [("event", "started")]
-		    Stopped   -> [("event", "stopped")]
+          trackerfyEvent ev =
+                case ev of
+                    Running   -> []
+                    Completed -> [("event", "completed")]
+                    Started   -> [("event", "started")]
+                    Stopped   -> [("event", "stopped")]
 
 -- Carry out URL-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.

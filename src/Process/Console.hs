@@ -49,7 +49,7 @@ data Cmd = Quit -- Quit the program
 type CmdChannel = Channel Cmd
 
 data CF = CF { cmdCh :: CmdChannel
-	     , logCh :: LogChannel }
+             , logCh :: LogChannel }
 
 instance Logging CF where
     getLogger cf = ("ConsoleP", logCh cf)
@@ -63,11 +63,11 @@ start logC waitC supC = do
   where
     lp = syncP =<< quitEvent
     quitEvent = do
-	ch <- asks cmdCh
-	ev <- recvP ch (==Quit)
-	wrapP ev 
-	    (\_ -> syncP =<< sendP waitC ())
-	
+        ch <- asks cmdCh
+        ev <- recvP ch (==Quit)
+        wrapP ev 
+            (\_ -> syncP =<< sendP waitC ())
+        
 
 readerP :: LogChannel -> IO CmdChannel
 readerP logCh = do cmdCh <- channel

@@ -78,27 +78,27 @@ start handles logC pm fspC supC =
   where
     lp = msgEvent >>= syncP
     msgEvent = do
-	ev <- recvPC fspCh
-	wrapP ev (\msg ->
-	    case msg of
-		CheckPiece n ch -> do
-		    pm <- gets pieceMap
-		    case M.lookup n pm of
-			Nothing -> sendP ch Nothing >>= syncP
-			Just pi -> do r <- gets fileHandles >>= (liftIO . FS.checkPiece pi)
-				      sendP ch (Just r) >>= syncP
-		ReadBlock n blk ch -> do
-		    logDebug $ "Reading block #" ++ show n
-			    ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
-		    -- TODO: Protection, either here or in the Peer code
-		    h  <- gets fileHandles
-		    bs <- gets pieceMap >>= (liftIO . FS.readBlock n blk h)
-		    sendP ch bs >>= syncP
-		WriteBlock pn blk bs -> do
+        ev <- recvPC fspCh
+        wrapP ev (\msg ->
+            case msg of
+                CheckPiece n ch -> do
+                    pm <- gets pieceMap
+                    case M.lookup n pm of
+                        Nothing -> sendP ch Nothing >>= syncP
+                        Just pi -> do r <- gets fileHandles >>= (liftIO . FS.checkPiece pi)
+                                      sendP ch (Just r) >>= syncP
+                ReadBlock n blk ch -> do
+                    logDebug $ "Reading block #" ++ show n
+                            ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
                     -- TODO: Protection, either here or in the Peer code
-		    fh <- gets fileHandles
-		    pm <- gets pieceMap
-		    liftIO $ FS.writeBlock fh pn blk pm bs)
+                    h  <- gets fileHandles
+                    bs <- gets pieceMap >>= (liftIO . FS.readBlock n blk h)
+                    sendP ch bs >>= syncP
+                WriteBlock pn blk bs -> do
+                    -- TODO: Protection, either here or in the Peer code
+                    fh <- gets fileHandles
+                    pm <- gets pieceMap
+                    liftIO $ FS.writeBlock fh pn blk pm bs)
 
 checkPiece :: FSPChannel -> PieceNum -> IO (Maybe Bool)
 checkPiece fspC n = do
