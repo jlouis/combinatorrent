@@ -59,7 +59,7 @@ executable HaskellTorrent
     random-shuffle,
     directory
 
-  ghc-options: -threaded -fwarn-unused-imports -fwarn-unrecognised-pragmas
+  ghc-options: -threaded -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations
   if flag(debug)
       cpp-options: "-DDEBUG"
       ghc-options: -prof -auto-all -caf-all
