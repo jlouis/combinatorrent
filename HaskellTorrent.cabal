@@ -62,6 +62,7 @@ executable HaskellTorrent
   ghc-options: -threaded -fwarn-unused-imports
   if flag(debug)
       cpp-options: "-DDEBUG"
+      ghc-options: -prof -auto-all -caf-all
   else
       cpp-options: "-DNDEBUG"
 
