@@ -87,16 +87,16 @@ cleanupP proc stopH cleanupH = do
   st <- get
   c  <- ask
   (a, s') <- liftIO $ runP c st proc `catches`
-		[ Handler (\ThreadKilled -> do
-		    runP c st ( do logInfo $ "Process Terminated by Supervisor"
-				   cleanupH ))
-		, Handler (\StopException -> 
-		     runP c st (do logInfo $ "Process Terminating gracefully"
-				   cleanupH >> stopH)) -- This one is ok
-		, Handler (\(ex :: SomeException) ->
-		    runP c st (do logFatal $ "Process exiting due to ex: " ++ show ex
-				  cleanupH >> stopH))
-		]
+                [ Handler (\ThreadKilled -> do
+                    runP c st ( do logInfo $ "Process Terminated by Supervisor"
+                                   cleanupH ))
+                , Handler (\StopException -> 
+                     runP c st (do logInfo $ "Process Terminating gracefully"
+                                   cleanupH >> stopH)) -- This one is ok
+                , Handler (\(ex :: SomeException) ->
+                    runP c st (do logFatal $ "Process exiting due to ex: " ++ show ex
+                                  cleanupH >> stopH))
+                ]
   put s'
   return a
 
@@ -106,14 +106,14 @@ foreverP p = p >> foreverP p
 
 syncP :: Event (c, b) -> Process a b c
 syncP ev = do (a, s) <- liftIO $ sync ev
-	      put s
-	      return a
+              put s
+              return a
 
 sendP :: Channel c -> c -> Process a b (Event ((), b))
 sendP ch v = do
     s <- get
     return $ (wrap (transmit ch v)
-		(\() -> return ((), s)))
+                (\() -> return ((), s)))
 
 sendPC :: (a -> Channel c) -> c -> Process a b (Event ((), b))
 sendPC sel v = asks sel >>= flip sendP v
@@ -122,7 +122,7 @@ recvP :: Channel c -> (c -> Bool) -> Process a b (Event (c, b))
 recvP ch pred = do
   s <- get
   return (wrap (receive ch pred)
-	    (\v -> return (v, s)))
+            (\v -> return (v, s)))
 
 recvPC :: (a -> Channel c) -> Process a b (Event (c, b))
 recvPC sel = asks sel >>= flip recvP (const True)
@@ -154,7 +154,7 @@ ignoreProcessBlock err thnk = do
 #if (__GLASGOW_HASKELL__ == 610)
         [ Handler (\BlockedOnDeadMVar -> return (err, st)) ]
 #elif (__GLASGOW_HASKELL__ == 612)
-	[ Handler (\BlockedIndefinitelyOnMVar -> return (err, st)) ]
+        [ Handler (\BlockedIndefinitelyOnMVar -> return (err, st)) ]
 #else
 #error Unknown GHC version
 #endif
@@ -166,9 +166,9 @@ ignoreProcessBlock err thnk = do
 -- | If a process has access to a logging channel, it is able to log messages to the world
 log :: Logging a => LogPriority -> String -> Process a b ()
 log prio msg = do
-	(name, logC) <- asks getLogger
-	when (prio >= logLevel name)
-		(liftIO $ logMsg' logC name prio msg)
+        (name, logC) <- asks getLogger
+        when (prio >= logLevel name)
+                (liftIO $ logMsg' logC name prio msg)
   where logMsg' c name pri = sync . transmit c . Mes pri name
 
 logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
@@ -199,9 +199,8 @@ instance Monoid LogPriority where
 logLevel :: LogFilter
 #ifdef DEBUG
 logLevel = mconcat [matchP "SendQueueP" Fatal,
-		    matchP "ReceiverP" Fatal,
-		    matchAny Debug]
+                    matchP "ReceiverP" Fatal,
+                    matchAny Debug]
 #else
 logLevel = matchAny Info
 #endif
-
