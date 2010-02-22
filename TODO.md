@@ -54,6 +54,7 @@ wish-list.
      Rather hard to check with the current construction in the PeerMgr. The
      PeerMgr needs more work before this is possible.
    - Use an mmap() based interface for file I/O.
+   - Use hslogger or similar as a logging backend.
 
 Planned for the next release
 ----------------------------
