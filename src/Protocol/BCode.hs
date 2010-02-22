@@ -64,9 +64,8 @@ import Control.Applicative hiding (many)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 import Data.Char
-import Data.Int
+
 import Data.List
-import Data.Maybe
 import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ hiding (char)
 

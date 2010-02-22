@@ -2,7 +2,6 @@ module Main (main)
 where
 
 import Control.Concurrent.CML
-import Control.Monad
 
 import qualified Data.ByteString as B
 

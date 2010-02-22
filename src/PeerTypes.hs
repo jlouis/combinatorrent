@@ -1,4 +1,11 @@
 module PeerTypes
+    ( Peer(..)
+    , PeerMessage(..)
+    , PeerChannel
+    , MgrMessage(..)
+    , MgrChannel
+    , BandwidthChannel
+    )
 where
 
 import Control.Concurrent

@@ -39,10 +39,6 @@ where
 import Control.Concurrent
 import Control.Concurrent.CML
 import Control.Monad.State
-import Control.Monad.Reader
-
-import System.IO
-
 
 import qualified Data.ByteString as B
 import qualified Data.Map as M

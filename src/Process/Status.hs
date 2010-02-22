@@ -47,7 +47,6 @@ import Control.Concurrent
 import Control.Concurrent.CML
 
 import Control.Monad.State
-import Control.Monad.Reader
 
 import Prelude hiding (log)
 import Logging

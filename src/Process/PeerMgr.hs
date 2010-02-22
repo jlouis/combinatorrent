@@ -6,9 +6,7 @@ module Process.PeerMgr (
 )
 where
 
-import Data.List
 import qualified Data.Map as M
-import Data.Ord
 
 import Control.Concurrent
 import Control.Concurrent.CML

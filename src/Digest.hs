@@ -6,9 +6,6 @@ module Digest
 where
 
 import Control.Concurrent
-import Control.Monad
-
-import Data.Maybe
 
 import qualified Data.ByteString.Lazy as L
 import OpenSSL

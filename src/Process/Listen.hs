@@ -1,4 +1,4 @@
-module ListenP
+module ListenP ()
 where
 
 -- TODO: Create the OMBox here rather than taking it as a parameter

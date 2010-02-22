@@ -44,7 +44,7 @@ import Control.Monad.State
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
-import Data.Maybe
+
 import System.IO
 import System.Directory (createDirectoryIfMissing)
 import Data.List (intercalate)

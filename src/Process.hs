@@ -47,11 +47,6 @@ import Data.Typeable
 import LoggingTypes
 import Prelude hiding (catch, log)
 
-import System.IO
-
--- import Supervisor
-
-
 -- | A @Process a b c@ is the type of processes with access to configuration data @a@, state @b@
 --   returning values of type @c@. Usually, the read-only data are configuration parameters and
 --   channels, and the state the internal process state. It is implemented by means of a transformer

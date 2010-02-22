@@ -5,6 +5,12 @@
 
 
 module Protocol.Wire
+    ( Message(..)
+    , encodePacket
+    , decodeMsg
+    , constructBitField
+    , initiateHandshake
+    )
 where
 
 import Control.Applicative hiding (empty)
@@ -18,7 +24,6 @@ import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
 
-import Data.Word
 import Data.Char
 import System.IO
 
