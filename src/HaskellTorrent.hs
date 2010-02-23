@@ -26,7 +26,10 @@ import Version
 import qualified Test
 
 main :: IO ()
-main = getArgs >>= progOpts >>= run
+main = do args <- getArgs
+          if "--tests" `elem` args
+              then Test.runTests
+              else progOpts args >>= run
 
 -- COMMAND LINE PARSING
 
@@ -36,7 +39,6 @@ data Flag = Test | Version
 options :: [OptDescr Flag]
 options =
   [ Option ['V','?']        ["version"] (NoArg Version)         "show version number"
-  , Option ['T']            ["tests"]    (NoArg Test)            "run internal test suite"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
@@ -50,9 +52,7 @@ run :: ([Flag], [String]) -> IO ()
 run (flags, files) = do
     if Version `elem` flags
         then progHeader
-        else if Test `elem` flags
-            then do Test.runTests
-            else case files of
+        else case files of
                 [] -> putStrLn "No torrentfile input"
                 [name] -> progHeader >> download name
                 _  -> putStrLn "More than one torrent file given"
