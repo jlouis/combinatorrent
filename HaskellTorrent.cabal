@@ -59,6 +59,7 @@ executable HaskellTorrent
     random-shuffle,
     QuickCheck,
     test-framework,
+    test-framework-quickcheck,
     directory
 
   ghc-options: -threaded -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations

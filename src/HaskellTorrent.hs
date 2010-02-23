@@ -9,8 +9,6 @@ import System.Environment
 import System.Random
 
 import System.Console.GetOpt
-import Test.QuickCheck
-import Text.Printf
 
 import qualified Protocol.BCode as BCode
 import qualified Process.Console as Console
@@ -25,6 +23,7 @@ import FS
 import Supervisor
 import Torrent
 import Version
+import qualified Test
 
 main :: IO ()
 main = getArgs >>= progOpts >>= run
@@ -52,7 +51,7 @@ run (flags, files) = do
     if Version `elem` flags
         then progHeader
         else if Test `elem` flags
-            then do runTests
+            then do Test.runTests
             else case files of
                 [] -> putStrLn "No torrentfile input"
                 [name] -> progHeader >> download name
@@ -60,15 +59,6 @@ run (flags, files) = do
 
 progHeader :: IO ()
 progHeader = putStrLn $ "This is Haskell-torrent version " ++ version
-
-runTests :: IO ()
-runTests = progHeader >> putStrLn "Running internal test suite" >> tests
-  where tests = mapM_ (\(s,a) -> printf "%-25s: " s >> a) properties
-        properties = [("reverse.reverse/id", test prop_reversereverse)]
-
--- reversing twice a finite list, is the same as identity
-prop_reversereverse s = (reverse . reverse) s == id s
-    where _ = s :: [Int]
 
 download :: String -> IO ()
 download name = do
