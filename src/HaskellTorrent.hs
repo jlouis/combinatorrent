@@ -37,7 +37,7 @@ data Flag = Test | Version
 options :: [OptDescr Flag]
 options =
   [ Option ['V','?']        ["version"] (NoArg Version)         "show version number"
-  , Option ['T']            ["test"]    (NoArg Test)            "run internal test suite"
+  , Option ['T']            ["tests"]    (NoArg Test)            "run internal test suite"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
