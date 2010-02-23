@@ -58,8 +58,10 @@ executable HaskellTorrent
     time,
     random-shuffle,
     QuickCheck,
+    HUnit,
     test-framework,
     test-framework-quickcheck,
+    test-framework-hunit,
     directory
 
   ghc-options: -threaded -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations
