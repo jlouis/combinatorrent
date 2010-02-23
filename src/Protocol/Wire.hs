@@ -213,9 +213,9 @@ constructBitField sz pieces = L.pack . build $ m
 -- -- TESTS
 
 testSuite = testGroup "Protocol/Wire"
-  $ map testProp testData
+  $ map testProp (zip [0..] testData)
 
-testProp m = testCase ("Test " ++ show m) $
+testProp (n, m) = testCase ("Test " ++ show n) $
     let encoded = encode m
         decoded = decode encoded
     in case decoded of
@@ -234,6 +234,7 @@ testData = [ KeepAlive
            , BitField (L.pack [1,2,3])
            , Request 123 (Block 4 7)
            , Piece 5 7 (B.pack [1,2,3,4,5,6,7,8,9,0])
+           , Piece 5 7 (B.pack (concat . replicate 30 $ [minBound..maxBound]))
            , Cancel 5 (Block 6 7)
            , Port 123
            ]
