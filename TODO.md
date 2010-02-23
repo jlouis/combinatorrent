@@ -92,5 +92,6 @@ Items for later (no particular order)
      is relevant for this client.
    - Process monitoring in general. Think.
    - Write a fuzzing framework for bittorrent.
+   - shapr wants this to be combinatorrent. Thoughts?
 
 # vim: filetype=none tw=76 expandtab
