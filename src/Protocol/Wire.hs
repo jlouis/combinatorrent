@@ -213,14 +213,14 @@ constructBitField sz pieces = L.pack . build $ m
 -- -- TESTS
 
 testSuite = testGroup "Protocol/Wire"
-  [ testCase "encode/decode" testDecodeEncodeProp1 ]
+  $ map testProp testData
 
-testDecodeEncodeProp1 :: Assertion
-testDecodeEncodeProp1 =
-    let encoded = encode testData
+testProp m = testCase ("Test " ++ show m) $
+    let encoded = encode m
         decoded = decode encoded
-    in
-        assertEqual "for encode/decode identity" (Right testData) decoded
+    in case decoded of
+          Left err -> assertFailure err
+          Right x  -> assertEqual ("for " ++ show m) x m
 
 -- Prelude.map testDecodeEncodeProp1 
 testData = [ KeepAlive
