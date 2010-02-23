@@ -29,7 +29,9 @@ module Protocol.BCode
               trackerWarning,
               trackerError,
               toBS,
-              fromBS )
+              fromBS,
+              --Tests
+              testSuite)
 where
 
 import Control.Monad
@@ -45,6 +47,10 @@ import Text.PrettyPrint.HughesPJ hiding (char)
 import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
+
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Test.HUnit hiding (Path)
 
 import Digest
 
@@ -301,13 +307,24 @@ prettyPrint :: BCode -> String
 prettyPrint = render . pp
 
 
-testDecodeEncodeProp1 :: BCode -> Bool
-testDecodeEncodeProp1 m =
-    let encoded = encode m
+toBDict :: [(String,BCode)] -> BCode
+toBDict = BDict . M.fromList . map (\(k,v) -> ((toBS k),v))
+
+toBString :: String -> BCode
+toBString = BString . toBS
+
+
+-- TESTS
+
+
+testSuite = testGroup "Protocol/BCode"
+  [ testCase "encode/decode" $ testDecodeEncodeProp1 ]
+
+testDecodeEncodeProp1 =
+    let encoded = encode testData
         decoded = decode encoded
-    in case decoded of
-         Left _ -> False
-         Right m' -> m == m'
+    in
+       assertEqual "for encode/decode identify" (Right testData) decoded
 
 testData = [BInt 123,
             BInt (-123),
@@ -325,13 +342,4 @@ testData = [BInt 123,
                                            ])
                     ]
            ]
-
-toBDict :: [(String,BCode)] -> BCode
-toBDict = BDict . M.fromList . map (\(k,v) -> ((toBS k),v))
-
-toBString :: String -> BCode
-toBString = BString . toBS
-
-
-
 

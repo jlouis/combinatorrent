@@ -10,6 +10,8 @@ module Protocol.Wire
     , decodeMsg
     , constructBitField
     , initiateHandshake
+    -- Tests
+    , testSuite
     )
 where
 
@@ -26,6 +28,10 @@ import Data.Serialize.Get
 
 import Data.Char
 import System.IO
+
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Test.HUnit
 
 import Logging
 import Torrent
@@ -182,15 +188,6 @@ initiateHandshake logC handle peerid infohash = do
                                            putLazyByteString $ toLBS infohash,
                                            putByteString . toBS $ peerid]
         sz = fromIntegral (L.length msg)
--- 
--- -- TESTS
-testDecodeEncodeProp1 :: Message -> Bool
-testDecodeEncodeProp1 m =
-    let encoded = encode m
-        decoded = decode encoded
-    in case decoded of
-         Left _ -> False
-         Right m' -> m == m'
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
 --   BITFIELD message to a peer.
@@ -212,21 +209,33 @@ constructBitField sz pieces = L.pack . build $ m
                                                   if b6 then 64 else 0,
                                                   if b7 then 128 else 0]
 
+--
+-- -- TESTS
+
+testSuite = testGroup "Protocol/Wire"
+  $ map testProp (zip [0..] testData)
+
+testProp (n, m) = testCase ("Test " ++ show n) $
+    let encoded = encode m
+        decoded = decode encoded
+    in case decoded of
+          Left err -> assertFailure err
+          Right x  -> assertEqual ("for " ++ show m) x m
+
 -- Prelude.map testDecodeEncodeProp1 
-testData = [KeepAlive,
-            Choke,
-            Unchoke,
-            Interested,
-            NotInterested,
-            Have 0,
-            Have 1,
-            Have 1934729,
-            BitField (L.pack [1,2,3]),
-            Request 123 (Block 4 7),
-            Piece 5 7 (B.pack [1,2,3,4,5,6,7,8,9,0]),
-            Piece 5 7 (B.pack (concat . replicate 30 $ [minBound..maxBound])),
-            Cancel 5 (Block 6 7),
-            Port 123
+testData = [ KeepAlive
+           , Choke
+           , Unchoke
+           , Interested
+           , NotInterested
+           , Have 0
+           , Have 1
+           , Have 1934729
+           , BitField (L.pack [1,2,3])
+           , Request 123 (Block 4 7)
+           , Piece 5 7 (B.pack [1,2,3,4,5,6,7,8,9,0])
+           , Piece 5 7 (B.pack (concat . replicate 30 $ [minBound..maxBound]))
+           , Cancel 5 (Block 6 7)
+           , Port 123
            ]
--- Currently returns all True
 
