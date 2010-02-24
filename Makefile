@@ -5,7 +5,7 @@ build:
 clean:
 	runghc Setup.lhs clean
 
-test:
+test: build
 	runghc Setup.lhs test
 
 conf:
