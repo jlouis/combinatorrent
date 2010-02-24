@@ -30,8 +30,8 @@ import Data.Char
 import System.IO
 
 import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.HUnit
+import Test.Framework.Providers.QuickCheck2
+import Test.QuickCheck
 
 import Logging
 import Torrent
@@ -53,6 +53,16 @@ data Message = KeepAlive
              | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
+
+instance Arbitrary Message where
+    arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
+                       return NotInterested,
+                       Have <$> arbitrary,
+                       BitField <$> arbitrary,
+                       Request <$> arbitrary <*> arbitrary,
+                       Piece <$> arbitrary <*> arbitrary <*> arbitrary,
+                       Cancel <$> arbitrary <*> arbitrary,
+                       Port <$> choose (0,16383)]
 
 
 data HandShake = HandShake 
@@ -213,29 +223,14 @@ constructBitField sz pieces = L.pack . build $ m
 -- -- TESTS
 
 testSuite = testGroup "Protocol/Wire"
-  $ map testProp (zip [0..] testData)
+  [ testProperty "QC encode-decode/id" propEncodeDecodeId]
 
-testProp (n, m) = testCase ("Test " ++ show n) $
+
+propEncodeDecodeId :: Message -> Bool
+propEncodeDecodeId m =
     let encoded = encode m
         decoded = decode encoded
-    in case decoded of
-          Left err -> assertFailure err
-          Right x  -> assertEqual ("for " ++ show m) x m
+    in
+        Right m == decoded
 
--- Prelude.map testDecodeEncodeProp1 
-testData = [ KeepAlive
-           , Choke
-           , Unchoke
-           , Interested
-           , NotInterested
-           , Have 0
-           , Have 1
-           , Have 1934729
-           , BitField (L.pack [1,2,3])
-           , Request 123 (Block 4 7)
-           , Piece 5 7 (B.pack [1,2,3,4,5,6,7,8,9,0])
-           , Piece 5 7 (B.pack (concat . replicate 30 $ [minBound..maxBound]))
-           , Cancel 5 (Block 6 7)
-           , Port 123
-           ]
 

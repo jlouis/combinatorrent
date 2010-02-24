@@ -26,6 +26,7 @@ module Torrent (
     )
 where
 
+import Control.Applicative
 import qualified Data.Foldable as F
 import qualified Data.ByteString as B
 import Data.List
@@ -35,6 +36,7 @@ import Network
 import Numeric
 
 import System.Random
+import Test.QuickCheck
 
 import Protocol.BCode
 import Digest
@@ -95,6 +97,10 @@ type BlockSize = Int
 data Block = Block { blockOffset :: Int        -- ^ offset of this block within the piece
                    , blockSize   :: BlockSize  -- ^ size of this block within the piece
                    } deriving (Eq, Ord, Show)
+
+instance Arbitrary Block where
+  arbitrary = Block <$> arbitrary <*> arbitrary
+
 
 defaultBlockSize :: BlockSize
 defaultBlockSize = 16384 -- Bytes
