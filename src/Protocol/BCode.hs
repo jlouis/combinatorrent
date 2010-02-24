@@ -48,11 +48,14 @@ import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
 
+import Test.QuickCheck
 import Test.Framework
+import Test.Framework.Providers.QuickCheck2
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path)
 
 import Digest
+import TestInstance() -- for instances only
 
 -- | BCode represents the structure of a bencoded file
 data BCode = BInt Integer                       -- ^ An integer
@@ -60,6 +63,19 @@ data BCode = BInt Integer                       -- ^ An integer
            | BArray [BCode]                     -- ^ An array
            | BDict (M.Map B.ByteString BCode)   -- ^ A key, value map
   deriving (Show, Eq)
+
+instance Arbitrary BCode where
+    arbitrary = sized bc'
+      where bc' :: Int -> Gen BCode
+            bc' 0 = oneof [BInt <$> arbitrary,
+                           BString <$> arbitrary]
+            bc' n | n > 0 =
+                oneof [BInt <$> arbitrary,
+                       BString <$> arbitrary,
+                       BArray <$> sequence (replicate n $ bc' (n `div` 8)),
+                       do keys <- vectorOf n arbitrary
+                          values <- sequence (replicate n $ bc' (n `div` 8))
+                          return $ BDict $ M.fromList $ zip keys values]
 
 data Path = PString B.ByteString
           | PInt Int
@@ -318,7 +334,15 @@ toBString = BString . toBS
 
 
 testSuite = testGroup "Protocol/BCode"
-  [ testCase "encode/decode" $ testDecodeEncodeProp1 ]
+  [ testProperty "QC encode-decode/id" propEncodeDecodeId,
+    testCase "HUnit encode-decode/id" testDecodeEncodeProp1 ]
+
+propEncodeDecodeId :: BCode -> Bool
+propEncodeDecodeId bc =
+    let encoded = encode bc
+        decoded = decode encoded
+    in
+       Right bc == decoded
 
 testDecodeEncodeProp1 =
     let encoded = encode testData
