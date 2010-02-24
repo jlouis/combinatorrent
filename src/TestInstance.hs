@@ -5,7 +5,6 @@ module TestInstance
 where
 
 import Data.Word
-import qualified Data.Map as M
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 

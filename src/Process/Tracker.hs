@@ -81,7 +81,7 @@ data CF = CF {
       , statusCh :: Channel Status.ST
       , statusPCh :: Channel Status.StatusMsg
       , trackerMsgCh :: Channel Status.TrackerMsg
-      , peerMgrCh :: Channel [PeerMgr.Peer]
+      , peerMgrCh :: PeerMgr.PeerMgrChannel
       }
 
 instance Logging CF where
@@ -98,7 +98,7 @@ data ST = ST {
       }
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
-      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> Channel [PeerMgr.Peer]
+      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
@@ -155,7 +155,7 @@ pokeTracker = do
         Right (ResponseDecodeError err) ->
                     do logInfo $ "Response Decode error: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
-        Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
+        Right bc -> do sendPC peerMgrCh (PeerMgr.PeersFromTracker $ newPeers bc) >>= syncP
                        let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
                                                                Status.trackIncomplete = incompleteR bc }
                        sendPC statusPCh trackerStats  >>= syncP

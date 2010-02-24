@@ -4,7 +4,7 @@ module Process.Peer (
     -- * Types
       PeerMessage(..)
     -- * Interface
-    , connect
+    , peerChildren
     )
 where
 
@@ -27,8 +27,6 @@ import Data.Set as S hiding (map)
 import Data.Time.Clock
 import Data.Word
 
-import Network
-
 import System.IO
 
 import PeerTypes
@@ -47,35 +45,21 @@ import Protocol.Wire
 -- INTERFACE
 ----------------------------------------------------------------------
 
-
-type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
-
-connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel -> LogChannel
-        -> StatusChan
-        -> MgrChannel -> Int
-        -> IO ThreadId
-connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
-    spawn (connector >> return ())
-  where connector =
-         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
-            h <- connectTo host port
-            logMsg logC "Connected, initiating handShake"
-            r <- initiateHandshake logC h pid ih
-            logMsg logC "Handshake run"
-            case r of
-              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
-                                              ++ " with error " ++ err)
-                             return ()
-              Right (_caps, _rpid) ->
-                  do logMsg logC "entering peerP loop code"
-                     supC <- channel -- TODO: Should be linked later on
-                     children <- peerChildren logC h mgrC pieceMgrC fsC statC pm nPieces
-                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children logC)
-                     return ()
+peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
+             -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
+peerChildren logC handle pMgrC pieceMgrC fsC statusC pm nPieces = do
+    queueC <- channel
+    senderC <- channel
+    receiverC <- channel
+    sendBWC <- channel
+    return [Worker $ senderP logC handle senderC,
+            Worker $ sendQueueP logC queueC senderC sendBWC,
+            Worker $ receiverP logC handle receiverC,
+            Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle
+                                queueC receiverC sendBWC statusC]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
-
 data SPCF = SPCF { spLogCh :: LogChannel
                  , spMsgCh :: Channel B.ByteString
                  }
@@ -168,19 +152,6 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     filterRequest n blk m =
         case m of Request n blk -> False
                   _             -> True
-
-peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
-             -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
-peerChildren logC handle pMgrC pieceMgrC fsC statusC pm nPieces = do
-    queueC <- channel
-    senderC <- channel
-    receiverC <- channel
-    sendBWC <- channel
-    return [Worker $ senderP logC handle senderC,
-            Worker $ sendQueueP logC queueC senderC sendBWC,
-            Worker $ receiverP logC handle receiverC,
-            Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle
-                                queueC receiverC sendBWC statusC]
 
 data RPCF = RPCF { rpLogC :: LogChannel
                  , rpMsgC :: Channel (Message, Integer) }
@@ -438,9 +409,6 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
 
-showPort :: PortID -> String
-showPort (PortNumber pn) = show pn
-showPort _               = "N/A"
 
 disconnectPeer :: MgrChannel -> ThreadId -> IO ()
 disconnectPeer c t = sync $ transmit c $ Disconnect t
