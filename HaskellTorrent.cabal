@@ -57,10 +57,10 @@ executable HaskellTorrent
     HsOpenSSL,
     time,
     random-shuffle,
-    QuickCheck,
+    QuickCheck >= 2,
     HUnit,
     test-framework,
-    test-framework-quickcheck,
+    test-framework-quickcheck2,
     test-framework-hunit,
     directory
 
