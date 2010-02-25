@@ -98,8 +98,7 @@ Source code Hierarchy
 Known bugs
 ----------
 
-   - I have seen the system violating an assertion in the Piece Manager. I think I got it,
-     nailed, but it may show up again.
-
+    "PieceMgrP"(Fatal):	Process exiting due to ex: user error (P/Blk (655,Block {blockOffset = 81920, blockSize = 16384}) is in the HaveBlocks set)
+    "ConsoleP"(Info):	Process Terminated by Supervisor
 
 
