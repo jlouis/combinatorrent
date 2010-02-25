@@ -101,4 +101,5 @@ Known bugs
     "PieceMgrP"(Fatal):	Process exiting due to ex: user error (P/Blk (655,Block {blockOffset = 81920, blockSize = 16384}) is in the HaveBlocks set)
     "ConsoleP"(Info):	Process Terminated by Supervisor
 
+   - The system currently leaks like hell. Haskell does not think it is the heap however, as it usually only has a couple of megabytes live, even for fairly big torrents. Hence, I have a hunch that the culprit is something else, and that it is related to FFI through HsOpenSSL. More investigation is needed however.
 

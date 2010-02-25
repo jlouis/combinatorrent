@@ -57,6 +57,8 @@ wish-list.
    - Use hslogger or similar as a logging backend.
    - Eliminiate use of nPieces in PeerP. It can be extracted from the 'pm'
      value.
+   - Play with the different digest-implementations of Haskell. It might be
+     that some are better than others.
 
 Planned for the next release
 ----------------------------
