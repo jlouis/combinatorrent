@@ -55,6 +55,8 @@ wish-list.
      PeerMgr needs more work before this is possible.
    - Use an mmap() based interface for file I/O.
    - Use hslogger or similar as a logging backend.
+   - Eliminiate use of nPieces in PeerP. It can be extracted from the 'pm'
+     value.
 
 Planned for the next release
 ----------------------------
