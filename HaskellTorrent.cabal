@@ -54,7 +54,7 @@ executable HaskellTorrent
     network,
     cml,
     HTTP,
-    HsOpenSSL,
+    hopenssl,
     time,
     random-shuffle,
     QuickCheck >= 2,
