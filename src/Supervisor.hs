@@ -77,7 +77,7 @@ allForOne name children logC parentC = do
   where
     startup = do
         childs <- mapM spawnChild children
-        modify (\_ -> STOFA childs)
+        modify (\_ -> STOFA (reverse childs))
         forever eventLoop
     eventLoop = do
         mTid <- liftIO myThreadId
@@ -130,7 +130,7 @@ oneForOne name children logC parentC = do
     startup :: Process CFOFO STOFO ()
     startup = do
         childs <- mapM spawnChild children
-        modify (\_ -> STOFO childs)
+        modify (\_ -> STOFO (reverse childs))
         forever eventLoop
     eventLoop :: Process CFOFO STOFO ()
     eventLoop = do
