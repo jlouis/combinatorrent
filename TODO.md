@@ -62,8 +62,6 @@ Planned for the next release
 ----------------------------
 
    - When closing, gracefully tell the tracker about it.
-   - Reduce CPU load and memory load. Alternative representations of various
-     data structures are needed.
    - Improve parallel execution. We are currently extremely synchronous.
    - KeepAlive messages on sockets.
    - Improve the Peer Management code. Keep track of peers and process them
@@ -72,6 +70,8 @@ Planned for the next release
 Items for later (no particular order)
 -------------------------------------
 
+   - Reduce CPU load and memory load. Alternative representations of various
+     data structures are needed.
    - Add restart-support to the supervisors where applicable.
    - Add support for multiple torrents at once
    - Add prioritization support of multiTorrents
