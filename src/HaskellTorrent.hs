@@ -1,6 +1,7 @@
 module Main (main)
 where
 
+import Control.Concurrent
 import Control.Concurrent.CML
 
 import qualified Data.ByteString as B
@@ -91,7 +92,7 @@ download name = do
                left = bytesLeft haveMap pieceMap
                clientState = determineState haveMap
            -- Create main supervisor process
-           allForOne "MainSup"
+           tid <- allForOne "MainSup"
                      [ Worker $ Console.start logC waitC
                      , Worker $ FSP.start handles logC pieceMap fspC
                      , Worker $ PeerMgr.start pmC pid (infoHash ti)
@@ -109,4 +110,8 @@ download name = do
                      ] logC supC
            sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
+           putStrLn "Closing down, giving processes 10 seconds to cool off"
+           sync $ transmit supC (PleaseDie tid)
+           threadDelay $ 10*1000000
+           putStrLn "Done..."
            return ()

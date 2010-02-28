@@ -103,11 +103,17 @@ start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
        spawnP (CF logC sc statusC msgC pc) (ST ti pid Stopped port tm 0)
-                   (catchP (forever loop)
-                        (defaultStopHandler supC)) -- TODO: Gracefully close down here!
-
-loop :: Process CF ST ()
-loop = do msg <- recvPC trackerMsgCh >>= syncP
+                    (cleanupP (forever loop)
+                        (defaultStopHandler supC)
+                        stopEvent)
+  where
+    stopEvent :: Process CF ST ()
+    stopEvent = do
+        logDebug "Stopping... telling tracker"
+        modify (\s -> s { state = Stopped }) >> talkTracker
+    loop :: Process CF ST ()
+    loop = do
+          msg <- recvPC trackerMsgCh >>= syncP
           logDebug $ "Got tracker event"
           case msg of
             Status.TrackerTick x ->
@@ -119,8 +125,7 @@ loop = do msg <- recvPC trackerMsgCh >>= syncP
                 modify (\s -> s { state = Started }) >> talkTracker
             Status.Complete ->
                   modify (\s -> s { state = Completed }) >> talkTracker
-  where
-        talkTracker = pokeTracker >>= timerUpdate
+    talkTracker = pokeTracker >>= timerUpdate
 
 eventTransition :: Process CF ST ()
 eventTransition = do
