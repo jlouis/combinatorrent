@@ -9,7 +9,9 @@ module Protocol.Wire
     , encodePacket
     , decodeMsg
     , constructBitField
+    -- Handshaking
     , initiateHandshake
+    , receiveHandshake
     -- Tests
     , testSuite
     )
@@ -159,24 +161,28 @@ toBS = B.pack . map toW8
 toLBS :: String -> L.ByteString
 toLBS = L.pack . map toW8
 
+fromLBS :: L.ByteString -> String
+fromLBS = map (chr . fromIntegral) . L.unpack
+
 toW8 :: Char -> Word8
 toW8 = fromIntegral . ord
 
--- | Receive the header parts from the other end
-receiveHeader :: Handle -> Int -> InfoHash
-              -> IO (Either String ([Capabilities], L.ByteString))
-receiveHeader h sz ih = parseHeader `fmap` B.hGet h sz
-  where parseHeader = runGet (headerParser ih)
 
-headerParser :: InfoHash -> Get ([Capabilities], L.ByteString)
-headerParser ih = do
+-- | Receive the header parts from the other end
+receiveHeader :: Handle -> Int -> (InfoHash -> Bool)
+              -> IO (Either String ([Capabilities], L.ByteString))
+receiveHeader h sz ihTst = parseHeader `fmap` B.hGet h sz
+  where parseHeader = runGet (headerParser ihTst)
+
+headerParser :: (InfoHash -> Bool) -> Get ([Capabilities], L.ByteString)
+headerParser ihTst = do
     hdSz <- getWord8
     when (fromIntegral hdSz /= protocolHeaderSize) $ fail "Wrong header size"
     protoString <- getByteString protocolHeaderSize
     when (protoString /= toBS protocolHeader) $ fail "Wrong protocol header"
     caps <- getWord64be
-    ihR  <- getLazyByteString 20
-    when (ihR /= toLBS ih) $ fail "Wrong InfoHash"
+    ihR  <- liftM fromLBS $ getLazyByteString 20
+    unless (ihTst ihR) $ fail "Wrong InfoHash"
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid)
 
@@ -193,11 +199,33 @@ initiateHandshake logC handle peerid infohash = do
     L.hPut handle msg
     hFlush handle
     logMsg logC "Receiving handshake from other end"
-    receiveHeader handle sz infohash -- TODO: Exceptions
-  where msg = L.fromChunks . map runPut $ [putLazyByteString protocolHandshake,
-                                           putLazyByteString $ toLBS infohash,
-                                           putByteString . toBS $ peerid]
+    receiveHeader handle sz (== infohash) -- TODO: Exceptions ?
+  where msg = handShakeMessage peerid infohash
         sz = fromIntegral (L.length msg)
+
+-- | Construct a default handshake message from a PeerId and an InfoHash
+handShakeMessage :: PeerId -> InfoHash -> L.ByteString
+handShakeMessage pid ih =
+    L.fromChunks . map runPut $ [putLazyByteString protocolHandshake,
+                                 putLazyByteString $ toLBS ih,
+                                 putByteString . toBS $ pid]
+
+-- | Receive a handshake on a socket
+receiveHandshake :: LogChannel -> Handle -> PeerId -> (InfoHash -> Bool) -> InfoHash
+                 -> IO (Either String ([Capabilities], L.ByteString))
+receiveHandshake logC h pid ihTst ih = do
+    logMsg logC "Receiving handshake from other end"
+    r <- receiveHeader h sz ihTst -- TODO: Exceptions ?
+    case r of
+        Left err -> return $ Left err
+        Right (caps, rpid) ->
+            do logMsg logC "Sending back handshake message"
+               L.hPut h msg
+               hFlush h
+               return $ Right (caps, rpid)
+  where msg = handShakeMessage pid ih
+        sz = fromIntegral (L.length msg)
+
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
 --   BITFIELD message to a peer.
@@ -210,13 +238,13 @@ constructBitField sz pieces = L.pack . build $ m
                     in if length first /= 8
                        then error "Wront bitfield"
                        else bytify first : build rest
-          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1 else 0,
-                                                  if b1 then 2 else 0,
-                                                  if b2 then 4 else 0,
-                                                  if b3 then 8 else 0,
-                                                  if b4 then 16 else 0,
-                                                  if b5 then 32 else 0,
-                                                  if b6 then 64 else 0,
+          bytify [b7,b6,b5,b4,b3,b2,b1,b0] = sum [if b0 then 1   else 0,
+                                                  if b1 then 2   else 0,
+                                                  if b2 then 4   else 0,
+                                                  if b3 then 8   else 0,
+                                                  if b4 then 16  else 0,
+                                                  if b5 then 32  else 0,
+                                                  if b6 then 64  else 0,
                                                   if b7 then 128 else 0]
 
 --

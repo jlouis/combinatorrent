@@ -4,7 +4,7 @@ module Process.Peer (
     -- * Types
       PeerMessage(..)
     -- * Interface
-    , connect
+    , peerChildren
     )
 where
 
@@ -21,13 +21,12 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Serialize.Get as G
 
 import qualified Data.Map as M
+import qualified Data.IntSet as IS
 import Data.Maybe
 
 import Data.Set as S hiding (map)
 import Data.Time.Clock
 import Data.Word
-
-import Network
 
 import System.IO
 
@@ -47,35 +46,21 @@ import Protocol.Wire
 -- INTERFACE
 ----------------------------------------------------------------------
 
-
-type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
-
-connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel -> LogChannel
-        -> StatusChan
-        -> MgrChannel -> Int
-        -> IO ThreadId
-connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
-    spawn (connector >> return ())
-  where connector =
-         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
-            h <- connectTo host port
-            logMsg logC "Connected, initiating handShake"
-            r <- initiateHandshake logC h pid ih
-            logMsg logC "Handshake run"
-            case r of
-              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
-                                              ++ " with error " ++ err)
-                             return ()
-              Right (_caps, _rpid) ->
-                  do logMsg logC "entering peerP loop code"
-                     supC <- channel -- TODO: Should be linked later on
-                     children <- peerChildren logC h mgrC pieceMgrC fsC statC pm nPieces
-                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children logC)
-                     return ()
+peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
+             -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
+peerChildren logC handle pMgrC pieceMgrC fsC statusC pm nPieces = do
+    queueC <- channel
+    senderC <- channel
+    receiverC <- channel
+    sendBWC <- channel
+    return [Worker $ senderP logC handle senderC,
+            Worker $ sendQueueP logC queueC senderC sendBWC,
+            Worker $ receiverP logC handle receiverC,
+            Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle
+                                queueC receiverC sendBWC statusC]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
-
 data SPCF = SPCF { spLogCh :: LogChannel
                  , spMsgCh :: Channel B.ByteString
                  }
@@ -169,19 +154,6 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
         case m of Request n blk -> False
                   _             -> True
 
-peerChildren :: LogChannel -> Handle -> MgrChannel -> PieceMgrChannel
-             -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
-peerChildren logC handle pMgrC pieceMgrC fsC statusC pm nPieces = do
-    queueC <- channel
-    senderC <- channel
-    receiverC <- channel
-    sendBWC <- channel
-    return [Worker $ senderP logC handle senderC,
-            Worker $ sendQueueP logC queueC senderC sendBWC,
-            Worker $ receiverP logC handle receiverC,
-            Worker $ peerP pMgrC pieceMgrC fsC pm logC nPieces handle
-                                queueC receiverC sendBWC statusC]
-
 data RPCF = RPCF { rpLogC :: LogChannel
                  , rpMsgC :: Channel (Message, Integer) }
 
@@ -241,7 +213,7 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
                , blockQueue :: S.Set (PieceNum, Block) -- ^ Blocks queued at the peer
                , peerChoke :: Bool -- ^ Is the peer choking us? True if yes
                , peerInterested :: Bool -- ^ True if the peer is interested
-               , peerPieces :: [PieceNum] -- ^ List of pieces the peer has access to
+               , peerPieces :: IS.IntSet -- ^ List of pieces the peer has access to
                , upRate :: Rate -- ^ Upload rate towards the peer (estimated)
                , downRate :: Rate -- ^ Download rate from the peer (estimated)
                , runningEndgame :: Bool -- ^ True if we are in endgame
@@ -256,7 +228,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
     tch <- channel
     ct <- getCurrentTime
     spawnP (PCF inBound outBound pMgrC pieceMgrC logC fsC ch sendBWC tch statC pm)
-           (PST True False S.empty True False [] (RC.new ct) (RC.new ct) False)
+           (PST True False S.empty True False IS.empty (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
             tid <- liftIO $ myThreadId
@@ -347,18 +319,18 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
         haveMsg pn = do
             pm <- asks pieceMap
             if M.member pn pm
-                then do modify (\s -> s { peerPieces = pn : peerPieces s})
+                then do modify (\s -> s { peerPieces = IS.insert pn $ peerPieces s})
                         considerInterest
                 else do logWarn "Unknown Piece"
                         stopP
         bitfieldMsg bf = do
             pieces <- gets peerPieces
-            case pieces of
-              -- TODO: Don't trust the bitfield
-              [] -> do modify (\s -> s { peerPieces = createPeerPieces bf})
-                       considerInterest
-              _  -> do logInfo "Got out of band Bitfield request, dying"
-                       stopP
+            if IS.null pieces
+                -- TODO: Don't trust the bitfield
+                then do modify (\s -> s { peerPieces = createPeerPieces bf})
+                        considerInterest
+                else do logInfo "Got out of band Bitfield request, dying"
+                        stopP
         requestMsg :: PieceNum -> Block -> Process PCF PST ()
         requestMsg pn blk = do
             choking <- gets weChoke
@@ -426,8 +398,8 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
         endgameLoMark = 1
         hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
 
-createPeerPieces :: L.ByteString -> [PieceNum]
-createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
+createPeerPieces :: L.ByteString -> IS.IntSet
+createPeerPieces = IS.fromList . map fromIntegral . concat . decodeBytes 0 . L.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]
         decodeByte soFar w =
             let dBit n = if testBit w (7-n)
@@ -438,9 +410,6 @@ createPeerPieces = map fromIntegral . concat . decodeBytes 0 . L.unpack
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
 
-showPort :: PortID -> String
-showPort (PortNumber pn) = show pn
-showPort _               = "N/A"
 
 disconnectPeer :: MgrChannel -> ThreadId -> IO ()
 disconnectPeer c t = sync $ transmit c $ Disconnect t

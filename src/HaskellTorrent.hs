@@ -1,6 +1,7 @@
 module Main (main)
 where
 
+import Control.Concurrent
 import Control.Concurrent.CML
 
 import qualified Data.ByteString as B
@@ -18,6 +19,7 @@ import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
+import qualified Process.Listen as Listen
 import Logging
 import FS
 import Supervisor
@@ -68,43 +70,48 @@ download name = do
       Left pe -> print pe
       Right bc ->
         do print bc
-	   (handles, haveMap, pieceMap) <- openAndCheckFile bc
-	   logC <- channel
-	   Logging.startLogger logC
+           (handles, haveMap, pieceMap) <- openAndCheckFile bc
+           logC <- channel
+           Logging.startLogger logC
            -- setup channels
            trackerC <- channel
            statusC  <- channel
            waitC    <- channel
            pieceMgrC <- channel
-	   supC <- channel
-	   fspC <- channel
+           supC <- channel
+           fspC <- channel
            statInC <- channel
            pmC <- channel
-	   chokeC <- channel
-	   chokeInfoC <- channel
+           chokeC <- channel
+           chokeInfoC <- channel
            putStrLn "Created channels"
-	   -- setup StdGen and Peer data
+           -- setup StdGen and Peer data
            gen <- getStdGen
-	   ti <- mkTorrentInfo bc
+           ti <- mkTorrentInfo bc
            let pid = mkPeerId gen
-	       left = bytesLeft haveMap pieceMap
-	       clientState = determineState haveMap
-	   -- Create main supervisor process
-	   allForOne "MainSup"
-		     [ Worker $ Console.start logC waitC
-		     , Worker $ FSP.start handles logC pieceMap fspC
-		     , Worker $ PeerMgr.start pmC pid (infoHash ti)
-				    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
-		     , Worker $ PieceMgr.start logC pieceMgrC fspC chokeInfoC statInC
-					(PieceMgr.createPieceDb haveMap pieceMap)
-		     , Worker $ Status.start logC left clientState statusC statInC trackerC
-		     , Worker $ Tracker.start ti pid defaultPort logC statusC statInC
-					trackerC pmC
-		     , Worker $ ChokeMgr.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
-				    (case clientState of
-					Seeding -> True
-					Leeching -> False)
-		     ] logC supC
-	   sync $ transmit trackerC Status.Start
+               left = bytesLeft haveMap pieceMap
+               clientState = determineState haveMap
+           -- Create main supervisor process
+           tid <- allForOne "MainSup"
+                     [ Worker $ Console.start logC waitC
+                     , Worker $ FSP.start handles logC pieceMap fspC
+                     , Worker $ PeerMgr.start pmC pid (infoHash ti)
+                                    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
+                     , Worker $ PieceMgr.start logC pieceMgrC fspC chokeInfoC statInC
+                                        (PieceMgr.createPieceDb haveMap pieceMap)
+                     , Worker $ Status.start logC left clientState statusC statInC trackerC
+                     , Worker $ Tracker.start ti pid defaultPort logC statusC statInC
+                                        trackerC pmC
+                     , Worker $ ChokeMgr.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
+                                    (case clientState of
+                                        Seeding -> True
+                                        Leeching -> False)
+                     , Worker $ Listen.start defaultPort pmC logC
+                     ] logC supC
+           sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
+           putStrLn "Closing down, giving processes 10 seconds to cool off"
+           sync $ transmit supC (PleaseDie tid)
+           threadDelay $ 10*1000000
+           putStrLn "Done..."
            return ()

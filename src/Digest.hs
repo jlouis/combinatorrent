@@ -5,25 +5,34 @@ module Digest
   )
 where
 
-import Control.Concurrent
+import Data.Char
+import Data.Word
+import Control.Monad.State
 
+import Foreign.Ptr
+import qualified Data.ByteString as B
+import Data.ByteString.Unsafe
 import qualified Data.ByteString.Lazy as L
-import OpenSSL
-import qualified OpenSSL.EVP.Digest as D
+import qualified OpenSSL.Digest as SSL
 
 -- Consider newtyping this
 type Digest = String
 
-sha1Digest :: IO D.Digest
-sha1Digest = do dig <- D.getDigestByName "SHA1"
-                case dig of
-                    Nothing -> fail "No such digest, SHA1"
-                    Just d -> return d
-
 digest :: L.ByteString -> IO Digest
-digest bs =
-  runInBoundThread $ -- I don't think this is needed strictly
-    withOpenSSL $
-        do sha1 <- sha1Digest
-           return $ D.digestLBS sha1 bs
+digest bs = do
+    upack <- digestLBS SSL.SHA1 bs
+    return $ map (chr . fromIntegral) upack
 
+digestLBS :: SSL.MessageDigest -> L.ByteString -> IO [Word8]
+digestLBS mdType xs =
+  SSL.mkDigest mdType $ evalStateT (updateLBS xs >> SSL.final)
+
+updateBS :: B.ByteString -> SSL.Digest ()
+updateBS bs = do
+    SSL.DST ctx <- get
+    liftIO $ unsafeUseAsCStringLen bs $
+            \(ptr, len) -> SSL.digestUpdate ctx (castPtr ptr) (fromIntegral len)
+    return ()
+
+updateLBS :: L.ByteString -> SSL.Digest ()
+updateLBS lbs = mapM_ updateBS $ L.toChunks lbs

@@ -75,13 +75,13 @@ data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int [PieceNum] (Channel Blocks)
+data PieceMgrMsg = GrabBlocks Int IS.IntSet (Channel Blocks)
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | AskInterested [PieceNum] (Channel Bool)
+                 | AskInterested IS.IntSet (Channel Bool)
                    -- ^ Ask if any of these pieces are interesting
                  | GetDone (Channel [PieceNum])
                    -- ^ Get the pieces which are already done
@@ -168,7 +168,7 @@ start logC mgrC fspC chokeC statC db supC =
                     inProg <- liftM (IS.fromList . M.keys) $ gets inProgress
                     pend   <- gets pendingPieces
                     -- @i@ is the intersection with with we need and the peer has.
-                    let i = IS.null $ IS.intersection (IS.fromList pieces)
+                    let i = IS.null $ IS.intersection pieces
                                    $ IS.union inProg pend
                     syncP =<< sendP retC (not i))
         storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
@@ -291,12 +291,12 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
-grabBlocks' :: Int -> [PieceNum] -> PieceMgrProcess Blocks
+grabBlocks' :: Int -> IS.IntSet -> PieceMgrProcess Blocks
 grabBlocks' k eligible = do
     blocks <- tryGrabProgress k eligible []
     pend <- gets pendingPieces
     if blocks == [] && IS.null pend
-        then do blks <- grabEndGame k (S.fromList eligible)
+        then do blks <- grabEndGame k eligible
                 modify (\db -> db { endGaming = True })
                 logDebug $ "PieceMgr entered endgame."
                 return $ Endgame blks
@@ -307,10 +307,11 @@ grabBlocks' k eligible = do
     -- Try grabbing pieces from the pieces in progress first
     tryGrabProgress 0 _  captured = return captured
     tryGrabProgress n ps captured = do
-        inprog <- gets inProgress
-        case ps `intersect` fmap fst (M.toList inprog) of
-          []  -> tryGrabPending n ps captured
-          (h:_) -> grabFromProgress n ps h captured
+        inProg <- gets inProgress
+        let is = IS.intersection ps (IS.fromList $ M.keys inProg)
+        case IS.null is of
+            True -> tryGrabPending n ps captured
+            False -> grabFromProgress n ps (head $ IS.elems is) captured
     -- The Piece @p@ was found, grab it
     grabFromProgress n ps p captured = do
         inprog <- gets inProgress
@@ -322,14 +323,13 @@ grabBlocks' k eligible = do
         -- This rather ugly piece of code should be substituted with something better
         if grabbed == []
              -- All pieces are taken, try the next one.
-             then tryGrabProgress n (ps \\ [p]) captured
+             then tryGrabProgress n (IS.delete p ps) captured
              else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
                      tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
     -- Try grabbing pieces from the pending blocks
     tryGrabPending n ps captured = do
         pending <- gets pendingPieces
-        let ips = IS.fromList ps
-            isn = IS.intersection ips pending
+        let isn = IS.intersection ps pending
         case IS.null isn of
             True -> return $ captured -- No (more) pieces to download, return
             False -> do
@@ -343,7 +343,7 @@ grabBlocks' k eligible = do
                                   inProgress    = M.insert h ipp inProg })
               tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
-        dls <- liftM (filter (\(p, _) -> S.member p ps)) $ gets downloading
+        dls <- liftM (filter (\(p, _) -> IS.member p ps)) $ gets downloading
         g <- liftIO newStdGen
         let shuffled = shuffle' dls (length dls) g
         return $ take n shuffled

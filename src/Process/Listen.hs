@@ -1,34 +1,33 @@
-module ListenP ()
+module Process.Listen
+    ( start
+    )
 where
 
--- TODO: Create the OMBox here rather than taking it as a parameter
-{-
-import Control.Concurrent.CML
+import Control.Concurrent
+import Control.Monad
+import Control.Monad.Trans
 
 import Network
 
-import ConsoleP
-import PeerP
-import Torrent
-import FSP
+import Process
+import Process.PeerMgr hiding (start)
+import Logging
+import Supervisor
 
+data CF = CF { peerMgrCh :: PeerMgrChannel
+             , logCh :: LogChannel
+             }
 
+instance Logging CF where
+    getLogger cf = ("ListenP", logCh cf)
 
-start :: PortID -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO ()
-start port pid ih fsC logC =
-    do sock <- listenOn port
-       spawn $ acceptor sock pid ih fsC logC
-       return ()
-
-
-acceptor :: Socket -> PeerId -> InfoHash -> FSPChannel -> LogChannel -> IO ()
-acceptor sock pid ih fsC logC =
-    do (h, _, _) <- accept sock
-       spawn $ acceptor sock pid ih fsC logC
-       r <- PeerP.listenHandshake h pid ih fsC logC
-       case r of
-         Left err -> do logMsg logC $ "Incoming peer Accept error" ++ err
-                        return ()
-         Right () -> return ()
--}
+start :: PortID -> PeerMgrChannel -> LogChannel -> SupervisorChan -> IO ThreadId
+start port peerMgrC logC supC = do
+    spawnP (CF peerMgrC logC) () (catchP (openListen >>= pgm)
+                        (defaultStopHandler supC)) -- TODO: Close socket resource!
+  where openListen = liftIO $ listenOn port
+        pgm sock = forever lp
+          where lp = do
+                  conn <- liftIO $ accept sock
+                  syncP =<< sendPC peerMgrCh (NewIncoming conn)
 

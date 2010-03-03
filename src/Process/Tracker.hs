@@ -81,7 +81,7 @@ data CF = CF {
       , statusCh :: Channel Status.ST
       , statusPCh :: Channel Status.StatusMsg
       , trackerMsgCh :: Channel Status.TrackerMsg
-      , peerMgrCh :: Channel [PeerMgr.Peer]
+      , peerMgrCh :: PeerMgr.PeerMgrChannel
       }
 
 instance Logging CF where
@@ -98,16 +98,22 @@ data ST = ST {
       }
 
 start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
-      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> Channel [PeerMgr.Peer]
+      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
 start ti pid port logC sc statusC msgC pc supC =
     do tm <- getPOSIXTime
        spawnP (CF logC sc statusC msgC pc) (ST ti pid Stopped port tm 0)
-                   (catchP (forever loop)
-                        (defaultStopHandler supC)) -- TODO: Gracefully close down here!
-
-loop :: Process CF ST ()
-loop = do msg <- recvPC trackerMsgCh >>= syncP
+                    (cleanupP (forever loop)
+                        (defaultStopHandler supC)
+                        stopEvent)
+  where
+    stopEvent :: Process CF ST ()
+    stopEvent = do
+        logDebug "Stopping... telling tracker"
+        modify (\s -> s { state = Stopped }) >> talkTracker
+    loop :: Process CF ST ()
+    loop = do
+          msg <- recvPC trackerMsgCh >>= syncP
           logDebug $ "Got tracker event"
           case msg of
             Status.TrackerTick x ->
@@ -119,8 +125,7 @@ loop = do msg <- recvPC trackerMsgCh >>= syncP
                 modify (\s -> s { state = Started }) >> talkTracker
             Status.Complete ->
                   modify (\s -> s { state = Completed }) >> talkTracker
-  where
-        talkTracker = pokeTracker >>= timerUpdate
+    talkTracker = pokeTracker >>= timerUpdate
 
 eventTransition :: Process CF ST ()
 eventTransition = do
@@ -155,7 +160,7 @@ pokeTracker = do
         Right (ResponseDecodeError err) ->
                     do logInfo $ "Response Decode error: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
-        Right bc -> do sendPC peerMgrCh (newPeers bc) >>= syncP
+        Right bc -> do sendPC peerMgrCh (PeerMgr.PeersFromTracker $ newPeers bc) >>= syncP
                        let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
                                                                Status.trackIncomplete = incompleteR bc }
                        sendPC statusPCh trackerStats  >>= syncP

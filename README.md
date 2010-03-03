@@ -43,6 +43,17 @@ Haskell-torrent will probably never support these BEPs:
 
    - 016, 017, 019
 
+Debugging
+---------
+
+For debugging, jlouis tends to use the following:
+
+    make conf build test
+
+This builds HaskellTorrent with the *Debug* flag set and also builds the software with profiling
+by default so it is easy to hunt down performance regressions. It also runs the internal test-suite
+for various values.
+
 Source code Hierarchy
 ---------------------
 
@@ -77,16 +88,15 @@ Source code Hierarchy
       - **PeerTypes**: Types used by peers.
       - **Process**: Code for Erlang-inspired processes.
       - **RateCalc**: Rate calculations for a network socket. We use this to keep track of the
-	current speed of a peer in one direction.
+        current speed of a peer in one direction.
       - **Supervisor**: Erlang-inspired Supervisor processes.
       - **Torrent**: Various helpers and types for Torrents.
       - **Version.hs.in**: Generates **Version.hs** via the configure script.
+      - **Test.hs**: Code for test-framework
+      - **TestInstance.hs**: Various helper instances not present in the test framework by default
 
 Known bugs
 ----------
 
-   - I have seen the system violating an assertion in the Piece Manager. I think I got it,
-     nailed, but it may show up again.
-
-
-
+    "PieceMgrP"(Fatal):	Process exiting due to ex: user error (P/Blk (655,Block {blockOffset = 81920, blockSize = 16384}) is in the HaveBlocks set)
+    "ConsoleP"(Info):	Process Terminated by Supervisor
