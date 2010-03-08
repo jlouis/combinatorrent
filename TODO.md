@@ -70,12 +70,17 @@ Planned for the next release
 ----------------------------
 
    - Improve parallel execution. We are currently extremely synchronous.
-   - Improve the Peer Management code. Keep track of peers and process them
-     over time in an intelligent manner.
+     Check the code with ThreadScope, some improvement has been done.
+
+   - KeepAlive messages on sockets.
+
+>>>>>>> Update TODO.
 
 Items for later (no particular order)
 -------------------------------------
 
+   - Improve the Peer Management code. Keep track of peers and process them
+     over time in an intelligent manner.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
    - Add restart-support to the supervisors where applicable.
