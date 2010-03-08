@@ -74,8 +74,6 @@ Planned for the next release
 
    - KeepAlive messages on sockets.
 
->>>>>>> Update TODO.
-
 Items for later (no particular order)
 -------------------------------------
 
