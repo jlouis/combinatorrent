@@ -258,8 +258,9 @@ selectPeers uploadSlots downPeers seedPeers = do
 
 -- | Send a message to the peer process at PeerChannel. May raise
 --   exceptions if the peer is not running anymore.
-msgPeer :: PeerMessage -> PeerChannel -> ChokeMgrProcess ()
-msgPeer msg ch = syncP =<< sendP ch msg
+msgPeer :: PeerChannel -> PeerMessage -> ChokeMgrProcess ThreadId
+msgPeer ch msg = liftIO $ spawn proc
+  where proc = sync $ transmit ch msg
 
 -- | This function carries out the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> ChokeMgrProcess ()
@@ -273,8 +274,8 @@ performChokingUnchoking elected peers =
     --   If we block on the sync, it means that the process in the other end must
     --   be dead. Thus we can just skip it. We will eventually receive this knowledge
     --   through another channel.
-    unchoke pi = ignoreProcessBlock () $ unchokePeer (pChannel pi)
-    choke   pi = ignoreProcessBlock () $ chokePeer (pChannel pi)
+    unchoke pi = unchokePeer (pChannel pi)
+    choke   pi = chokePeer (pChannel pi)
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
     --  in us. The rest will either be unchoked if they are not interested (ensuring fast start
     --    should they become interested); or they will be choked to avoid TCP/IP congestion.
@@ -286,8 +287,8 @@ performChokingUnchoking elected peers =
     optChoke k ((_, pi) : ps) = if pInterestedInUs pi
                                 then unchokePeer (pChannel pi) >> optChoke (k-1) ps
                                 else unchokePeer (pChannel pi) >> optChoke k ps
-    chokePeer = msgPeer ChokePeer
-    unchokePeer = msgPeer UnchokePeer
+    chokePeer = flip msgPeer ChokePeer
+    unchokePeer = flip msgPeer UnchokePeer
 
 -- | Function to split peers into those where we are seeding and those were we are leeching.
 --   also prunes the list for peers which are not interesting.
@@ -322,14 +323,12 @@ traversePeers thnk = T.mapM thnk =<< gets peerMap
 informDone :: PieceNum -> ChokeMgrProcess ()
 informDone pn = traversePeers sendDone >> return ()
   where
-    sendDone pi = ignoreProcessBlock ()
-            $ (sendP (pChannel pi) $ PieceCompleted pn) >>= syncP
+    sendDone pi = msgPeer (pChannel pi) (PieceCompleted pn)
 
 informBlockComplete :: PieceNum -> Block -> ChokeMgrProcess ()
 informBlockComplete pn blk = traversePeers sendComp >> return ()
   where
-    sendComp pi = ignoreProcessBlock ()
-        $ (sendP (pChannel pi) $ CancelBlock pn blk) >>= syncP
+    sendComp pi = msgPeer (pChannel pi) (CancelBlock pn blk)
 
 updateDB :: ChokeMgrProcess ()
 updateDB = do
