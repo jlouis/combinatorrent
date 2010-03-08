@@ -14,7 +14,8 @@ Here is what I do to install haskell torrrent locally on my machine:
 
     cabal install --prefix=$HOME --user
 
-Since we are using the magnificient cabal, this is enough to install haskell torrent in our $HOME/bin directory.
+Since we are using the magnificient cabal, this is enough to install haskell
+torrent in our $HOME/bin directory.
 
 Usage
 -----------------
@@ -23,7 +24,9 @@ Haskell torrent can currently only do one very simple thing. If you call it with
 
     HaskellTorrent foo.torrent
 
-then it will begin downloading the file in foo.torrent to the current directory via the Bittorrent protocol. *Note:* Currently we have no support for multifile torrents.
+then it will begin downloading the file in foo.torrent to the current
+directory via the Bittorrent protocol. *Note:* Currently we have no support
+for multifile torrents.
 
 Protocol support
 ----------------
@@ -53,6 +56,48 @@ For debugging, jlouis tends to use the following:
 This builds HaskellTorrent with the *Debug* flag set and also builds the software with profiling
 by default so it is easy to hunt down performance regressions. It also runs the internal test-suite
 for various values.
+
+Reading material for hacking HaskellTorrent:
+--------------------------------------------
+
+   - [Protocol specification - BEP0003](http://www.bittorrent.org/beps/bep_0003.html):
+     This is the original protocol specification, tracked into the BEP
+     process. It is worth reading because it explains the general overview
+     and the precision with which the original protocol was written down.
+
+   - [Bittorrent Enhancement Process - BEP0000](http://www.bittorrent.org/beps/bep_0000.html)
+     The BEP process is an official process for adding extensions on top of
+     the BitTorrent protocol. It allows implementors to mix and match the
+     extensions making sense for their client and it allows people to
+     discuss extensions publicly in a forum. It also provisions for the
+     deprecation of certain features in the long run as they prove to be of
+     less value.
+
+   - [wiki.theory.org](http://wiki.theory.org/Main_Page)
+     An alternative description of the protocol. This description is in
+     general much more detailed than the BEP structure. It is worth a read
+     because it acts somewhat as a historic remark and a side channel. Note
+     that there are some commentary on these pages which can be disputed
+     quite a lot.
+
+   - ["Concurrent Programming in ML" - John. H. Reppy](http://www.amazon.com/Concurrent-Programming-ML-John-Reppy/dp/0521480892)
+     This book describes the CML system which HaskellTorrent uses. The basic
+     idea of CML is that of higher order events. That is, events which can
+     be abstractly manipulated before being synchronized on. For instance,
+     CML events are a Functor instance, though the code currently does not
+     reflect that. This also provisions for fair selective receives
+     with dynamic choice of which events may fire.
+
+   - ["A Concurrent ML library in Concurrent Haskell" - Avik Chaudhuri, ICFP 2009](http://www.cs.umd.edu/~avik/projects/cmllch/)
+     The paper behind the CML library which HaskellTorrent uses. It
+     describes a way to transform the first-order MVar and ForkIO structures
+     of concurrent haskell into a higher order CML language by use of a
+     clever matchmaking algorithm.
+
+   - ["Supervisor Behaviour"](http://erlang.org/doc/design_principles/sup_princ.html)
+     From the Erlang documentation. How the Erlang Supervisor behaviour
+     works. The Supervisor and process structure of HaskellTorrent is
+     somewhat inspired by the Erlang ditto.
 
 Source code Hierarchy
 ---------------------
@@ -100,3 +145,5 @@ Known bugs
 
     "PieceMgrP"(Fatal):	Process exiting due to ex: user error (P/Blk (655,Block {blockOffset = 81920, blockSize = 16384}) is in the HaveBlocks set)
     "ConsoleP"(Info):	Process Terminated by Supervisor
+
+# vim: filetype=none tw=76 expandtab
