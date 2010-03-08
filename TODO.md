@@ -70,7 +70,6 @@ Planned for the next release
 ----------------------------
 
    - Improve parallel execution. We are currently extremely synchronous.
-   - KeepAlive messages on sockets.
    - Improve the Peer Management code. Keep track of peers and process them
      over time in an intelligent manner.
 

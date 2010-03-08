@@ -29,6 +29,7 @@ import Data.Time.Clock
 import Data.Word
 
 import System.IO
+import System.Timeout
 
 import PeerTypes
 import Process
@@ -77,11 +78,15 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
   where
     pgm :: Process SPCF Handle ()
     pgm = do
-        c <- ask
-        m <- syncP =<< recvPC spMsgCh
+        m <- liftIO $ timeout defaultTimeout s
         h <- get
-        liftIO $ do B.hPut h m
-                    hFlush h
+        case m of
+            Nothing -> putMsg (encodePacket KeepAlive)
+            Just m  -> putMsg m
+        liftIO $ hFlush h
+    defaultTimeout = 120 * 10^6
+    putMsg m = liftIO $ B.hPut h m
+    s = sync $ receive ch (const True)
 
 -- | Messages we can send to the Send Queue
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
