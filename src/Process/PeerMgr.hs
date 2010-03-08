@@ -67,25 +67,22 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
   where
     lp = do chooseP [incomingPeers, peerEvent] >>= syncP
             fillPeers
-    incomingPeers = do
-        ev <- recvPC peerCh
-        wrapP ev (\msg ->
+    incomingPeers =
+        recvWrapPC peerCh (\msg ->
             case msg of
                 PeersFromTracker ps -> do
                        logDebug "Adding peers to queue"
                        modify (\s -> s { peersInQueue = ps ++ peersInQueue s })
                 NewIncoming conn@(h, _, _) -> do
                     sz <- liftM M.size $ gets peers
-                    if (sz < numPeers)
+                    if sz < numPeers
                         then do logDebug "New incoming peer, handling"
                                 addIncoming conn
                                 return ()
                         else do logDebug "Already too many peers, closing!"
                                 liftIO $ hClose h)
-    peerEvent = do
-        ev <- recvPC mgrCh
-        wrapP ev (\msg -> do
-                case msg of
+    peerEvent =
+        recvWrapPC mgrCh (\msg -> case msg of
                     Connect tid c -> newPeer tid c
                     Disconnect tid -> removePeer tid)
     newPeer tid c = do logDebug $ "Adding new peer " ++ show tid
@@ -151,7 +148,7 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
 acceptor (h,hn,pn) ih ihTst pool pid logC mgrC pieceMgrC fsC statC pm nPieces =
     spawn (connector >> return ())
   where connector = do
-            logMsg logC $ "Handling incoming connection"
+            logMsg logC "Handling incoming connection"
             r <- receiveHandshake logC h pid ihTst ih
             logMsg logC "RecvHandshake run"
             case r of
