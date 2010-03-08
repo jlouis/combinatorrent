@@ -1,4 +1,4 @@
-.PHONY: test build clean rebuild local-install haddock hlint tags conf dist-rebuild conf-nodebug
+.PHONY: test build clean rebuild local-install haddock hlint tags conf dist-rebuild conf-nodebug conf-ts
 build:
 	runghc Setup.lhs build
 
@@ -9,7 +9,10 @@ test: build
 	runghc Setup.lhs test
 
 conf:
-	runghc Setup.lhs configure --flags=debug --user
+	runghc Setup.lhs configure --flags="debug profiling" --user
+
+conf-ts:
+	runghc Setup.lhs configure --flags="debug threadscope" --user
 
 conf-nodebug:
 	runghc Setup.lhs configure --user
