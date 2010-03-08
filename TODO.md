@@ -55,7 +55,7 @@ wish-list.
      PeerMgr needs more work before this is possible.
    - Use an mmap() based interface for file I/O.
    - Use hslogger or similar as a logging backend.
-   - Eliminiate use of nPieces in PeerP. It can be extracted from the 'pm'
+   - Eliminate use of nPieces in PeerP. It can be extracted from the 'pm'
      value.
    - Improve synchronization when the supervisor tree is closing down.
      Currently the problem is that the supervisor tree will close down by
@@ -87,7 +87,7 @@ Items for later (no particular order)
    - Support the FAST extension
    - Add rate limitation support, locally or globally
    - Add support for DHT
-   - Support UDP tracking extension
+   - Support the UDP tracking extension
    - Support partial downloads (select files you want in the torrent)
    - Write an ETA estimator
    - Write the Users Guide.
@@ -97,6 +97,7 @@ Items for later (no particular order)
      is relevant for this client.
    - Process monitoring in general. Think.
    - Write a fuzzing framework for bittorrent.
-   - shapr wants this to be combinatorrent. Thoughts?
+   - shapr wants this to be combinatorrent. Change to this name. It rocks
+     and people I've talked to really likes it.
 
 # vim: filetype=none tw=76 expandtab
