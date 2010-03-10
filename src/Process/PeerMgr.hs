@@ -17,10 +17,10 @@ import Control.Monad.Reader
 
 import Network
 import System.IO
+import System.Log.Logger
 
 import PeerTypes
 import Process
-import Logging
 import Process.Peer as Peer
 import Process.ChokeMgr hiding (start)
 import Process.FS hiding (start)
@@ -42,11 +42,10 @@ data CF = CF { peerCh :: PeerMgrChannel
              , fsCh  :: FSPChannel
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
-             , logCh :: LogChannel
              }
 
 instance Logging CF where
-  getLogger cf = ("PeerMgrP", logCh cf)
+    logName _ = "Process.PeerMgr"
 
 data ST = ST { peersInQueue  :: [Peer]
              , peers :: M.Map ThreadId (Channel PeerMessage)
@@ -55,13 +54,13 @@ data ST = ST { peersInQueue  :: [Peer]
              }
 
 start :: PeerMgrChannel -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
-      -> LogChannel -> ChokeMgrChannel -> StatusChan -> Int -> SupervisorChan
+      -> ChokeMgrChannel -> StatusChan -> Int -> SupervisorChan
       -> IO ThreadId
-start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
+start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
-       pool <- liftM snd $ oneForOne "PeerPool" [] logC fakeChan
-       spawnP (CF ch pieceMgrC mgrC fsC pool chokeMgrC logC)
+       pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
+       spawnP (CF ch pieceMgrC mgrC fsC pool chokeMgrC)
               (ST [] M.empty pid ih) (catchP (forever lp)
                                        (defaultStopHandler supC))
   where
@@ -71,24 +70,24 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
         recvWrapPC peerCh (\msg ->
             case msg of
                 PeersFromTracker ps -> do
-                       logDebug "Adding peers to queue"
+                       debugP "Adding peers to queue"
                        modify (\s -> s { peersInQueue = ps ++ peersInQueue s })
                 NewIncoming conn@(h, _, _) -> do
                     sz <- liftM M.size $ gets peers
                     if sz < numPeers
-                        then do logDebug "New incoming peer, handling"
+                        then do debugP "New incoming peer, handling"
                                 addIncoming conn
                                 return ()
-                        else do logDebug "Already too many peers, closing!"
+                        else do debugP "Already too many peers, closing!"
                                 liftIO $ hClose h)
     peerEvent =
         recvWrapPC mgrCh (\msg -> case msg of
                     Connect tid c -> newPeer tid c
                     Disconnect tid -> removePeer tid)
-    newPeer tid c = do logDebug $ "Adding new peer " ++ show tid
+    newPeer tid c = do debugP $ "Adding new peer " ++ show tid
                        sendPC chokeMgrCh (AddPeer tid c) >>= syncP
                        modify (\s -> s { peers = M.insert tid c (peers s)})
-    removePeer tid = do logDebug $ "Removing peer " ++ show tid
+    removePeer tid = do debugP $ "Removing peer " ++ show tid
                         sendPC chokeMgrCh (RemovePeer tid) >>= syncP
                         modify (\s -> s { peers = M.delete tid (peers s)})
     numPeers = 40
@@ -97,7 +96,7 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
         when (sz < numPeers)
             (do q <- gets peersInQueue
                 let (toAdd, rest) = splitAt (numPeers - sz) q
-                logDebug $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
+                debugP $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
                 mapM_ addPeer toAdd
                 modify (\s -> s { peersInQueue = rest }))
     addPeer (Peer hn prt) = do
@@ -107,8 +106,7 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
         pmC  <- asks pieceMgrCh
         fsC  <- asks fsCh
         mgrC <- asks mgrCh
-        logC <- asks logCh
-        liftIO $ connect (hn, prt, pid, ih, pm) pool pmC fsC logC statC mgrC nPieces
+        liftIO $ connect (hn, prt, pid, ih, pm) pool pmC fsC statC mgrC nPieces
     addIncoming conn = do
         pid <- gets peerId
         ih  <- gets infoHash
@@ -116,51 +114,53 @@ start ch pid ih pm pieceMgrC fsC logC chokeMgrC statC nPieces supC =
         pieceMgrC  <- asks pieceMgrCh
         fsC  <- asks fsCh
         mgrC <- asks mgrCh
-        logC <- asks logCh
         let ihTst = (== ih)
-        liftIO $ acceptor conn ih ihTst pool pid logC mgrC pieceMgrC fsC statC pm nPieces
+        liftIO $ acceptor conn ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
 
-connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel -> LogChannel
+connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel
         -> StatusChan
         -> MgrChannel -> Int
         -> IO ThreadId
-connect (host, port, pid, ih, pm) pool pieceMgrC fsC logC statC mgrC nPieces =
+connect (host, port, pid, ih, pm) pool pieceMgrC fsC statC mgrC nPieces =
     spawn (connector >> return ())
   where connector =
-         do logMsg logC $ "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
+         do debugM "Process.PeerMgr.connect" $
+                "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
-            logMsg logC "Connected, initiating handShake"
-            r <- initiateHandshake logC h pid ih
-            logMsg logC "Handshake run"
+            debugM "Process.PeerMgr.connect" "Connected, initiating handShake"
+            r <- initiateHandshake h pid ih
+            debugM "Process.PeerMgr.connect" "Handshake run"
             case r of
-              Left err -> do logMsg logC ("Peer handshake failure at host " ++ host
-                                              ++ " with error " ++ err)
+              Left err -> do debugM "Process.PeerMgr.connect"
+                                ("Peer handshake failure at host " ++ host
+                                  ++ " with error " ++ err)
                              return ()
               Right (_caps, _rpid) ->
-                  do logMsg logC "entering peerP loop code"
+                  do debugM "Process.PeerMgr.connect" "entering peerP loop code"
                      supC <- channel -- TODO: Should be linked later on
-                     children <- peerChildren logC h mgrC pieceMgrC fsC statC pm nPieces
-                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children logC)
+                     children <- peerChildren h mgrC pieceMgrC fsC statC pm nPieces
+                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
-acceptor (h,hn,pn) ih ihTst pool pid logC mgrC pieceMgrC fsC statC pm nPieces =
+acceptor (h,hn,pn) ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces =
     spawn (connector >> return ())
   where connector = do
-            logMsg logC "Handling incoming connection"
-            r <- receiveHandshake logC h pid ihTst ih
-            logMsg logC "RecvHandshake run"
+            debugLog "Handling incoming connection"
+            r <- receiveHandshake h pid ihTst ih
+            debugLog "RecvHandshake run"
             case r of
-                Left err -> do logMsg logC ("Incoming Peer handshake failure with " ++ show hn ++ "("
+                Left err -> do debugLog ("Incoming Peer handshake failure with " ++ show hn ++ "("
                                             ++ show pn ++ "), error: " ++ err)
                                return ()
                 Right (_caps, _rpid) ->
-                    do logMsg logC "entering peerP loop code"
+                    do debugLog "entering peerP loop code"
                        supC <- channel -- TODO: Should be linked later on
-                       children <- peerChildren logC h mgrC pieceMgrC fsC statC pm nPieces
-                       sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children logC)
+                       children <- peerChildren h mgrC pieceMgrC fsC statC pm nPieces
+                       sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
+        debugLog = debugM "Process.PeerMgr.acceptor"
 
 showPort :: PortID -> String
 showPort (PortNumber pn) = show pn

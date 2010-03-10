@@ -11,19 +11,17 @@ import Network
 
 import Process
 import Process.PeerMgr hiding (start)
-import Logging
 import Supervisor
 
 data CF = CF { peerMgrCh :: PeerMgrChannel
-             , logCh :: LogChannel
              }
 
 instance Logging CF where
-    getLogger cf = ("ListenP", logCh cf)
+    logName _ = "Process.Listen"
 
-start :: PortID -> PeerMgrChannel -> LogChannel -> SupervisorChan -> IO ThreadId
-start port peerMgrC logC supC = do
-    spawnP (CF peerMgrC logC) () (catchP (openListen >>= pgm)
+start :: PortID -> PeerMgrChannel -> SupervisorChan -> IO ThreadId
+start port peerMgrC supC = do
+    spawnP (CF peerMgrC) () (catchP (openListen >>= pgm)
                         (defaultStopHandler supC)) -- TODO: Close socket resource!
   where openListen = liftIO $ listenOn port
         pgm sock = forever lp

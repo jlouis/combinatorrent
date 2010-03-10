@@ -23,7 +23,6 @@ import Control.Concurrent.CML
 import Control.Monad.State
 
 import Prelude hiding (log)
-import Logging
 import Process
 import Supervisor
 import Torrent
@@ -40,13 +39,12 @@ type StatusChan = Channel StatusMsg
 -- | TrackerChannel is the channel of the tracker
 data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 
-data CF  = CF { logCh :: LogChannel
-              , statusCh :: Channel StatusMsg
+data CF  = CF { statusCh :: Channel StatusMsg
               , trackerCh1 :: Channel TrackerMsg
               , trackerCh :: Channel ST }
 
 instance Logging CF where
-    getLogger cf = ("StatusP", logCh cf)
+    logName _ = "Process.Status"
 
 data ST = ST { uploaded :: Integer,
                downloaded :: Integer,
@@ -57,10 +55,10 @@ data ST = ST { uploaded :: Integer,
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: LogChannel -> Integer -> TorrentState -> Channel ST
+start :: Integer -> TorrentState -> Channel ST
       -> Channel StatusMsg -> Channel TrackerMsg -> SupervisorChan -> IO ThreadId
-start logC l tState trackerC statusC trackerC1 supC = do
-    spawnP (CF logC statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
+start l tState trackerC statusC trackerC1 supC = do
+    spawnP (CF statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
         (catchP (foreverP pgm) (defaultStopHandler supC))
   where
     pgm = do ev <- chooseP [sendEvent, recvEvent]
@@ -72,16 +70,16 @@ start logC l tState trackerC statusC trackerC1 supC = do
                         TrackerStat ic c ->
                            modify (\s -> s { incomplete = ic, complete = c })
                         CompletedPiece bytes -> do
-                            logDebug "StatusProcess updated left"
+                            debugP "StatusProcess updated left"
                             modify (\s -> s { left = (left s) - bytes })
                         PeerStat up down -> do
                            modify (\s -> s { uploaded = (uploaded s) + up,
                                              downloaded = (downloaded s) + down })
                            u <- gets uploaded
                            d <- gets downloaded
-                           logDebug $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
+                           debugP $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
                         TorrentCompleted -> do
-                           logDebug "TorrentCompletion at StatusP"
+                           debugP "TorrentCompletion at StatusP"
                            l <- gets left
                            when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
                            syncP =<< sendPC trackerCh1 Complete

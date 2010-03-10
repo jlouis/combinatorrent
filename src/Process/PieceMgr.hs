@@ -24,7 +24,6 @@ import Prelude hiding (log)
 import System.Random
 import System.Random.Shuffle
 
-import Logging
 import Process.FS hiding (start)
 import Process.Status as STP hiding (start) 
 import Supervisor
@@ -95,22 +94,21 @@ type PieceMgrChannel = Channel PieceMgrMsg
 type ChokeInfoChannel = Channel ChokeInfoMsg
 
 data PieceMgrCfg = PieceMgrCfg
-    { logCh :: LogChannel
-    , pieceMgrCh :: PieceMgrChannel
+    { pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
     , chokeCh :: ChokeInfoChannel
     , statusCh :: StatusChan
     }
 
 instance Logging PieceMgrCfg where
-  getLogger cf = ("PieceMgrP", logCh cf)
+  logName _ = "Process.PieceMgr"
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 
-start :: LogChannel -> PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> StatusChan -> PieceDB
+start :: PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> StatusChan -> PieceDB
       -> SupervisorChan -> IO ThreadId
-start logC mgrC fspC chokeC statC db supC =
-    spawnP (PieceMgrCfg logC mgrC fspC chokeC statC) db
+start mgrC fspC chokeC statC db supC =
+    spawnP (PieceMgrCfg mgrC fspC chokeC statC) db
                     (catchP (forever pgm)
                         (defaultStopHandler supC))
   where pgm = do
@@ -129,12 +127,12 @@ start logC mgrC fspC chokeC statC db supC =
             wrapP ev (\msg ->
               case msg of
                 GrabBlocks n eligible c ->
-                    do logDebug "Grabbing Blocks"
+                    do debugP "Grabbing Blocks"
                        blocks <- grabBlocks' n eligible
-                       logDebug "Grabbed..."
+                       debugP "Grabbed..."
                        syncP =<< sendP c blocks
                 StoreBlock pn blk d ->
-                    do logDebug $ "Storing block: " ++ show (pn, blk)
+                    do debugP $ "Storing block: " ++ show (pn, blk)
                        storeBlock pn blk d
                        modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
                        endgameBroadcast pn blk
@@ -143,7 +141,7 @@ start logC mgrC fspC chokeC statC db supC =
                            (do assertPieceComplete pn
                                pend <- gets pendingPieces
                                iprog <- gets inProgress
-                               logInfo $ "Piece #" ++ show pn
+                               infoP $ "Piece #" ++ show pn
                                          ++ " completed, there are " 
                                          ++ (show $ IS.size pend) ++ " pending "
                                          ++ (show $ M.size iprog) ++ " in progress"
@@ -204,7 +202,7 @@ checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
     when (M.size im == IS.size doneP)
-        (do logInfo "Torrent Completed"
+        (do infoP "Torrent Completed"
             sendPC statusCh STP.TorrentCompleted >>= syncP
             sendPC chokeCh  TorrentComplete >>= syncP)
 
@@ -263,7 +261,7 @@ updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
 updateProgress pn blk = do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
-      Nothing -> do logDebug "updateProgress can't find progress block, error?"
+      Nothing -> do debugP "updateProgress can't find progress block, error?"
                     return False
       Just pg ->
           let blkSet = ipHaveBlocks pg
@@ -274,7 +272,7 @@ updateProgress pn blk = do
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = do
             modify (\db -> db { inProgress = M.adjust (const pg) pn (inProgress db) })
-            logDebug $ "Iphave : " ++ show (ipHave pg) ++ " ipDone: " ++ show (ipDone pg)
+            debugP $ "Iphave : " ++ show (ipHave pg) ++ " ipDone: " ++ show (ipDone pg)
             return (ipHave pg == ipDone pg)
         ipHave = S.size . ipHaveBlocks
 
@@ -298,7 +296,7 @@ grabBlocks' k eligible = do
     if blocks == [] && IS.null pend
         then do blks <- grabEndGame k eligible
                 modify (\db -> db { endGaming = True })
-                logDebug $ "PieceMgr entered endgame."
+                debugP $ "PieceMgr entered endgame."
                 return $ Endgame blks
         else do modify (\s -> s { downloading = blocks ++ (downloading s) })
                 return $ Leech blocks

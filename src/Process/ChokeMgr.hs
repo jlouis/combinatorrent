@@ -26,7 +26,6 @@ import System.Random
 import PeerTypes
 import Process.PieceMgr hiding (start)
 import Process
-import Logging
 import Supervisor
 import Torrent hiding (infoHash)
 import Process.Timer as Timer
@@ -39,24 +38,23 @@ data ChokeMgrMsg = Tick
                  | AddPeer PeerPid PeerChannel
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
-data CF = CF { logCh :: LogChannel
-             , mgrCh :: ChokeMgrChannel
+data CF = CF { mgrCh :: ChokeMgrChannel
              , infoCh :: ChokeInfoChannel
              }
 
 instance Logging CF where
-  getLogger cf = ("ChokeMgrP", logCh cf)
+  logName _ = "Process.ChokeMgr"
 
 type ChokeMgrProcess a = Process CF PeerDB a
 
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: LogChannel -> ChokeMgrChannel -> ChokeInfoChannel -> Int -> Bool -> SupervisorChan
+start :: ChokeMgrChannel -> ChokeInfoChannel -> Int -> Bool -> SupervisorChan
       -> IO ThreadId
-start logC ch infoC ur weSeed supC = do
+start ch infoC ur weSeed supC = do
     Timer.register 10 Tick ch
-    spawnP (CF logC ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
+    spawnP (CF ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
               (defaultStopHandler supC))
   where
@@ -68,7 +66,7 @@ start logC ch infoC ur weSeed supC = do
                         Tick          -> tick
                         RemovePeer t  -> removePeer t
                         AddPeer t pCh -> do
-                            logDebug $ "Adding peer " ++ show t
+                            debugP $ "Adding peer " ++ show t
                             weSeed <- gets seeding
                             addPeer pCh weSeed t)
     infoEvent =
@@ -81,12 +79,12 @@ start logC ch infoC ur weSeed supC = do
                                         , peerMap =
                                            M.map (\pi -> pi { pAreSeeding = True })
                                                  $ peerMap s}))
-    tick = do logDebug "Ticked"
+    tick = do debugP "Ticked"
               ch <- asks mgrCh
               Timer.register 10 Tick ch
               updateDB
               runRechokeRound
-    removePeer tid = do logDebug $ "Removing peer " ++ show tid
+    removePeer tid = do debugP $ "Removing peer " ++ show tid
                         modify (\db -> db { peerMap = M.delete tid (peerMap db),
                                             peerChain = (peerChain db) \\ [tid] })
 
@@ -240,12 +238,12 @@ selectPeers uploadSlots downPeers seedPeers = do
         let (nDownSlots, nSeedSlots) = assignUploadSlots uploadSlots downPeers seedPeers
             downPids = S.fromList $ map fst $ take nDownSlots $ sortLeech downPeers
             seedPids = S.fromList $ map fst $ take nSeedSlots $ sortSeeds seedPeers
-        logDebug $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
+        debugP $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
         when (uploadSlots < nDownSlots + nSeedSlots)
             (fail "Wrong calculation of slots")
-        logDebug $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
+        debugP $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
         rm <- rateMap
-        logDebug $ "Peer rates: " ++ rm
+        debugP $ "Peer rates: " ++ rm
         return $ S.union downPids seedPids
     where
         rateMap :: ChokeMgrProcess String

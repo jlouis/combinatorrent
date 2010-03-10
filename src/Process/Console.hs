@@ -14,26 +14,26 @@ import Control.Monad.Reader
 import Prelude hiding (catch)
 import Process
 
-import Logging
 import Supervisor
+
+import System.Log.Logger
 
 data Cmd = Quit -- Quit the program
          deriving (Eq, Show)
 
 type CmdChannel = Channel Cmd
 
-data CF = CF { cmdCh :: CmdChannel
-             , logCh :: LogChannel }
+data CF = CF { cmdCh :: CmdChannel }
 
 instance Logging CF where
-    getLogger cf = ("ConsoleP", logCh cf)
+    logName _ = "Process.Console"
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: LogChannel -> Channel () -> SupervisorChan -> IO ThreadId
-start logC waitC supC = do
-    cmdC <- readerP logC -- We shouldn't be doing this in the long run
-    spawnP (CF cmdC logC) () (catchP (forever lp) (defaultStopHandler supC))
+start :: Channel () -> SupervisorChan -> IO ThreadId
+start waitC supC = do
+    cmdC <- readerP -- We shouldn't be doing this in the long run
+    spawnP (CF cmdC) () (catchP (forever lp) (defaultStopHandler supC))
   where
     lp = syncP =<< quitEvent
     quitEvent = do
@@ -43,13 +43,14 @@ start logC waitC supC = do
             (\_ -> syncP =<< sendP waitC ())
         
 
-readerP :: LogChannel -> IO CmdChannel
-readerP logCh = do cmdCh <- channel
-                   spawn $ lp cmdCh
-                   return cmdCh
+readerP :: IO CmdChannel
+readerP = do cmdCh <- channel
+             spawn $ lp cmdCh
+             return cmdCh
   where lp cmdCh = do c <- getLine
                       case c of
                         "quit" -> sync $ transmit cmdCh Quit
-                        cmd    -> do logMsg' logCh "Console" Info $ "Unrecognized command: " ++ show cmd
+                        cmd    -> do logM "Process.Console.readerP" INFO $
+                                        "Unrecognized command: " ++ show cmd
                                      lp cmdCh
 

@@ -17,7 +17,6 @@ import Control.Monad.State
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 
-import Logging
 import Process
 import Torrent
 import qualified FS
@@ -31,11 +30,10 @@ type FSPChannel = Channel FSPMsg
 
 data CF = CF
       { fspCh :: FSPChannel -- ^ Channel on which to receive messages
-      , logCh :: LogChannel -- ^ Channel for logging
       }
 
 instance Logging CF where
-  getLogger cf = ("FSP", logCh cf)
+  logName _ = "Process.FS"
 
 data ST = ST
       { fileHandles :: FS.Handles -- ^ The file we are working on
@@ -46,9 +44,9 @@ data ST = ST
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: FS.Handles -> LogChannel -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
-start handles logC pm fspC supC =
-    spawnP (CF fspC logC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
+start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
+start handles pm fspC supC =
+    spawnP (CF fspC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
   where
     lp = msgEvent >>= syncP
     msgEvent = do
@@ -62,7 +60,7 @@ start handles logC pm fspC supC =
                         Just pi -> do r <- gets fileHandles >>= (liftIO . FS.checkPiece pi)
                                       sendP ch (Just r) >>= syncP
                 ReadBlock n blk ch -> do
-                    logDebug $ "Reading block #" ++ show n
+                    debugP $ "Reading block #" ++ show n
                             ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"
                     -- TODO: Protection, either here or in the Peer code
                     h  <- gets fileHandles
