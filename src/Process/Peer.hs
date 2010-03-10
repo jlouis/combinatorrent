@@ -29,6 +29,7 @@ import Data.Time.Clock
 import Data.Word
 
 import System.IO
+import System.Timeout
 
 import PeerTypes
 import Process
@@ -77,11 +78,15 @@ senderP logC h ch supC = spawnP (SPCF logC ch) h (catchP (foreverP pgm)
   where
     pgm :: Process SPCF Handle ()
     pgm = do
-        c <- ask
-        m <- syncP =<< recvPC spMsgCh
+        m <- liftIO $ timeout defaultTimeout s
         h <- get
-        liftIO $ do B.hPut h m
-                    hFlush h
+        case m of
+            Nothing -> putMsg (encodePacket KeepAlive)
+            Just m  -> putMsg m
+        liftIO $ hFlush h
+    defaultTimeout = 120 * 10^6
+    putMsg m = liftIO $ B.hPut h m
+    s = sync $ receive ch (const True)
 
 -- | Messages we can send to the Send Queue
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
@@ -115,26 +120,26 @@ sendQueueP logC inC outC bandwC supC = spawnP (SQCF logC inC outC bandwC) (SQST 
     pgm = do
         q <- gets outQueue
         l <- gets bytesTransferred
-        case (Q.isEmpty q, l > 0) of
-            (True, False) -> queueEvent >>= syncP
-            (True, True ) -> chooseP [queueEvent, rateUpdateEvent] >>= syncP
-            (False, False) -> chooseP [queueEvent, sendEvent] >>= syncP
-            (False, True)  -> chooseP [queueEvent, sendEvent, rateUpdateEvent] >>= syncP
+        -- Gather together events which may trigger
+        syncP =<< (chooseP $
+            concat [if Q.isEmpty q then [] else [sendEvent],
+                    if l > 0 then [rateUpdateEvent] else [],
+                    [queueEvent]])
     rateUpdateEvent = do
         l <- gets bytesTransferred
         ev <- sendPC bandwidthCh l
         wrapP ev (\() ->
             modify (\s -> s { bytesTransferred = 0 }))
     queueEvent = do
-        ev <- recvPC sqInCh
-        wrapP ev (\m -> case m of
-                        SendQMsg msg -> do logDebug "Queueing event for sending"
-                                           modifyQ (Q.push msg)
-                        SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
-                        SendOChoke -> do modifyQ (Q.filter filterAllPiece)
-                                         modifyQ (Q.push Choke)
-                        SendQRequestPrune n blk ->
-                            modifyQ (Q.filter (filterRequest n blk)))
+        recvWrapPC sqInCh
+                (\m -> case m of
+                    SendQMsg msg -> do logDebug "Queueing event for sending"
+                                       modifyQ (Q.push msg)
+                    SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
+                    SendOChoke -> do modifyQ (Q.filter filterAllPiece)
+                                     modifyQ (Q.push Choke)
+                    SendQRequestPrune n blk ->
+                         modifyQ (Q.filter (filterRequest n blk)))
     modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
     sendEvent = do
@@ -160,7 +165,8 @@ data RPCF = RPCF { rpLogC :: LogChannel
 instance Logging RPCF where
   getLogger cf = ("ReceiverP", rpLogC cf)
 
-receiverP :: LogChannel -> Handle -> Channel (Message, Integer) -> SupervisorChan -> IO ThreadId
+receiverP :: LogChannel -> Handle -> Channel (Message, Integer)
+          -> SupervisorChan -> IO ThreadId
 receiverP logC h ch supC = spawnP (RPCF logC ch) h
         (catchP (foreverP pgm)
                (defaultStopHandler supC))
@@ -239,7 +245,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
             -- Install the StatusP timer
             c <- asks timerCh
             Timer.register 30 () c
-            foreverP (recvEvt)
+            foreverP (eventLoop)
         cleanup = do
             t <- liftIO myThreadId
             syncP =<< sendPC peerMgrCh (Disconnect t)
@@ -247,7 +253,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
             c <- liftIO $ channel
             syncP =<< (sendPC pieceMgrCh $ GetDone c)
             recvP c (const True) >>= syncP
-        recvEvt = do
+        eventLoop = do
             syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent, timerEvent]
         chokeMgrEvent = do
             evt <- recvPC peerCh
@@ -396,7 +402,7 @@ peerP pMgrC pieceMgrC fsC pm logC nPieces h outBound inBound sendBWC statC supC 
                     modify (\s -> s { runningEndgame = True }) >> return blks
         loMark = 10
         endgameLoMark = 1
-        hiMark = 15 -- These two values are chosen rather arbitrarily at the moment.
+        hiMark = 15 -- These three values are chosen rather arbitrarily at the moment.
 
 createPeerPieces :: L.ByteString -> IS.IntSet
 createPeerPieces = IS.fromList . map fromIntegral . concat . decodeBytes 0 . L.unpack
@@ -409,21 +415,6 @@ createPeerPieces = IS.fromList . map fromIntegral . concat . decodeBytes 0 . L.u
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
-
-
 disconnectPeer :: MgrChannel -> ThreadId -> IO ()
 disconnectPeer c t = sync $ transmit c $ Disconnect t
 
-
--- TODO: Consider if this code is correct with what we did to [connect]
-{-
-listenHandshake :: Handle -> PeerId -> InfoHash -> FSPChannel -> LogChannel
-                -> MgrChannel
-                -> IO (Either String ())
-listenHandshake h pid ih fsC logC mgrC =
-    do r <- initiateHandshake logC h pid ih
-       case r of
-         Left err -> return $ Left err
-         Right (_caps, _rpid) -> do peerP mgrC fsC logC h -- TODO: Coerce with connect
-                                    return $ Right ()
--}

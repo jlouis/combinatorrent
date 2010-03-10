@@ -28,6 +28,14 @@ flag debug
   description: Enable debug support
   default:     False
 
+flag profiling
+  description: Enable profiling support
+  default:     False
+
+flag threadscope
+  description: Enable the eventlog necessary for ThreadScope
+  default: False
+
 executable HaskellTorrent
   hs-source-dirs: src
   main-is: HaskellTorrent.hs
@@ -67,9 +75,14 @@ executable HaskellTorrent
   ghc-options: -threaded -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations
   if flag(debug)
       cpp-options: "-DDEBUG"
-      ghc-options: -prof -auto-all -caf-all
   else
       cpp-options: "-DNDEBUG"
+
+  if flag(profiling)
+      ghc-options: -prof -auto-all -caf-all
+
+  if flag(threadscope)
+      ghc-options: -eventlog
 
 source-repository head
   type: git
