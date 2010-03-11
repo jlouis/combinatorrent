@@ -1,6 +1,6 @@
 name: HaskellTorrent
 category: Network
-version: 0.1
+version: 0.1.1
 category: Network
 description:   HaskellTorrent provides a BitTorrent client, based on the CML library
                for concurrency. This is an early preview release which is capable of
@@ -41,7 +41,7 @@ executable HaskellTorrent
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
     Process.Timer, Process.Tracker,
     Digest, FS, PeerTypes, Process, RateCalc,
-    Supervisor, Torrent
+    Supervisor, Torrent, Test, TestInstance
 
   extensions: CPP
 
