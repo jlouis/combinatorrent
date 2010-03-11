@@ -12,11 +12,13 @@ import Control.Concurrent.CML
 import Control.Monad.Reader
 
 import Prelude hiding (catch)
-import Process
+import System.Log.Logger
 
+
+import Process
+import qualified Process.Status as St
 import Supervisor
 
-import System.Log.Logger
 
 data Cmd = Quit -- ^ Quit the program
          | Show -- ^ Show current state
@@ -34,8 +36,8 @@ instance Logging CF where
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> SupervisorChan -> IO ThreadId
-start waitC supC = do
+start :: Channel () -> Channel St.ST -> SupervisorChan -> IO ThreadId
+start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP
     spawnP (CF cmdC wrtC) () (catchP (forever lp) (defaultStopHandler supC))
@@ -65,7 +67,9 @@ start waitC supC = do
         wrtC <- asks wrtCh
         ev <- recvP ch (==Show)
         wrapP ev
-            (\_ -> syncP =<< sendPC wrtCh "TODO: Show current status")
+            (\_ -> do
+                st <- syncP =<< recvP statusC (const True)
+                syncP =<< sendPC wrtCh (show st))
 
 helpMessage :: String
 helpMessage = concat

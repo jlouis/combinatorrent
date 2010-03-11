@@ -59,6 +59,7 @@ data TorrentInfo = TorrentInfo {
       announceURL :: AnnounceURL } deriving Show
 
 data TorrentState = Seeding | Leeching
+    deriving Show
 
 -- PIECES
 ----------------------------------------------------------------------

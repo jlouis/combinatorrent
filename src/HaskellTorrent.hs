@@ -112,7 +112,7 @@ download flags name = do
                clientState = determineState haveMap
            -- Create main supervisor process
            tid <- allForOne "MainSup"
-                     [ Worker $ Console.start waitC
+                     [ Worker $ Console.start waitC statusC
                      , Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PeerMgr.start pmC pid (infoHash ti)
                                     pieceMap pieceMgrC fspC chokeC statInC (pieceCount ti)

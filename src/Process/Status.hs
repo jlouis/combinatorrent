@@ -52,6 +52,7 @@ data ST = ST { uploaded :: Integer,
                incomplete :: Maybe Integer,
                complete :: Maybe Integer,
                state :: TorrentState }
+    deriving Show
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
@@ -61,8 +62,7 @@ start l tState trackerC statusC trackerC1 supC = do
     spawnP (CF statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
         (catchP (foreverP pgm) (defaultStopHandler supC))
   where
-    pgm = do ev <- chooseP [sendEvent, recvEvent]
-             syncP ev
+    pgm = syncP =<< chooseP [sendEvent, recvEvent]
     sendEvent = get >>= sendPC trackerCh
     recvEvent = do evt <- recvPC statusCh
                    wrapP evt (\m ->
@@ -84,4 +84,3 @@ start l tState trackerC statusC trackerC1 supC = do
                            when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
                            syncP =<< sendPC trackerCh1 Complete
                            modify (\s -> s { state = Seeding }))
-                   
