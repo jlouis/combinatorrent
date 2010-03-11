@@ -40,7 +40,7 @@ start waitC supC = do
     wrtC <- writerP
     spawnP (CF cmdC wrtC) () (catchP (forever lp) (defaultStopHandler supC))
   where
-    lp = syncP =<< chooseP [quitEvent, helpEvent, unknownEvent]
+    lp = syncP =<< chooseP [quitEvent, helpEvent, unknownEvent, showEvent]
     quitEvent = do
         ch <- asks cmdCh
         ev <- recvP ch (==Quit)
