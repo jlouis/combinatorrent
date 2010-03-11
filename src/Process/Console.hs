@@ -18,12 +18,16 @@ import Supervisor
 
 import System.Log.Logger
 
-data Cmd = Quit -- Quit the program
+data Cmd = Quit -- ^ Quit the program
+         | Show -- ^ Show current state
+         | Help -- ^ Print Help message
+         | Unknown String -- ^ Unknown command
          deriving (Eq, Show)
 
 type CmdChannel = Channel Cmd
 
-data CF = CF { cmdCh :: CmdChannel }
+data CF = CF { cmdCh :: CmdChannel
+             , wrtCh :: Channel String }
 
 instance Logging CF where
     logName _ = "Process.Console"
@@ -33,15 +37,51 @@ instance Logging CF where
 start :: Channel () -> SupervisorChan -> IO ThreadId
 start waitC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
-    spawnP (CF cmdC) () (catchP (forever lp) (defaultStopHandler supC))
+    wrtC <- writerP
+    spawnP (CF cmdC wrtC) () (catchP (forever lp) (defaultStopHandler supC))
   where
-    lp = syncP =<< quitEvent
+    lp = syncP =<< chooseP [quitEvent, helpEvent, unknownEvent]
     quitEvent = do
         ch <- asks cmdCh
         ev <- recvP ch (==Quit)
         wrapP ev 
             (\_ -> syncP =<< sendP waitC ())
-        
+    helpEvent = do
+        ch <- asks cmdCh
+        wrtC <- asks wrtCh
+        ev <- recvP ch (==Help)
+        wrapP ev
+            (\_ -> syncP =<< sendPC wrtCh helpMessage)
+    unknownEvent = do
+        ch <- asks cmdCh
+        wrtC <- asks wrtCh
+        ev <- recvP ch (\m -> case m of
+                                Unknown _ -> True
+                                _         -> False)
+        wrapP ev
+            (\(Unknown cmd) -> syncP =<< (sendPC wrtCh $ "Unknown command: " ++ cmd))
+    showEvent = do
+        ch <- asks cmdCh
+        wrtC <- asks wrtCh
+        ev <- recvP ch (==Show)
+        wrapP ev
+            (\_ -> syncP =<< sendPC wrtCh "TODO: Show current status")
+
+helpMessage :: String
+helpMessage = concat
+    [ "Command Help:\n"
+    , "\n"
+    , "  help    - Show this help\n"
+    , "  quit    - Quit the program\n"
+    , "  show    - Show the current downloading status\n"
+    ]
+
+writerP :: IO (Channel String)
+writerP = do wrtCh <- channel
+             spawn $ lp wrtCh
+             return wrtCh
+  where lp wCh = forever (do m <- sync $ receive wCh (const True)
+                             putStrLn m)
 
 readerP :: IO CmdChannel
 readerP = do cmdCh <- channel
@@ -49,8 +89,11 @@ readerP = do cmdCh <- channel
              return cmdCh
   where lp cmdCh = do c <- getLine
                       case c of
+                        "help" -> sync $ transmit cmdCh Help
                         "quit" -> sync $ transmit cmdCh Quit
+                        "show" -> sync $ transmit cmdCh Show
                         cmd    -> do logM "Process.Console.readerP" INFO $
                                         "Unrecognized command: " ++ show cmd
+                                     sync $ transmit cmdCh (Unknown cmd)
                                      lp cmdCh
 

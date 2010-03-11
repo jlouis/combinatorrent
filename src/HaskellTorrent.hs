@@ -64,7 +64,8 @@ run (flags, files) = do
                 _  -> putStrLn "More than one torrent file given"
 
 progHeader :: IO ()
-progHeader = putStrLn $ "This is Haskell-torrent version " ++ version
+progHeader = putStrLn $ "This is Haskell-torrent version " ++ version ++ "\n" ++
+                        "  For help type 'help'\n"
 
 download :: [Flag] -> String -> IO ()
 download flags name = do
