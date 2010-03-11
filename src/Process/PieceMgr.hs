@@ -202,7 +202,7 @@ checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
     when (M.size im == IS.size doneP)
-        (do infoP "Torrent Completed"
+        (do liftIO $ putStrLn "Torrent Completed"
             sendPC statusCh STP.TorrentCompleted >>= syncP
             sendPC chokeCh  TorrentComplete >>= syncP)
 
