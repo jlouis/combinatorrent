@@ -3,6 +3,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML
+import Control.Monad
 
 import qualified Data.ByteString as B
 
@@ -10,6 +11,9 @@ import System.Environment
 import System.Random
 
 import System.Console.GetOpt
+import System.Log.Logger
+import System.Log.Handler.Simple
+import System.IO as SIO
 
 import qualified Protocol.BCode as BCode
 import qualified Process.Console as Console
@@ -20,7 +24,6 @@ import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
-import Logging
 import FS
 import Supervisor
 import Torrent
@@ -35,12 +38,13 @@ main = do args <- getArgs
 
 -- COMMAND LINE PARSING
 
-data Flag = Test | Version
+data Flag = Version | Debug
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
   [ Option ['V','?']        ["version"] (NoArg Version)         "show version number"
+  , Option ['D']            ["debug"]   (NoArg Debug)           "spew extra debug information"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
@@ -56,23 +60,26 @@ run (flags, files) = do
         then progHeader
         else case files of
                 [] -> putStrLn "No torrentfile input"
-                [name] -> progHeader >> download name
+                [name] -> progHeader >> download flags name
                 _  -> putStrLn "More than one torrent file given"
 
 progHeader :: IO ()
 progHeader = putStrLn $ "This is Haskell-torrent version " ++ version
 
-download :: String -> IO ()
-download name = do
+download :: [Flag] -> String -> IO ()
+download flags name = do
     torrent <- B.readFile name
     let bcoded = BCode.decode torrent
     case bcoded of
       Left pe -> print pe
-      Right bc ->
-        do print bc
+      Right bc -> do
+           rootL <- getRootLogger
+           fLog <- streamHandler SIO.stdout DEBUG
+           when (Debug `elem` flags)
+                (updateGlobalLogger rootLoggerName
+                    (setHandlers [fLog] . (setLevel DEBUG)))
+           debugM "Main" (show bc)
            (handles, haveMap, pieceMap) <- openAndCheckFile bc
-           logC <- channel
-           Logging.startLogger logC
            -- setup channels
            trackerC <- channel
            statusC  <- channel
@@ -84,7 +91,7 @@ download name = do
            pmC <- channel
            chokeC <- channel
            chokeInfoC <- channel
-           putStrLn "Created channels"
+           debugM "Main" "Created channels"
            -- setup StdGen and Peer data
            gen <- getStdGen
            ti <- mkTorrentInfo bc
@@ -93,25 +100,25 @@ download name = do
                clientState = determineState haveMap
            -- Create main supervisor process
            tid <- allForOne "MainSup"
-                     [ Worker $ Console.start logC waitC
-                     , Worker $ FSP.start handles logC pieceMap fspC
+                     [ Worker $ Console.start waitC
+                     , Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PeerMgr.start pmC pid (infoHash ti)
-                                    pieceMap pieceMgrC fspC logC chokeC statInC (pieceCount ti)
-                     , Worker $ PieceMgr.start logC pieceMgrC fspC chokeInfoC statInC
+                                    pieceMap pieceMgrC fspC chokeC statInC (pieceCount ti)
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
                                         (PieceMgr.createPieceDb haveMap pieceMap)
-                     , Worker $ Status.start logC left clientState statusC statInC trackerC
-                     , Worker $ Tracker.start ti pid defaultPort logC statusC statInC
+                     , Worker $ Status.start left clientState statusC statInC trackerC
+                     , Worker $ Tracker.start ti pid defaultPort statusC statInC
                                         trackerC pmC
-                     , Worker $ ChokeMgr.start logC chokeC chokeInfoC 100 -- 100 is upload rate in KB
+                     , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
                                     (case clientState of
                                         Seeding -> True
                                         Leeching -> False)
-                     , Worker $ Listen.start defaultPort pmC logC
-                     ] logC supC
+                     , Worker $ Listen.start defaultPort pmC
+                     ] supC
            sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
-           putStrLn "Closing down, giving processes 10 seconds to cool off"
+           infoM "Main" "Closing down, giving processes 10 seconds to cool off"
            sync $ transmit supC (PleaseDie tid)
            threadDelay $ 10*1000000
-           putStrLn "Done..."
+           infoM "Main" "Done..."
            return ()

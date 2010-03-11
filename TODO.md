@@ -70,7 +70,6 @@ Planned for the next release
 
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
-   - Use hslogger or similar as a logging backend.
 
 Items for later (no particular order)
 -------------------------------------

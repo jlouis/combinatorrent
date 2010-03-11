@@ -30,12 +30,12 @@ import Data.Serialize.Get
 
 import Data.Char
 import System.IO
+import System.Log.Logger
 
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
-import Logging
 import Torrent
 
 ------------------------------------------------------------
@@ -192,13 +192,13 @@ decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities _ = []
 
 -- | Initiate a handshake on a socket
-initiateHandshake :: LogChannel -> Handle -> PeerId -> InfoHash
+initiateHandshake :: Handle -> PeerId -> InfoHash
                   -> IO (Either String ([Capabilities], L.ByteString))
-initiateHandshake logC handle peerid infohash = do
-    logMsg logC "Sending off handshake message"
+initiateHandshake handle peerid infohash = do
+    debugM "Protocol.Wire" "Sending off handshake message"
     L.hPut handle msg
     hFlush handle
-    logMsg logC "Receiving handshake from other end"
+    debugM "Protocol.Wire" "Receiving handshake from other end"
     receiveHeader handle sz (== infohash) -- TODO: Exceptions ?
   where msg = handShakeMessage peerid infohash
         sz = fromIntegral (L.length msg)
@@ -211,15 +211,15 @@ handShakeMessage pid ih =
                                  putByteString . toBS $ pid]
 
 -- | Receive a handshake on a socket
-receiveHandshake :: LogChannel -> Handle -> PeerId -> (InfoHash -> Bool) -> InfoHash
+receiveHandshake :: Handle -> PeerId -> (InfoHash -> Bool) -> InfoHash
                  -> IO (Either String ([Capabilities], L.ByteString))
-receiveHandshake logC h pid ihTst ih = do
-    logMsg logC "Receiving handshake from other end"
+receiveHandshake h pid ihTst ih = do
+    debugM "Protocol.Wire" "Receiving handshake from other end"
     r <- receiveHeader h sz ihTst -- TODO: Exceptions ?
     case r of
         Left err -> return $ Left err
         Right (caps, rpid) ->
-            do logMsg logC "Sending back handshake message"
+            do debugM "Protocol.Wire" "Sending back handshake message"
                L.hPut h msg
                hFlush h
                return $ Right (caps, rpid)

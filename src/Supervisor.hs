@@ -26,7 +26,6 @@ import Control.Monad.Reader
 
 import Prelude hiding (catch)
 
-import Logging
 import Process
 
 data Child = Supervisor (SupervisorChan -> IO ThreadId)
@@ -55,24 +54,24 @@ class SupervisorConf a where
 data CFOFA = CFOFA { name :: String
                    , chan :: SupervisorChan
                    , parent :: SupervisorChan
-                   , logCh :: LogChannel }
+                   }
 
 instance SupervisorConf CFOFA where
     getParent = parent
     getChan   = chan
 
 instance Logging CFOFA where
-    getLogger cf = (name cf, logCh cf) -- TODO: Better naming!
+    logName = name
 
 data STOFA = STOFA { childInfo :: [ChildInfo] }
 
 -- | Run a set of processes and do it once in the sense that if someone dies,
 --   no restart is attempted. We will just kill off everybody without any kind
 --   of prejudice.
-allForOne :: String -> Children -> LogChannel -> SupervisorChan -> IO ThreadId
-allForOne name children logC parentC = do
+allForOne :: String -> Children -> SupervisorChan -> IO ThreadId
+allForOne name children parentC = do
     c <- channel
-    spawnP (CFOFA name c parentC logC) (STOFA []) (catchP startup
+    spawnP (CFOFA name c parentC) (STOFA []) (catchP startup
                                                         (defaultStopHandler parentC))
   where
     startup = do
@@ -101,14 +100,14 @@ allForOne name children logC parentC = do
 data CFOFO = CFOFO { oName :: String
                    , oChan :: SupervisorChan
                    , oparent :: SupervisorChan
-                   , ologCh :: LogChannel }
+                   }
 
 instance SupervisorConf CFOFO where
     getParent = oparent
     getChan   = oChan
 
 instance Logging CFOFO where
-    getLogger cf = (oName cf, ologCh cf) -- TODO: Better naming!
+    logName = oName
 
 data STOFO = STOFO [ChildInfo]
 
@@ -120,10 +119,10 @@ data STOFO = STOFO [ChildInfo]
 --   the death and let the other processes keep running.
 --
 --   TODO: Restart policies.
-oneForOne :: String -> Children -> LogChannel -> SupervisorChan -> IO (ThreadId, SupervisorChan)
-oneForOne name children logC parentC = do
+oneForOne :: String -> Children -> SupervisorChan -> IO (ThreadId, SupervisorChan)
+oneForOne name children parentC = do
     c <- channel
-    t <- spawnP (CFOFO name c parentC logC) (STOFO []) (catchP startup
+    t <- spawnP (CFOFO name c parentC) (STOFO []) (catchP startup
                                                 (defaultStopHandler parentC))
     return (t, c)
   where

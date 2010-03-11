@@ -25,15 +25,15 @@ module Process (
     , stopP
     , ignoreProcessBlock -- This ought to be renamed
     -- * Log Interface
-    , logInfo
-    , logDebug
-    , logWarn
-    , logFatal
-    , logError
+    , Logging(..)
+    , logP
+    , infoP
+    , debugP
+    , warningP
+    , criticalP
+    , errorP
     )
 where
-
-import Data.Monoid
 
 import Control.Concurrent
 import Control.Concurrent.CML
@@ -44,8 +44,9 @@ import Control.Monad.State
 
 import Data.Typeable
 
-import LoggingTypes
 import Prelude hiding (catch, log)
+
+import System.Log.Logger
 
 -- | A @Process a b c@ is the type of processes with access to configuration data @a@, state @b@
 --   returning values of type @c@. Usually, the read-only data are configuration parameters and
@@ -88,13 +89,13 @@ cleanupP proc stopH cleanupH = do
   c  <- ask
   (a, s') <- liftIO $ runP c st proc `catches`
                 [ Handler (\ThreadKilled -> do
-                    runP c st ( do logInfo $ "Process Terminated by Supervisor"
+                    runP c st ( do infoP $ "Process Terminated by Supervisor"
                                    cleanupH ))
                 , Handler (\StopException -> 
-                     runP c st (do logInfo $ "Process Terminating gracefully"
+                     runP c st (do infoP $ "Process Terminating gracefully"
                                    cleanupH >> stopH)) -- This one is ok
                 , Handler (\(ex :: SomeException) ->
-                    runP c st (do logFatal $ "Process exiting due to ex: " ++ show ex
+                    runP c st (do criticalP $ "Process exiting due to ex: " ++ show ex
                                   cleanupH >> stopH))
                 ]
   put s'
@@ -163,44 +164,21 @@ ignoreProcessBlock err thnk = do
 
 ------ LOGGING
 
--- | If a process has access to a logging channel, it is able to log messages to the world
-log :: Logging a => LogPriority -> String -> Process a b ()
-log prio msg = do
-        (name, logC) <- asks getLogger
-        when (prio >= logLevel name)
-                (liftIO $ logMsg' logC name prio msg)
-  where logMsg' c name pri = sync . transmit c . Mes pri name
+--
+-- | The class of types where we have a logger inside them somewhere
+class Logging a where
+  -- | Returns a channel for logging and an Identifying string to use
+  logName :: a -> String
 
-logInfo, logDebug, logFatal, logWarn, logError :: Logging a => String -> Process a b ()
-logInfo  = log Info
-logDebug = log Debug
-logFatal = log Fatal
-logWarn  = log Warn
-logError = log Error
+logP :: Logging a => Priority -> String -> Process a b ()
+logP prio msg = do
+    n <- asks logName
+    liftIO $ logM n prio msg
 
--- Logging filters
-type LogFilter = String -> LogPriority
+infoP, debugP, criticalP, warningP, errorP :: Logging a => String -> Process a b ()
+infoP  = logP INFO
+debugP = logP DEBUG
+criticalP = logP CRITICAL
+warningP  = logP WARNING
+errorP    = logP ERROR
 
-matchP :: String -> LogPriority -> LogFilter
-matchP process prio = \s -> if s == process then prio else None
-
-matchAny :: LogPriority -> LogFilter
-matchAny prio = const prio
-
-matchNone :: LogFilter
-matchNone = const None
-
-instance Monoid LogPriority where
-    mempty = None
-    mappend None g = g
-    mappend f g    = f
-
--- | The level by which we log
-logLevel :: LogFilter
-#ifdef DEBUG
-logLevel = mconcat [matchP "SendQueueP" Fatal,
-                    matchP "ReceiverP" Fatal,
-                    matchAny Debug]
-#else
-logLevel = matchAny Info
-#endif

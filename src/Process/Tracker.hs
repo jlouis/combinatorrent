@@ -31,7 +31,6 @@ import Numeric (showHex)
 
 
 import Protocol.BCode as BCode hiding (encode)
-import Logging
 import Process
 import Supervisor
 import Torrent
@@ -77,15 +76,14 @@ failTimerInterval = 15 * 60
 
 -- | Configuration of the tracker process
 data CF = CF {
-        logCh :: LogChannel
-      , statusCh :: Channel Status.ST
+        statusCh :: Channel Status.ST
       , statusPCh :: Channel Status.StatusMsg
       , trackerMsgCh :: Channel Status.TrackerMsg
       , peerMgrCh :: PeerMgr.PeerMgrChannel
       }
 
 instance Logging CF where
-  getLogger cf = ("TrackerP", logCh cf)
+    logName _ = "Process.Tracker"
 
 -- | Internal state of the tracker CHP process
 data ST = ST {
@@ -97,24 +95,24 @@ data ST = ST {
       , nextTick :: Integer
       }
 
-start :: TorrentInfo -> PeerId -> PortID -> LogChannel -> Channel Status.ST
+start :: TorrentInfo -> PeerId -> PortID -> Channel Status.ST
       -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
-start ti pid port logC sc statusC msgC pc supC =
+start ti pid port sc statusC msgC pc supC =
     do tm <- getPOSIXTime
-       spawnP (CF logC sc statusC msgC pc) (ST ti pid Stopped port tm 0)
+       spawnP (CF sc statusC msgC pc) (ST ti pid Stopped port tm 0)
                     (cleanupP (forever loop)
                         (defaultStopHandler supC)
                         stopEvent)
   where
     stopEvent :: Process CF ST ()
     stopEvent = do
-        logDebug "Stopping... telling tracker"
+        debugP "Stopping... telling tracker"
         modify (\s -> s { state = Stopped }) >> talkTracker
     loop :: Process CF ST ()
     loop = do
           msg <- recvPC trackerMsgCh >>= syncP
-          logDebug $ "Got tracker event"
+          debugP $ "Got tracker event"
           case msg of
             Status.TrackerTick x ->
                 do t <- gets nextTick
@@ -143,22 +141,22 @@ pokeTracker :: Process CF ST (Integer, Maybe Integer)
 pokeTracker = do
     upDownLeft <- syncP =<< recvPC statusCh
     url <- buildRequestURL upDownLeft
-    logDebug $ "Request URL: " ++ url
+    debugP $ "Request URL: " ++ url
     uri <- case parseURI url of
             Nothing -> fail $ "Could not parse the url " ++ url
             Just u  -> return u
     resp <- trackerRequest uri
     case resp of
-        Left err -> do logInfo $ "Tracker HTTP Error: " ++ err
+        Left err -> do infoP $ "Tracker HTTP Error: " ++ err
                        return (failTimerInterval, Just failTimerInterval)
         Right (ResponseWarning wrn) ->
-                    do logInfo $ "Tracker Warning Response: " ++ fromBS wrn
+                    do infoP $ "Tracker Warning Response: " ++ fromBS wrn
                        return (failTimerInterval, Just failTimerInterval)
         Right (ResponseError err) ->
-                    do logInfo $ "Tracker Error Response: " ++ fromBS err
+                    do infoP $ "Tracker Error Response: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
         Right (ResponseDecodeError err) ->
-                    do logInfo $ "Response Decode error: " ++ fromBS err
+                    do infoP $ "Response Decode error: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
         Right bc -> do sendPC peerMgrCh (PeerMgr.PeersFromTracker $ newPeers bc) >>= syncP
                        let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
@@ -174,7 +172,7 @@ timerUpdate (timeout, minTimeout) = do
         (do t <- tick
             ch <- asks trackerMsgCh
             Timer.register timeout (Status.TrackerTick t) ch
-            logDebug $ "Set timer to: " ++ show timeout)
+            debugP $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })
                   return t
@@ -218,7 +216,7 @@ trackerRequest uri =
                (2,_,_) ->
                    case BCode.decode . toBS . rspBody $ r of
                      Left pe -> return $ Left (show pe)
-                     Right bc -> do logDebug $ "Response: " ++ BCode.prettyPrint bc
+                     Right bc -> do debugP $ "Response: " ++ BCode.prettyPrint bc
                                     return $ Right $ processResultDict bc
                (3,_,_) ->
                    case findHeader HdrLocation r of
