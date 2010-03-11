@@ -87,13 +87,13 @@ readerP :: IO CmdChannel
 readerP = do cmdCh <- channel
              spawn $ lp cmdCh
              return cmdCh
-  where lp cmdCh = do c <- getLine
-                      case c of
-                        "help" -> sync $ transmit cmdCh Help
-                        "quit" -> sync $ transmit cmdCh Quit
-                        "show" -> sync $ transmit cmdCh Show
-                        cmd    -> do logM "Process.Console.readerP" INFO $
-                                        "Unrecognized command: " ++ show cmd
-                                     sync $ transmit cmdCh (Unknown cmd)
-                                     lp cmdCh
+  where lp cmdCh = forever $
+           do c <- getLine
+              case c of
+                "help" -> sync $ transmit cmdCh Help
+                "quit" -> sync $ transmit cmdCh Quit
+                "show" -> sync $ transmit cmdCh Show
+                cmd    -> do logM "Process.Console.readerP" INFO $
+                                     "Unrecognized command: " ++ show cmd
+                             sync $ transmit cmdCh (Unknown cmd)
 
