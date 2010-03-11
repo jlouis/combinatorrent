@@ -6,6 +6,7 @@ import Control.Concurrent.CML
 import Control.Monad
 
 import qualified Data.ByteString as B
+import Data.List
 
 import System.Environment
 import System.Random
@@ -38,13 +39,14 @@ main = do args <- getArgs
 
 -- COMMAND LINE PARSING
 
-data Flag = Version | Debug
+data Flag = Version | Debug | LogFile String
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
-  [ Option ['V','?']        ["version"] (NoArg Version)         "show version number"
-  , Option ['D']            ["debug"]   (NoArg Debug)           "spew extra debug information"
+  [ Option ['V','?']        ["version"] (NoArg Version)         "Show version number"
+  , Option ['D']            ["debug"]   (NoArg Debug)           "Spew extra debug information"
+  , Option []               ["logfile"] (ReqArg LogFile "FILE") "Choose a filepath on which to log"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
@@ -67,6 +69,19 @@ progHeader :: IO ()
 progHeader = putStrLn $ "This is Haskell-torrent version " ++ version ++ "\n" ++
                         "  For help type 'help'\n"
 
+setupLogging :: [Flag] -> IO ()
+setupLogging flags = do
+    rootL <- getRootLogger
+    fLog <- case logFlag flags of
+                Nothing -> streamHandler SIO.stdout DEBUG
+                Just (LogFile fp) -> fileHandler fp DEBUG
+    when (Debug `elem` flags)
+          (updateGlobalLogger rootLoggerName
+                 (setHandlers [fLog] . (setLevel DEBUG)))
+  where logFlag = find (\e -> case e of
+                                LogFile _ -> True
+                                _         -> False)
+
 download :: [Flag] -> String -> IO ()
 download flags name = do
     torrent <- B.readFile name
@@ -74,11 +89,7 @@ download flags name = do
     case bcoded of
       Left pe -> print pe
       Right bc -> do
-           rootL <- getRootLogger
-           fLog <- streamHandler SIO.stdout DEBUG
-           when (Debug `elem` flags)
-                (updateGlobalLogger rootLoggerName
-                    (setHandlers [fLog] . (setLevel DEBUG)))
+           setupLogging flags
            debugM "Main" (show bc)
            (handles, haveMap, pieceMap) <- openAndCheckFile bc
            -- setup channels
