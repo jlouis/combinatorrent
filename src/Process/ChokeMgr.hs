@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Process.ChokeMgr (
     -- * Types, Channels
       ChokeMgrChannel
@@ -316,6 +317,7 @@ rechoke = do
     performChokingUnchoking electedPeers peers
 
 -- | Traverse all peers and process them with a thunk.
+traversePeers :: (MonadState PeerDB m) => (PeerInfo -> m b) -> m (M.Map PeerPid b)
 traversePeers thnk = T.mapM thnk =<< gets peerMap
 
 informDone :: PieceNum -> ChokeMgrProcess ()
