@@ -122,12 +122,12 @@ sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
             concat [if Q.isEmpty q then [] else [sendEvent],
                     if l > 0 then [rateUpdateEvent] else [],
                     [queueEvent]])
-    rateUpdateEvent = do
+    rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
         l <- gets bytesTransferred
         ev <- sendPC bandwidthCh l
         wrapP ev (\() ->
             modify (\s -> s { bytesTransferred = 0 }))
-    queueEvent = do
+    queueEvent = {-# SCC "Peer.SendQ.queueEvt" #-} do
         recvWrapPC sqInCh
                 (\m -> case m of
                     SendQMsg msg -> do debugP "Queueing event for sending"
@@ -139,7 +139,7 @@ sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
                          modifyQ (Q.filter (filterRequest n blk)))
     modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
     modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
-    sendEvent = do
+    sendEvent = {-# SCC "Peer.SendQ.sendEvt" #-} do
         Just (e, r) <- gets (Q.pop . outQueue)
         let bs = encodePacket e
         tEvt <- sendPC sqOutCh bs
