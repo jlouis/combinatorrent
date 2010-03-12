@@ -292,7 +292,7 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
 grabBlocks' :: Int -> IS.IntSet -> PieceMgrProcess Blocks
-grabBlocks' k eligible = do
+grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     blocks <- tryGrabProgress k eligible []
     pend <- gets pendingPieces
     if blocks == [] && IS.null pend
@@ -358,7 +358,7 @@ grabBlocks' k eligible = do
             where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 assertPieceDB :: PieceMgrProcess ()
-assertPieceDB = do
+assertPieceDB = {-# SCC "assertPieceDB" #-} do
     c <- gets assertCount
     if c == 0
         then do modify (\db -> db { assertCount = 10 })
