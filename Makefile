@@ -9,7 +9,7 @@ test: build
 	runghc Setup.lhs test
 
 conf:
-	runghc Setup.lhs configure --flags="debug profiling" --user
+	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling
 
 conf-ts:
 	runghc Setup.lhs configure --flags="debug threadscope" --user

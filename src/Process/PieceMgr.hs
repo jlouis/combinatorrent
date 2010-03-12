@@ -48,6 +48,7 @@ data PieceDB = PieceDB
     , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
     , infoMap       :: PieceMap   -- ^ Information about pieces
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
+    , assertCount   :: Int        -- ^ When to next check the database for consistency
     } deriving Show
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -184,7 +185,7 @@ start mgrC fspC chokeC statC db supC =
 ----------------------------------------------------------------------
 
 createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
-createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False
+createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False 0
   where pending = filt (==False)
         done    = filt (==True)
         filt f  = IS.fromList . M.keys $ M.filter f mmap
@@ -356,7 +357,12 @@ grabBlocks' k eligible = do
             where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 assertPieceDB :: PieceMgrProcess ()
-assertPieceDB = assertSets >> assertInProgress >> assertDownloading
+assertPieceDB = do
+    c <- gets assertCount
+    if c == 0
+        then do modify (\db -> db { assertCount = 10 })
+                assertSets >> assertInProgress >> assertDownloading
+        else modify (\db -> db { assertCount = assertCount db - 1 })
   where
     -- If a piece is pending in the database, we have the following rules:
     --
