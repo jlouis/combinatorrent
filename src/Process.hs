@@ -113,17 +113,19 @@ syncP ev = do (a, s) <- liftIO $ sync ev
 sendP :: Channel c -> c -> Process a b (Event ((), b))
 sendP ch v = do
     s <- get
-    return $ (wrap (transmit ch v)
+    return $ (wrap (send ch v)
                 (\() -> return ((), s)))
+  where send = {-# SCC "transmit" #-} transmit
 
 sendPC :: (a -> Channel c) -> c -> Process a b (Event ((), b))
 sendPC sel v = asks sel >>= flip sendP v
 
 recvP :: Channel c -> (c -> Bool) -> Process a b (Event (c, b))
 recvP ch pred = do
-  s <- get
-  return (wrap (receive ch pred)
-            (\v -> return (v, s)))
+    s <- get
+    return (wrap (recv ch pred)
+              (\v -> return (v, s)))
+  where recv = {-# SCC "receive" #-} receive
 
 recvPC :: (a -> Channel c) -> Process a b (Event (c, b))
 recvPC sel = asks sel >>= flip recvP (const True)
@@ -131,7 +133,8 @@ recvPC sel = asks sel >>= flip recvP (const True)
 wrapP :: Event (c, b) -> (c -> Process a b y) -> Process a b (Event (y, b))
 wrapP ev p = do
     c <- ask
-    return $ wrap ev (\(v, s) -> runP c s (p v))
+    return $ wp ev (\(v, s) -> runP c s (p v))
+  where wp = {-# SCC "wrap" #-} wrap
 
 -- Convenience function
 recvWrapPC :: (a -> Channel c) -> (c -> Process a b y) -> Process a b (Event (y, b))
@@ -140,7 +143,8 @@ recvWrapPC sel p = do
     wrapP ev p
 
 chooseP :: [Process a b (Event (c, b))] -> Process a b (Event (c, b))
-chooseP events = (sequence events) >>= (return . choose)
+chooseP events = (sequence events) >>= (return . chs)
+  where chs = {-# SCC "choose" #-} choose
 
 -- VERSION SPECIFIC PROCESS ORIENTED FUNCTIONS
 

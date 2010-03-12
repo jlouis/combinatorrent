@@ -77,6 +77,7 @@ pInfoLookup pn mp = case M.lookup pn mp of
 -- | FIXME: minor code duplication with @readBlock@
 readPiece :: PieceNum -> Handles -> PieceMap -> IO L.ByteString
 readPiece pn handles mp =
+    {-# SCC "readPiece" #-}
     do pInfo <- pInfoLookup pn mp
        bs <- L.concat `fmap`
              forM (projectHandles handles (offset pInfo) (len pInfo))
@@ -92,6 +93,7 @@ readPiece pn handles mp =
 --   expensive. Returning lazy ones may be more appropriate.
 readBlock :: PieceNum -> Block -> Handles -> PieceMap -> IO B.ByteString
 readBlock pn blk handles mp =
+    {-# SCC "readBlock" #-}
     do pInfo <- pInfoLookup pn mp
        B.concat `fmap`
         forM (projectHandles handles (offset pInfo + (fromIntegral $ blockOffset blk))
@@ -106,6 +108,7 @@ readBlock pn blk handles mp =
 --   block is of a wrong length, the call will fail.
 writeBlock :: Handles -> PieceNum -> Block -> PieceMap -> B.ByteString -> IO ()
 writeBlock handles n blk pm blkData =
+    {-# SCC "writeBlock" #-}
     do when lenFail $ fail "Writing block of wrong length"
        pInfo <- pInfoLookup n pm
        foldM_ (\blkData (h, offset, size) ->
@@ -124,7 +127,7 @@ writeBlock handles n blk pm blkData =
 -- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
 checkPiece :: PieceInfo -> Handles -> IO Bool
-checkPiece inf handles = do
+checkPiece inf handles = {-# SCC "checkPiece" #-} do
   bs <- L.concat `fmap`
         forM (projectHandles handles (offset inf) (fromInteger $ len inf))
                  (\(h, offset, size) ->
