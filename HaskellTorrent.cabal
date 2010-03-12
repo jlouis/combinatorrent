@@ -73,7 +73,7 @@ executable HaskellTorrent
     hslogger,
     directory
 
-  ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations
+  ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures
   if !flag(debug)
       cpp-options: "-DNDEBUG"
 
