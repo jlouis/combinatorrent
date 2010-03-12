@@ -62,7 +62,7 @@ start l tState trackerC statusC trackerC1 supC = do
     spawnP (CF statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
         (catchP (foreverP pgm) (defaultStopHandler supC))
   where
-    pgm = syncP =<< chooseP [sendEvent, recvEvent]
+    pgm = {-# SCC "StatusP" #-} syncP =<< chooseP [sendEvent, recvEvent]
     sendEvent = get >>= sendPC trackerCh
     recvEvent = do evt <- recvPC statusCh
                    wrapP evt (\m ->

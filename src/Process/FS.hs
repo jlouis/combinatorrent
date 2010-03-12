@@ -48,7 +48,7 @@ start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
 start handles pm fspC supC =
     spawnP (CF fspC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
   where
-    lp = msgEvent >>= syncP
+    lp = {-# SCC "FS_Process" #-} msgEvent >>= syncP
     msgEvent = do
         ev <- recvPC fspCh
         wrapP ev (\msg ->

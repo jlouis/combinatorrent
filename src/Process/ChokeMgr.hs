@@ -60,7 +60,7 @@ start ch infoC ur weSeed supC = do
               (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 weSeed slots M.empty []
-    pgm = do chooseP [mgrEvent, infoEvent] >>= syncP
+    pgm = {-# SCC "ChokeMgr" #-} do chooseP [mgrEvent, infoEvent] >>= syncP
     mgrEvent =
           recvWrapPC mgrCh
             (\msg -> case msg of
