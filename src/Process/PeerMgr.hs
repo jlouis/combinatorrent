@@ -144,6 +144,10 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC statC mgrC nPieces =
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
+acceptor :: (Handle, HostName, PortNumber) -> InfoHash -> (InfoHash -> Bool) -> SupervisorChan
+         -> PeerId -> MgrChannel -> PieceMgrChannel -> FSPChannel -> StatusChan
+         -> PieceMap -> Int
+         -> IO ThreadId
 acceptor (h,hn,pn) ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces =
     spawn (connector >> return ())
   where connector = do

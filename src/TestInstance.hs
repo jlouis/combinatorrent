@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy as L
 import System.Random
 import Test.QuickCheck
 
+integralRandomR :: (Integral a, Integral b, RandomGen g, Num b) => (a, b) -> g -> (b, g)
 integralRandomR (a,b) g = case randomR (c,d) g of
                             (x,h) -> (fromIntegral x, h)
     where (c,d) = (fromIntegral a :: Integer,
