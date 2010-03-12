@@ -109,6 +109,7 @@ type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 start :: PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> StatusChan -> PieceDB
       -> SupervisorChan -> IO ThreadId
 start mgrC fspC chokeC statC db supC =
+    {-# SCC "PieceMgr" #-}
     spawnP (PieceMgrCfg mgrC fspC chokeC statC) db
                     (catchP (forever pgm)
                         (defaultStopHandler supC))

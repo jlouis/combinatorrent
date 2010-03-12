@@ -75,7 +75,7 @@ senderP h ch supC = spawnP (SPCF ch) h (catchP (foreverP pgm)
                                                         liftIO $ hClose h))
   where
     pgm :: Process SPCF Handle ()
-    pgm = do
+    pgm = {-# SCC "Peer.Sender" #-} do
         m <- liftIO $ timeout defaultTimeout s
         h <- get
         case m of
@@ -114,7 +114,7 @@ sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
                 (defaultStopHandler supC))
   where
     pgm :: Process SQCF SQST ()
-    pgm = do
+    pgm = {-# SCC "Peer.SendQueue" #-} do
         q <- gets outQueue
         l <- gets bytesTransferred
         -- Gather together events which may trigger
@@ -169,7 +169,7 @@ receiverP h ch supC = spawnP (RPCF ch) h
   where
     pgm = do debugP "Peer waiting for input"
              readHeader ch
-    readHeader ch = do
+    readHeader ch = {-# SCC "Peer.Receiver" #-} do
         h <- get
         feof <- liftIO $ hIsEOF h
         if feof
@@ -248,7 +248,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC supC = do
             c <- liftIO $ channel
             syncP =<< (sendPC pieceMgrCh $ GetDone c)
             recvP c (const True) >>= syncP
-        eventLoop = do
+        eventLoop = {-# SCC "Peer.Control" #-} do
             syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent, timerEvent]
         chokeMgrEvent = do
             evt <- recvPC peerCh
