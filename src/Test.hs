@@ -21,10 +21,12 @@ runTests =
      , Protocol.Wire.testSuite
      ]
 
+testSuite :: Test
 testSuite = testGroup "Test test-framework"
  [ testProperty "reverse-reverse/id" prop_reversereverse ]
 
 -- reversing twice a finite list, is the same as identity
+prop_reversereverse :: [Int] -> Bool
 prop_reversereverse s = (reverse . reverse) s == id s
     where _ = s :: [Int]
 

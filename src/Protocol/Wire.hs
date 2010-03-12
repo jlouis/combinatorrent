@@ -118,6 +118,8 @@ instance Serialize Message where
        <|> getPiece   <|> getCancel
        <|> getPort
 
+getBF, getChoke, getUnchoke, getIntr, getNI, getHave, getReq :: Get Message
+getPiece, getCancel, getPort, getKA :: Get Message
 getChoke   = byte 0 *> return Choke
 getUnchoke = byte 1 *> return Unchoke
 getIntr    = byte 2 *> return Interested
@@ -249,7 +251,7 @@ constructBitField sz pieces = L.pack . build $ m
 
 --
 -- -- TESTS
-
+testSuite :: Test
 testSuite = testGroup "Protocol/Wire"
   [ testProperty "QC encode-decode/id" propEncodeDecodeId]
 
