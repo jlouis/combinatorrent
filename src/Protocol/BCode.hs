@@ -52,7 +52,7 @@ import Test.QuickCheck
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.Framework.Providers.HUnit
-import Test.HUnit hiding (Path)
+import Test.HUnit hiding (Path, Test)
 
 import Digest
 import TestInstance() -- for instances only
@@ -333,6 +333,7 @@ toBString = BString . toBS
 -- TESTS
 
 
+testSuite :: Test
 testSuite = testGroup "Protocol/BCode"
   [ testProperty "QC encode-decode/id" propEncodeDecodeId,
     testCase "HUnit encode-decode/id" testDecodeEncodeProp1 ]
@@ -344,12 +345,14 @@ propEncodeDecodeId bc =
     in
        Right bc == decoded
 
+testDecodeEncodeProp1 :: Assertion
 testDecodeEncodeProp1 =
     let encoded = encode testData
         decoded = decode encoded
     in
        assertEqual "for encode/decode identify" (Right testData) decoded
 
+testData :: [BCode]
 testData = [BInt 123,
             BInt (-123),
             BString (toBS "Hello"),
