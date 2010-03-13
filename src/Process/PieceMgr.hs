@@ -92,7 +92,9 @@ data PieceMgrMsg = GrabBlocks Int IS.IntSet (Channel Blocks)
                    -- ^ Get the pieces which are already done
 
 instance NFData PieceMgrMsg where
-    rnf a = a `seq` ()
+    rnf a = case a of
+              (GrabBlocks _ is _) -> rnf is
+              a                   -> a `seq` ()
 
 data ChokeInfoMsg = PieceDone PieceNum
                   | BlockComplete PieceNum Block
