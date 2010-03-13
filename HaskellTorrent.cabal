@@ -45,7 +45,7 @@ executable HaskellTorrent
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
     Process.Timer, Process.Tracker,
     Digest, FS, PeerTypes, Process, RateCalc, Control.Concurrent.CML.Strict
-    Supervisor, Torrent, Test, TestInstance
+    Supervisor, Torrent, Test, TestInstance, DeepSeqInstances
 
   extensions: CPP
 
