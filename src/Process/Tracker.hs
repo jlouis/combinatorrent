@@ -14,7 +14,7 @@ where
 
 import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
 import Control.Monad.Reader
 import Control.Monad.State
 

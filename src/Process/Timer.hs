@@ -9,17 +9,18 @@ module Process.Timer (register)
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 import Control.Monad.Trans
 
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
-registerL :: Integer -> a -> Channel a -> IO ()
+registerL :: NFData a => Integer -> a -> Channel a -> IO ()
 registerL secs v tickChan = do spawn timerProcess
                                return ()
   where timerProcess = do threadDelay $ fromInteger $ secs * 1000000
                           sync $ transmit tickChan v
 
 
-register :: MonadIO m => Integer -> a -> Channel a -> m ()
+register :: (MonadIO m, NFData a) => Integer -> a -> Channel a -> m ()
 register secs v c = liftIO $ registerL secs v c

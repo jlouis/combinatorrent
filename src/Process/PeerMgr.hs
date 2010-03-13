@@ -11,7 +11,9 @@ where
 import qualified Data.Map as M
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
+
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -33,6 +35,10 @@ import Torrent hiding (infoHash)
 
 data PeerMgrMsg = PeersFromTracker [Peer]
                 | NewIncoming (Handle, HostName, PortNumber)
+
+instance NFData PeerMgrMsg where
+  rnf a = a `seq` ()
+
 
 type PeerMgrChannel = Channel PeerMgrMsg
 

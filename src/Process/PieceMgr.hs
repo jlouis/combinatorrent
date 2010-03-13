@@ -11,7 +11,9 @@ where
 
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
+
 import Control.Monad.State
 import Data.List
 import qualified Data.ByteString as B
@@ -74,6 +76,9 @@ data InProgressPiece = InProgressPiece
 data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
+instance NFData Blocks where
+  rnf a = a `seq` ()
+
 -- | Messages for RPC towards the PieceMgr.
 data PieceMgrMsg = GrabBlocks Int IS.IntSet (Channel Blocks)
                    -- ^ Ask for grabbing some blocks
@@ -86,10 +91,16 @@ data PieceMgrMsg = GrabBlocks Int IS.IntSet (Channel Blocks)
                  | GetDone (Channel [PieceNum])
                    -- ^ Get the pieces which are already done
 
+instance NFData PieceMgrMsg where
+    rnf a = a `seq` ()
+
 data ChokeInfoMsg = PieceDone PieceNum
                   | BlockComplete PieceNum Block
                   | TorrentComplete
     deriving (Eq, Show)
+
+instance NFData ChokeInfoMsg where
+  rnf a = a `seq` ()
 
 type PieceMgrChannel = Channel PieceMgrMsg
 type ChokeInfoChannel = Channel ChokeInfoMsg

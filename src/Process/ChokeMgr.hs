@@ -15,7 +15,8 @@ import qualified Data.Set as S
 import Data.Traversable as T
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -37,6 +38,10 @@ import Process.Timer as Timer
 data ChokeMgrMsg = Tick
                  | RemovePeer PeerPid
                  | AddPeer PeerPid PeerChannel
+
+instance NFData ChokeMgrMsg where
+  rnf a = a `seq` ()
+
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
 data CF = CF { mgrCh :: ChokeMgrChannel

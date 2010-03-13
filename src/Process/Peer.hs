@@ -9,7 +9,9 @@ module Process.Peer (
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
+
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -91,6 +93,9 @@ data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we c
                       | SendQMsg Message           -- ^ We want to send the Message to the peer
                       | SendOChoke                 -- ^ We want to choke the peer
                       | SendQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
+
+instance NFData SendQueueMessage where
+  rnf a = a `seq` ()
 
 data SQCF = SQCF { sqInCh :: Channel SendQueueMessage
                  , sqOutCh :: Channel B.ByteString

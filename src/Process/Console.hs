@@ -8,7 +8,8 @@ module Process.Console
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 import Control.Monad.Reader
 
 import Prelude hiding (catch)
@@ -25,6 +26,9 @@ data Cmd = Quit -- ^ Quit the program
          | Help -- ^ Print Help message
          | Unknown String -- ^ Unknown command
          deriving (Eq, Show)
+
+instance NFData Cmd where
+  rnf a = a `seq` ()
 
 type CmdChannel = Channel Cmd
 

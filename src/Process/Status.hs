@@ -18,7 +18,8 @@ module Process.Status (
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 
 import Control.Monad.State
 
@@ -34,10 +35,16 @@ data StatusMsg = TrackerStat { trackIncomplete :: Maybe Integer
                           , peerDownloaded :: Integer }
                | TorrentCompleted
 
+instance NFData StatusMsg where
+  rnf a = a `seq` ()
+
 type StatusChan = Channel StatusMsg
 
 -- | TrackerChannel is the channel of the tracker
 data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
+
+instance NFData TrackerMsg where
+   rnf a = a `seq` ()
 
 data CF  = CF { statusCh :: Channel StatusMsg
               , trackerCh1 :: Channel TrackerMsg
@@ -53,6 +60,9 @@ data ST = ST { uploaded :: Integer,
                complete :: Maybe Integer,
                state :: TorrentState }
     deriving Show
+
+instance NFData ST where
+  rnf a = a `seq` ()
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.

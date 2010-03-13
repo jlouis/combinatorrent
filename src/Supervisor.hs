@@ -20,7 +20,8 @@ where
 
 import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -34,6 +35,9 @@ data Child = Supervisor (SupervisorChan -> IO ThreadId)
 data SupervisorMsg = IAmDying ThreadId
                    | PleaseDie ThreadId
                    | SpawnNew Child
+
+instance NFData SupervisorMsg where
+    rnf a = a `seq` ()
 
 type SupervisorChan = Channel SupervisorMsg
 type Children = [Child]

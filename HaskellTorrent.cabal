@@ -44,7 +44,7 @@ executable HaskellTorrent
     Process.ChokeMgr, Process.Console, Process.FS, Process.Listen,
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
     Process.Timer, Process.Tracker,
-    Digest, FS, PeerTypes, Process, RateCalc,
+    Digest, FS, PeerTypes, Process, RateCalc, Control.Concurrent.CML.Strict
     Supervisor, Torrent, Test, TestInstance
 
   extensions: CPP
@@ -71,6 +71,8 @@ executable HaskellTorrent
     test-framework-quickcheck2,
     test-framework-hunit,
     hslogger,
+    strict-concurrency,
+    deepseq,
     directory
 
   ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures

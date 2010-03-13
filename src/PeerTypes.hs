@@ -9,7 +9,8 @@ module PeerTypes
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 
 import Data.Time.Clock
 
@@ -25,11 +26,17 @@ data PeerMessage = ChokePeer
                  | PieceCompleted PieceNum
                  | CancelBlock PieceNum Block
 
+instance NFData PeerMessage where
+    rnf a = a `seq` ()
+
 type PeerChannel = Channel PeerMessage
 
 
 data MgrMessage = Connect ThreadId (Channel PeerMessage)
                 | Disconnect ThreadId
+
+instance NFData MgrMessage where
+  rnf a = a `seq` ()
 
 type MgrChannel = Channel MgrMessage
 
