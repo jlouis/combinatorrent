@@ -70,16 +70,16 @@ Planned for the next release
 
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
+   - Reduce CPU load and memory load. Alternative representations of various
+     data structures are needed.
+   - Add support for multiple torrents at once
 
 Items for later (no particular order)
 -------------------------------------
 
    - Improve the Peer Management code. Keep track of peers and process them
      over time in an intelligent manner.
-   - Reduce CPU load and memory load. Alternative representations of various
-     data structures are needed.
    - Add restart-support to the supervisors where applicable.
-   - Add support for multiple torrents at once
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
