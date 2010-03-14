@@ -64,6 +64,8 @@ wish-list.
 
      The fix is to build more structure into the closing of the supervisor
      tree and make it properly synchronous.
+   - Play around with a more strict variant of CML. Don Stewart suggested to
+     look at some retainer profiling around the primitives.
 
 Planned for the next release
 ----------------------------
