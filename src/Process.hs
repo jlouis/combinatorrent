@@ -23,6 +23,7 @@ module Process (
     , recvWrapPC
     , wrapP
     , stopP
+    , atTimeEvtP
     , ignoreProcessBlock -- This ought to be renamed
     -- * Log Interface
     , Logging(..)
@@ -133,6 +134,12 @@ wrapP :: Event (c, b) -> (c -> Process a b y) -> Process a b (Event (y, b))
 wrapP ev p = do
     c <- ask
     return $ wrap ev (\(v, s) -> runP c s (p v))
+
+atTimeEvtP :: NFData c => Integer -> c -> Process a b (Event (c, b))
+atTimeEvtP secs msg = do
+    s <- get
+    return (wrap (atTimeEvt secs msg)
+                (\m -> return (m, s)))
 
 -- Convenience function
 recvWrapPC :: (a -> Channel c) -> (c -> Process a b y) -> Process a b (Event (y, b))

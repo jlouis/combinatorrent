@@ -25,6 +25,7 @@ import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
+import qualified Process.DirWatcher()
 import FS
 import Supervisor
 import Torrent
