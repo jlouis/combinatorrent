@@ -84,7 +84,25 @@ Planned for the next release
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
-   - Add support for multiple torrents at once
+   - Add support for multiple torrents at once:
+        Global Processes:
+            ChokeMgr,
+            Console,
+            Listen,
+            PeerMgr,
+            TorrentManager,
+            Timer
+
+        Torrent-local processes:
+            FS (perhaps),
+            Peer,
+            PieceMgr,
+            Status,
+            Tracker.
+
+     We will have to check all the global processes to make sure they
+     understand the concept of having multiple torrents at their disposal.
+
 
 Items for later (no particular order)
 -------------------------------------
