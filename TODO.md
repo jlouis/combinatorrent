@@ -66,6 +66,16 @@ wish-list.
      tree and make it properly synchronous.
    - Play around with a more strict variant of CML. Don Stewart suggested to
      look at some retainer profiling around the primitives.
+   - Cut down communication from the Receiver to the Peer Control process:
+     When the Receiver Process runs, it should try to drain its socket as
+     much as possible before trying to communicate with the peer. It should
+     also try to drain the socket again while waiting on the Control
+     process. Doing this will lower the contended point of communication in
+     the system.
+   - Investigate and use the Event Library of Bryan O'Sullivan and Johan
+     Tibbel:
+
+     [A Haskell event notification library - Github](http://github.com/tibbe/event)
 
 Planned for the next release
 ----------------------------
