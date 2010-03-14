@@ -92,7 +92,7 @@ p32be :: Integral a => a -> Put
 p32be = putWord32be . fromIntegral
 
 decodeMsg :: Get Message
-decodeMsg = get
+decodeMsg = {-# SCC "decodeMsg" #-} get
 
 encodePacket :: Message -> B.ByteString
 encodePacket m = mconcat [szEnc, mEnc]

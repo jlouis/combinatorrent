@@ -172,9 +172,8 @@ receiverP h ch supC = spawnP (RPCF ch) h
         (catchP (foreverP pgm)
                (defaultStopHandler supC))
   where
-    pgm = do debugP "Peer waiting for input"
-             readHeader ch
-    readHeader ch = {-# SCC "Peer.Receiver" #-} do
+    pgm = readHeader ch
+    readHeader ch = {-# SCC "Recv_readHeader" #-} do
         h <- get
         feof <- liftIO $ hIsEOF h
         if feof
@@ -183,7 +182,7 @@ receiverP h ch supC = spawnP (RPCF ch) h
             else do bs' <- liftIO $ B.hGet h 4
                     l <- conv bs'
                     readMessage l ch
-    readMessage l ch = do
+    readMessage l ch = {-# SCC "Recv_readMessage" #-} do
         if (l == 0)
             then return ()
             else do debugP $ "Reading off " ++ show l ++ " bytes"
@@ -192,8 +191,8 @@ receiverP h ch supC = spawnP (RPCF ch) h
                     case G.runGet decodeMsg bs of
                         Left _ -> do warningP "Incorrect parse in receiver, dying!"
                                      stopP
-                        Right msg -> do sendPC rpMsgC (msg, fromIntegral l) >>= syncP
-    conv bs = do
+                        Right msg -> sendPC rpMsgC (msg, fromIntegral l) >>= syncP
+    conv bs = {-# SCC "Recv_conf" #-} do
         case G.runGet G.getWord32be bs of
           Left err -> do warningP $ "Incorrent parse in receiver, dying: " ++ show err
                          stopP
