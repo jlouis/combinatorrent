@@ -31,7 +31,7 @@ haddock:
 	runghc Setup.lhs haddock --executables
 
 hlint:
-	hlint src
+	hlint -r --cpp-define='__GLASGOW_HASKELL__=612' src
 
 tags:
 	hasktags --both $$(find src -type f -name '*.*hs')
