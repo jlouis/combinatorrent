@@ -76,7 +76,7 @@ newtype Event a = Event (Synchronizer -> Abort -> Name -> IO a)
 --------------------------------------------------------------------------------
 
 atchan :: In a -> Out a -> IO ()
-atchan i o = do
+atchan i o = {-# SCC "atchan" #-} do
   (cand_i,patt,si) <- L.takeMVar i
   (cand_o,y,so) <- L.takeMVar o
   if (patt y && si /= so)
@@ -95,9 +95,9 @@ atchan i o = do
       atchan i o
 
 atsync :: Synchronizer -> Abort -> IO () -> IO ()
-atsync r a x = do
+atsync r a x = {-# SCC "atsync" #-} do
   (t,s) <- L.takeMVar r
-  forkIO $ fix $ \z -> do
+  forkIO $ fix $ \z -> {-# SCC "atsync_1" #-} do
     (_,s') <- L.takeMVar r
     forkIO z
     L.putMVar s' Nothing
@@ -116,7 +116,7 @@ atsync r a x = do
     else x
 
 atpointI :: Synchronizer -> Point -> In a -> (a -> Bool) -> IO a -> IO a
-atpointI r t i patt x = do
+atpointI r t i patt x = {-# SCC "atpointI" #-} do
   e <- L.newEmptyMVar
   L.putMVar i (e,patt,r)
   ms <- L.takeMVar e
@@ -130,7 +130,7 @@ atpointI r t i patt x = do
     ms
 
 atpointO :: Synchronizer -> Point -> Out a -> a -> IO () -> IO ()
-atpointO r t o y x = do
+atpointO r t o y x = {-# SCC "atpointO" #-} do
   e <- L.newEmptyMVar
   L.putMVar o (e,y,r)
   ms <- L.takeMVar e
@@ -156,7 +156,7 @@ channel :: IO (Channel a)
 channel = do
   i <- L.newEmptyMVar
   o <- L.newEmptyMVar
-  forkIO $ forever $ atchan i o
+  forkIO $ {-# SCC "channel" #-} forever $ atchan i o
   m <- S.newEmptyMVar
   return (Channel i o m)
 
@@ -168,7 +168,7 @@ channel = do
 -- is true.
 receive :: Channel a -> (a -> Bool) -> Event a
 receive (Channel i _ m) patt = Event efun where
-  efun r _ n = do
+  efun r _ n = {-# SCC "receive" #-} do
     t <- L.newEmptyMVar
     forkIO (L.putMVar n [t])
     atpointI r t i patt (S.takeMVar m)
@@ -180,7 +180,7 @@ receive (Channel i _ m) patt = Event efun where
 -- synchronize with @receive c@.
 transmit :: NFData a => Channel a -> a -> Event ()
 transmit (Channel _ o m) y = Event efun where
-  efun r _ n = do
+  efun r _ n = {-# SCC "transmit" #-} do
     t <- L.newEmptyMVar
     forkIO (L.putMVar n [t])
     atpointO r t o y (S.putMVar m y)
@@ -196,11 +196,11 @@ transmit (Channel _ o m) y = Event efun where
 -- /aborted/.
 choose :: [Event a] -> Event a
 choose vL = Event efun where
-  efun r a n = do
+  efun r a n = {-# SCC "choose" #-} do
     j <- L.newEmptyMVar
     tL <- foldM (\tL -> \(Event v) -> do
         n' <- L.newEmptyMVar
-        forkIO $ v r a n' >>= L.putMVar j
+        forkIO $ {-# SCC "choose_1" #-} v r a n' >>= L.putMVar j
         tL' <- L.takeMVar n'
         L.putMVar n' tL'
         return (tL' ++ tL)
@@ -249,9 +249,9 @@ wrapabort f (Event v) = Event efun where
 --
 -- This blocks the calling thread until a matching event is available.
 sync :: Event a -> IO a
-sync (Event v) = do
+sync (Event v) = {-# SCC "sync" #-} do
   j <- L.newEmptyMVar
-  forkIO $ fix $ \z -> do
+  forkIO $ fix $ \z -> {-# SCC "sync" #-} do
     r <- L.newEmptyMVar
     a <- L.newEmptyMVar
     n <- L.newEmptyMVar
