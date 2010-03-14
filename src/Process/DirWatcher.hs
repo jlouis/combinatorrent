@@ -28,7 +28,7 @@ import Supervisor
 
 data DirWatchMsg = AddedTorrent FilePath
                  | RemovedTorrent FilePath
-  deriving Show
+  deriving (Eq, Show)
 
 instance NFData DirWatchMsg where
   rnf a = a `seq` ()
@@ -63,7 +63,9 @@ processDirectory = do
     running <- get
     let (added, removed) = (S.toList $ S.difference torrents running,
                             S.toList $ S.difference running torrents)
-    syncP =<< sendPC reportCh (map AddedTorrent added ++ map RemovedTorrent removed)
-    -- Make ready for next iteration
-    put torrents
+        msg = (map AddedTorrent added ++ map RemovedTorrent removed)
+    when (msg /= [])
+        (do syncP =<< sendPC reportCh msg
+            -- Make ready for next iteration
+            put torrents)
 
