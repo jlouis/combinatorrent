@@ -26,6 +26,7 @@ import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
 import qualified Process.DirWatcher()
+import qualified Process.TorrentManager()
 import FS
 import Supervisor
 import Torrent

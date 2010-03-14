@@ -28,6 +28,7 @@ import Supervisor
 
 data DirWatchMsg = AddedTorrent FilePath
                  | RemovedTorrent FilePath
+  deriving Show
 
 instance NFData DirWatchMsg where
   rnf a = a `seq` ()
