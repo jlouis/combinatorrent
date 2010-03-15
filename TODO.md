@@ -29,7 +29,6 @@ wish-list.
    - When we grab pieces from the Piece Manager, let it provide us with a
      pruned set of pieces we can ask with later. This way, we only need to
      consider pieces we already have once and we get a faster system.
-
      When doing this, only prune pieces which are done and checked.
    - Send keepalives every two minutes as per the spec.
    - For the histogram code, look at
@@ -38,21 +37,14 @@ wish-list.
      Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
    - Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
      of the PeerMgr code.
-   - Update the Seeder status in PeerMgrP.
    - Do not send HAVE messages if the Peer already has the Piece Number.
    - Improve on the command line parser. We will certainly need full-fledged
      CL parsing at some point.
-   - Let Piece Sets be S.Set PieceNum rather than [PieceNum]. They are
-     larger than 1000 for some large torrents, so it makes sense to shift to
-     a better representation.
    - The status reporting code needs some help. It only transfers up/down
      rates once every 30 seconds. If a peer is living for less than 30
      seconds, then no upload/download will be reported for that peer. The
      fix is to contact the StatusP when a peer closes if it has something to
      transfer.
-   - Make sure we actually seed when the torrent finishes.
-     Rather hard to check with the current construction in the PeerMgr. The
-     PeerMgr needs more work before this is possible.
    - Use an mmap() based interface for file I/O.
    - Eliminate use of nPieces in PeerP. It can be extracted from the 'pm'
      value.
@@ -61,7 +53,6 @@ wish-list.
      asynchronous messages, so the sync on stopping tree will not wait until
      the subtree is done. This has another quite dangerous implication:
      Stray indefinite blocks on mvars when closing down.
-
      The fix is to build more structure into the closing of the supervisor
      tree and make it properly synchronous.
    - Play around with a more strict variant of CML. Don Stewart suggested to
@@ -84,21 +75,12 @@ Planned for the next release
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
-   - Add support for multiple torrents at once:
+   - Add support for multiple torrents at once we need to at least hack in
+     these processes to make it possible:
         Global Processes:
             ChokeMgr,
-            Console,
-            Listen,
             PeerMgr,
-            TorrentManager,
-            Timer
-
-        Torrent-local processes:
-            FS (perhaps),
-            Peer,
-            PieceMgr,
-            Status,
-            Tracker.
+            TorrentManager
 
      We will have to check all the global processes to make sure they
      understand the concept of having multiple torrents at their disposal.
