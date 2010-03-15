@@ -188,7 +188,7 @@ headerParser ihTst = do
     when (protoString /= toBS protocolHeader) $ fail "Wrong protocol header"
     caps <- getWord64be
     ihR  <- liftM fromLBS $ getLazyByteString 20
-    unless (ihTst ihR) $ fail "Wrong InfoHash"
+    unless (ihTst ihR) $ fail "Unknown InfoHash"
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid, ihR)
 
@@ -205,7 +205,7 @@ initiateHandshake handle peerid infohash = do
     L.hPut handle msg
     hFlush handle
     debugM "Protocol.Wire" "Receiving handshake from other end"
-    receiveHeader handle sz (== infohash) -- TODO: Exceptions ?
+    receiveHeader handle sz (== infohash)
   where msg = handShakeMessage peerid infohash
         sz = fromIntegral (L.length msg)
 
@@ -217,20 +217,20 @@ handShakeMessage pid ih =
                                  putByteString . toBS $ pid]
 
 -- | Receive a handshake on a socket
-receiveHandshake :: Handle -> PeerId -> (InfoHash -> Bool) -> InfoHash
+receiveHandshake :: Handle -> PeerId -> (InfoHash -> Bool)
                  -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
-receiveHandshake h pid ihTst ih = do
+receiveHandshake h pid ihTst = do
     debugM "Protocol.Wire" "Receiving handshake from other end"
-    r <- receiveHeader h sz ihTst -- TODO: Exceptions ?
+    r <- receiveHeader h sz ihTst
     case r of
         Left err -> return $ Left err
         Right (caps, rpid, ih) ->
             do debugM "Protocol.Wire" "Sending back handshake message"
-               L.hPut h msg
+               L.hPut h (msg ih)
                hFlush h
                return $ Right (caps, rpid, ih)
-  where msg = handShakeMessage pid ih
-        sz = fromIntegral (L.length msg)
+  where msg ih = handShakeMessage pid ih
+        sz = fromIntegral (L.length $ msg "12345678901234567890") -- Dummy value
 
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
