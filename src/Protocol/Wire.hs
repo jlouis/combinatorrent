@@ -176,11 +176,11 @@ toW8 = fromIntegral . ord
 
 -- | Receive the header parts from the other end
 receiveHeader :: Handle -> Int -> (InfoHash -> Bool)
-              -> IO (Either String ([Capabilities], L.ByteString))
+              -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
 receiveHeader h sz ihTst = parseHeader `fmap` B.hGet h sz
   where parseHeader = runGet (headerParser ihTst)
 
-headerParser :: (InfoHash -> Bool) -> Get ([Capabilities], L.ByteString)
+headerParser :: (InfoHash -> Bool) -> Get ([Capabilities], L.ByteString, InfoHash)
 headerParser ihTst = do
     hdSz <- getWord8
     when (fromIntegral hdSz /= protocolHeaderSize) $ fail "Wrong header size"
@@ -190,7 +190,7 @@ headerParser ihTst = do
     ihR  <- liftM fromLBS $ getLazyByteString 20
     unless (ihTst ihR) $ fail "Wrong InfoHash"
     pid <- getLazyByteString 20
-    return (decodeCapabilities caps, pid)
+    return (decodeCapabilities caps, pid, ihR)
 
 
 data Capabilities = Fast
@@ -199,7 +199,7 @@ decodeCapabilities _ = []
 
 -- | Initiate a handshake on a socket
 initiateHandshake :: Handle -> PeerId -> InfoHash
-                  -> IO (Either String ([Capabilities], L.ByteString))
+                  -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
 initiateHandshake handle peerid infohash = do
     debugM "Protocol.Wire" "Sending off handshake message"
     L.hPut handle msg
@@ -218,17 +218,17 @@ handShakeMessage pid ih =
 
 -- | Receive a handshake on a socket
 receiveHandshake :: Handle -> PeerId -> (InfoHash -> Bool) -> InfoHash
-                 -> IO (Either String ([Capabilities], L.ByteString))
+                 -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
 receiveHandshake h pid ihTst ih = do
     debugM "Protocol.Wire" "Receiving handshake from other end"
     r <- receiveHeader h sz ihTst -- TODO: Exceptions ?
     case r of
         Left err -> return $ Left err
-        Right (caps, rpid) ->
+        Right (caps, rpid, ih) ->
             do debugM "Protocol.Wire" "Sending back handshake message"
                L.hPut h msg
                hFlush h
-               return $ Right (caps, rpid)
+               return $ Right (caps, rpid, ih)
   where msg = handShakeMessage pid ih
         sz = fromIntegral (L.length msg)
 

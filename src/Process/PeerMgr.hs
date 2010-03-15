@@ -43,9 +43,7 @@ instance NFData PeerMgrMsg where
 type PeerMgrChannel = Channel PeerMgrMsg
 
 data CF = CF { peerCh :: PeerMgrChannel
-             , pieceMgrCh :: PieceMgrChannel
              , mgrCh :: Channel MgrMessage
-             , fsCh  :: FSPChannel
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
              }
@@ -53,10 +51,20 @@ data CF = CF { peerCh :: PeerMgrChannel
 instance Logging CF where
     logName _ = "Process.PeerMgr"
 
+data TorrentLocal = TorrentLocal
+                        { tcPcMgrCh :: PieceMgrChannel
+                        , tcFSCh    :: FSPChannel
+                        , tcStatCh    :: StatusChan
+                        , tcPM      :: PieceMap
+                        }
+
+type ChanManageMap = M.Map InfoHash TorrentLocal
+
 data ST = ST { peersInQueue  :: [Peer]
              , peers :: M.Map ThreadId (Channel PeerMessage)
              , peerId :: PeerId
              , infoHash :: InfoHash
+             , cmMap :: ChanManageMap
              }
 
 start :: PeerMgrChannel -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
@@ -66,10 +74,12 @@ start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
-       spawnP (CF ch pieceMgrC mgrC fsC pool chokeMgrC)
-              (ST [] M.empty pid ih) (catchP (forever lp)
+       spawnP (CF ch mgrC pool chokeMgrC)
+              (ST [] M.empty pid ih cmap) (catchP (forever lp)
                                        (defaultStopHandler supC))
   where
+    cmap = M.insert ih initMMap M.empty
+    initMMap = TorrentLocal pieceMgrC fsC statC pm
     lp = do chooseP [incomingPeers, peerEvent] >>= syncP
             fillPeers
     incomingPeers =
@@ -109,29 +119,27 @@ start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
         pid <- gets peerId
         ih  <- gets infoHash
         pool <- asks peerPool
-        pmC  <- asks pieceMgrCh
-        fsC  <- asks fsCh
         mgrC <- asks mgrCh
-        liftIO $ connect (hn, prt, pid, ih, pm) pool pmC fsC statC mgrC nPieces
+        cmap <- gets cmMap
+        liftIO $ connect (hn, prt, pid, ih, pm) pool mgrC cmap
     addIncoming conn = do
         pid <- gets peerId
         ih  <- gets infoHash
         pool <- asks peerPool
-        pieceMgrC  <- asks pieceMgrCh
-        fsC  <- asks fsCh
         mgrC <- asks mgrCh
-        let ihTst = (== ih)
-        liftIO $ acceptor conn ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces
+        cmap <- gets cmMap
+        liftIO $ acceptor conn ih pool pid mgrC cmap
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
 
-connect :: ConnectRecord -> SupervisorChan -> PieceMgrChannel -> FSPChannel
-        -> StatusChan
-        -> MgrChannel -> Int
+connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> ChanManageMap
         -> IO ThreadId
-connect (host, port, pid, ih, pm) pool pieceMgrC fsC statC mgrC nPieces =
+connect (host, port, pid, ih, pm) pool mgrC cmap =
     spawn (connector >> return ())
-  where connector =
+  where tc = case M.lookup ih cmap of
+                Nothing -> error "Impossible (2)"
+                Just x  -> x
+        connector =
          do debugM "Process.PeerMgr.connect" $
                 "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
             h <- connectTo host port
@@ -143,20 +151,24 @@ connect (host, port, pid, ih, pm) pool pieceMgrC fsC statC mgrC nPieces =
                                 ("Peer handshake failure at host " ++ host
                                   ++ " with error " ++ err)
                              return ()
-              Right (_caps, _rpid) ->
+              Right (_caps, _rpid, _ih) ->
                   do debugM "Process.PeerMgr.connect" "entering peerP loop code"
                      supC <- channel -- TODO: Should be linked later on
-                     children <- peerChildren h mgrC pieceMgrC fsC statC pm nPieces
+                     children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
+                                                      (tcPM tc) (M.size (tcPM tc))
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
-acceptor :: (Handle, HostName, PortNumber) -> InfoHash -> (InfoHash -> Bool) -> SupervisorChan
-         -> PeerId -> MgrChannel -> PieceMgrChannel -> FSPChannel -> StatusChan
-         -> PieceMap -> Int
+acceptor :: (Handle, HostName, PortNumber) -> InfoHash -> SupervisorChan
+         -> PeerId -> MgrChannel -> ChanManageMap
          -> IO ThreadId
-acceptor (h,hn,pn) ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces =
+acceptor (h,hn,pn) ih pool pid mgrC cmmap =
     spawn (connector >> return ())
-  where connector = do
+  where ihTst k = M.member k cmmap
+        tc = case M.lookup ih cmmap of
+                Nothing -> error "Impossible"
+                Just x  -> x
+        connector = do
             debugLog "Handling incoming connection"
             r <- receiveHandshake h pid ihTst ih
             debugLog "RecvHandshake run"
@@ -164,10 +176,11 @@ acceptor (h,hn,pn) ih ihTst pool pid mgrC pieceMgrC fsC statC pm nPieces =
                 Left err -> do debugLog ("Incoming Peer handshake failure with " ++ show hn ++ "("
                                             ++ show pn ++ "), error: " ++ err)
                                return ()
-                Right (_caps, _rpid) ->
+                Right (_caps, _rpid, ih) ->
                     do debugLog "entering peerP loop code"
                        supC <- channel -- TODO: Should be linked later on
-                       children <- peerChildren h mgrC pieceMgrC fsC statC pm nPieces
+                       children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc)
+                                                        (tcStatCh tc) (tcPM tc) (M.size (tcPM tc))
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"
