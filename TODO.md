@@ -78,7 +78,6 @@ Planned for the next release
    - Add support for multiple torrents at once we need to at least hack in
      these processes to make it possible:
         Global Processes:
-            ChokeMgr,
             PeerMgr,
             TorrentManager
 
