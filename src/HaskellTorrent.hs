@@ -12,6 +12,8 @@ import System.Environment
 import System.Random
 
 import System.Console.GetOpt
+import System.Directory (doesDirectoryExist)
+import System.FilePath ()
 import System.Log.Logger
 import System.Log.Handler.Simple
 import System.IO as SIO
@@ -25,6 +27,8 @@ import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
+import qualified Process.DirWatcher as DirWatcher (start)
+import qualified Process.TorrentManager as TorrentManager (start)
 import FS
 import Supervisor
 import Torrent
@@ -39,7 +43,7 @@ main = do args <- getArgs
 
 -- COMMAND LINE PARSING
 
-data Flag = Version | Debug | LogFile String
+data Flag = Version | Debug | LogFile FilePath | WatchDir FilePath
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -47,6 +51,7 @@ options =
   [ Option ['V','?']        ["version"] (NoArg Version)         "Show version number"
   , Option ['D']            ["debug"]   (NoArg Debug)           "Spew extra debug information"
   , Option []               ["logfile"] (ReqArg LogFile "FILE") "Choose a filepath on which to log"
+  , Option ['W']            ["watchdir"] (ReqArg WatchDir "DIR") "Choose a directory to watch for torrents"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
@@ -82,6 +87,22 @@ setupLogging flags = do
                                 LogFile _ -> True
                                 _         -> False)
 
+setupDirWatching :: [Flag] -> IO [Child]
+setupDirWatching flags = do
+    case dirWatchFlag flags of
+        Nothing -> return []
+        Just (WatchDir dir) -> do
+            ex <- doesDirectoryExist dir
+            if ex
+                then do watchC <- channel
+                        return [ Worker $ DirWatcher.start dir watchC
+                               , Worker $ TorrentManager.start watchC ]
+                else do putStrLn $ "Directory does not exist, not watching"
+                        return []
+  where dirWatchFlag = find (\e -> case e of
+                                    WatchDir _ -> True
+                                    _          -> False)
+
 download :: [Flag] -> String -> IO ()
 download flags name = do
     torrent <- B.readFile name
@@ -90,6 +111,7 @@ download flags name = do
       Left pe -> print pe
       Right bc -> do
            setupLogging flags
+           workersWatch <- setupDirWatching flags
            debugM "Main" (show bc)
            (handles, haveMap, pieceMap) <- openAndCheckFile bc
            -- setup channels
@@ -112,6 +134,7 @@ download flags name = do
                clientState = determineState haveMap
            -- Create main supervisor process
            tid <- allForOne "MainSup"
+                     (workersWatch ++
                      [ Worker $ Console.start waitC statusC
                      , Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PeerMgr.start pmC pid (infoHash ti)
@@ -126,7 +149,7 @@ download flags name = do
                                         Seeding -> True
                                         Leeching -> False)
                      , Worker $ Listen.start defaultPort pmC
-                     ] supC
+                     ]) supC
            sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
            infoM "Main" "Closing down, giving processes 10 seconds to cool off"

@@ -21,7 +21,7 @@ import qualified Data.Map as M
 
 import System.IO
 import System.Directory (createDirectoryIfMissing)
-import Data.List (intercalate)
+import System.FilePath (joinPath)
 
 import Protocol.BCode as BCode
 import qualified Digest as D
@@ -195,9 +195,3 @@ openAndCheckFile bc =
        return (handles, have, pieceMap)
   where Just files = BCode.infoFiles bc
         Just pieceMap = mkPieceMap bc
-        joinPath = intercalate "/"
-
-
-
-
-

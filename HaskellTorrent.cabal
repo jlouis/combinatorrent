@@ -45,35 +45,36 @@ executable HaskellTorrent
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
     Process.Timer, Process.Tracker,
     Digest, FS, PeerTypes, Process, RateCalc, Control.Concurrent.CML.Strict
-    Supervisor, Torrent, Test, TestInstance, DeepSeqInstances
+    Supervisor, Torrent, Test, TestInstance, DeepSeqInstances, Process.DirWatcher
 
   extensions: CPP
 
   build-depends:
     base >= 3.0,
     base <= 5.0,
-    mtl,
-    cereal,
-    pretty,
-    parsec,
-    containers,
     bytestring,
-    random,
-    network,
+    cereal,
     cml,
-    HTTP,
-    hopenssl,
-    time,
-    random-shuffle,
-    QuickCheck >= 2,
-    HUnit,
-    test-framework,
-    test-framework-quickcheck2,
-    test-framework-hunit,
-    hslogger,
-    strict-concurrency,
+    containers,
     deepseq,
-    directory
+    directory,
+    filepath,
+    hopenssl,
+    hslogger,
+    HTTP,
+    HUnit,
+    mtl,
+    network,
+    parsec,
+    pretty,
+    QuickCheck >= 2,
+    random,
+    random-shuffle,
+    strict-concurrency,
+    test-framework,
+    test-framework-hunit,
+    test-framework-quickcheck2,
+    time
 
   ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures
   if !flag(debug)

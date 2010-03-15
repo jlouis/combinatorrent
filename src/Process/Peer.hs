@@ -161,7 +161,7 @@ sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
         case m of Request n blk -> False
                   _             -> True
 
-data RPCF = RPCF { rpMsgC :: Channel (Message, Integer) }
+data RPCF = RPCF { rpMsgCh :: Channel (Message, Integer) }
 
 instance Logging RPCF where
     logName _ = "Process.Peer.Receiver"
@@ -172,26 +172,20 @@ receiverP h ch supC = spawnP (RPCF ch) h
         (catchP (foreverP pgm)
                (defaultStopHandler supC))
   where
-    pgm = readHeader ch
-    readHeader ch = {-# SCC "Recv_readHeader" #-} do
+    pgm = readHeader
+    readHeader = {-# SCC "Recv_readHeader" #-} do
+        ch <- asks rpMsgCh
         h <- get
-        feof <- liftIO $ hIsEOF h
-        if feof
-            then do debugP "Handle Closed"
-                    stopP
-            else do bs' <- liftIO $ B.hGet h 4
-                    l <- conv bs'
-                    readMessage l ch
-    readMessage l ch = {-# SCC "Recv_readMessage" #-} do
+        bs' <- liftIO $ B.hGet h 4
+        l <- conv bs'
         if (l == 0)
             then return ()
             else do debugP $ "Reading off " ++ show l ++ " bytes"
-                    h <- get
-                    bs <- liftIO $ B.hGet h (fromIntegral l)
+                    bs <- {-# SCC "Recv_hGet" #-} liftIO $ B.hGet h (fromIntegral l)
                     case G.runGet decodeMsg bs of
                         Left _ -> do warningP "Incorrect parse in receiver, dying!"
                                      stopP
-                        Right msg -> sendPC rpMsgC (msg, fromIntegral l) >>= syncP
+                        Right msg -> sendPC rpMsgCh (msg, fromIntegral l) >>= syncP
     conv bs = {-# SCC "Recv_conf" #-} do
         case G.runGet G.getWord32be bs of
           Left err -> do warningP $ "Incorrent parse in receiver, dying: " ++ show err

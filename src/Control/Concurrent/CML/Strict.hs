@@ -31,12 +31,13 @@ module Control.Concurrent.CML.Strict (
   wrap,
   guard,
   wrapabort,
-  spawn
+  spawn,
+  atTimeEvt
 ) where
 
 import qualified Control.Concurrent.MVar.Strict as S
 import qualified Control.Concurrent.MVar as L (MVar, newEmptyMVar, putMVar, takeMVar)
-import Control.Concurrent(ThreadId, forkIO)
+import Control.Concurrent(ThreadId, forkIO, threadDelay)
 import Control.DeepSeq
 import Control.Monad.Fix(fix)
 import Control.Monad(foldM, forever)
@@ -227,6 +228,13 @@ guard vs = Event efun where
   efun r a n = do
     Event v <- vs
     v r a n
+
+atTimeEvt :: NFData a => Integer -> a -> Event a
+atTimeEvt secs msg = guard (do ch <- channel
+                               spawn $ trigger ch
+                               return $ receive ch (const True))
+  where trigger ch = do threadDelay $ 5*1000000
+                        sync $ transmit ch msg
 
 -- | Specify a post-synchronization action that is spawned if an event is
 -- /not/ selected by a 'choose'.
