@@ -63,6 +63,8 @@ wish-list.
      also try to drain the socket again while waiting on the Control
      process. Doing this will lower the contended point of communication in
      the system.
+   - Add support for selecting what port to use for the listen. Also add
+     random port support.
    - Investigate and use the Event Library of Bryan O'Sullivan and Johan
      Tibbel:
 
