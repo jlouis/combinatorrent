@@ -113,7 +113,6 @@ download flags name = do
            setupLogging flags
            workersWatch <- setupDirWatching flags
            debugM "Main" (show bc)
-           (handles, haveMap, pieceMap) <- openAndCheckFile bc
            -- setup channels
            statusC  <- channel
            waitC    <- channel
@@ -125,24 +124,18 @@ download flags name = do
            debugM "Main" "Created channels"
            -- setup StdGen and Peer data
            gen <- getStdGen
-           ti <- mkTorrentInfo bc
-           let pid = mkPeerId gen
-               left = bytesLeft haveMap pieceMap
-               clientState = determineState haveMap
            -- Create main supervisor process
+           let pid = mkPeerId gen
            tid <- allForOne "MainSup"
                      (workersWatch ++
                      [ Worker $ Console.start waitC statusC
-                     , Worker $ PeerMgr.start pmC pid 
+                     , Worker $ PeerMgr.start pmC pid
                                     chokeC torrentManagerC
                      , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
-                                    (case clientState of
-                                        Seeding -> True
-                                        Leeching -> False)
+                                    False -- TODO: Fix this leeching/seeding problem
                      , Worker $ Listen.start defaultPort pmC
                      ]) supC
-           startTorrent handles chokeInfoC pieceMap haveMap left clientState
-                                statusC ti pid pmC torrentManagerC
+           startTorrent bc chokeInfoC statusC pid pmC torrentManagerC
            sync $ receive waitC (const True)
            infoM "Main" "Closing down, giving processes 10 seconds to cool off"
            sync $ transmit supC (PleaseDie tid)
@@ -150,26 +143,24 @@ download flags name = do
            infoM "Main" "Done..."
            return ()
 
-startTorrent :: Handles
+startTorrent :: BCode.BCode
                 -> PieceMgr.ChokeInfoChannel
-                -> PieceMap
-                -> PiecesDoneMap
-                -> Integer
-                -> TorrentState
                 -> Channel Status.ST
-                -> TorrentInfo
                 -> PeerId
                 -> PeerMgr.PeerMgrChannel
                 -> Channel PeerMgr.ManageMsg
                 -> IO ThreadId
-startTorrent handles chokeInfoC pieceMap haveMap left clientState
-              statusC ti pid pmC torrentManagerC = do
+startTorrent bc chokeInfoC statusC pid pmC torrentManagerC = do
            fspC <- channel
            trackerC   <- channel
            supC       <- channel
            chokeInfoC <- channel
            statInC <- channel
            pieceMgrC <- channel
+           (handles, haveMap, pieceMap) <- openAndCheckFile bc
+           let left = bytesLeft haveMap pieceMap
+               clientState = determineState haveMap
+           ti <- mkTorrentInfo bc
            tid <- allForOne "TorrentSup"
                      [ Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
