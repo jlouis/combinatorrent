@@ -5,7 +5,6 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.Monad
 
-import qualified Data.ByteString as B
 import Data.List
 
 import System.Environment
@@ -18,18 +17,13 @@ import System.Log.Logger
 import System.Log.Handler.Simple
 import System.IO as SIO
 
-import qualified Protocol.BCode as BCode
 import qualified Process.Console as Console
-import qualified Process.FS as FSP
 import qualified Process.PeerMgr as PeerMgr
-import qualified Process.PieceMgr as PieceMgr (start, createPieceDb, ChokeInfoChannel)
 import qualified Process.ChokeMgr as ChokeMgr (start)
-import qualified Process.Status as Status
-import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
-import qualified Process.DirWatcher as DirWatcher (start, DirWatchChan)
+import qualified Process.DirWatcher as DirWatcher (start, DirWatchChan, DirWatchMsg(..))
 import qualified Process.TorrentManager as TorrentManager (start)
-import FS
+
 import Supervisor
 import Torrent
 import Version
@@ -101,75 +95,41 @@ setupDirWatching flags watchC = do
                                     WatchDir _ -> True
                                     _          -> False)
 
+generatePeerId :: IO PeerId
+generatePeerId = do
+    gen <- getStdGen
+    return $ mkPeerId gen
+
 download :: [Flag] -> String -> IO ()
 download flags name = do
-    torrent <- B.readFile name
-    let bcoded = BCode.decode torrent
-    case bcoded of
-      Left pe -> print pe
-      Right bc -> do
-           setupLogging flags
-           watchC <- channel
-           workersWatch <- setupDirWatching flags watchC
-           debugM "Main" (show bc)
-           -- setup channels
-           statusC  <- channel
-           waitC    <- channel
-           supC <- channel
-           pmC <- channel
-           chokeC <- channel
-           chokeInfoC <- channel
-           torrentManagerC <- channel
-           debugM "Main" "Created channels"
-           -- setup StdGen and Peer data
-           gen <- getStdGen
-           -- Create main supervisor process
-           let pid = mkPeerId gen
-           tid <- allForOne "MainSup"
-                     (workersWatch ++
-                     [ Worker $ Console.start waitC statusC
-                     , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC
-                     , Worker $ PeerMgr.start pmC pid
-                                    chokeC torrentManagerC
-                     , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
-                                    False -- TODO: Fix this leeching/seeding problem
-                     , Worker $ Listen.start defaultPort pmC
-                     ]) supC
-           startTorrent bc chokeInfoC statusC pid pmC torrentManagerC
-           sync $ receive waitC (const True)
-           infoM "Main" "Closing down, giving processes 10 seconds to cool off"
-           sync $ transmit supC (PleaseDie tid)
-           threadDelay $ 10*1000000
-           infoM "Main" "Done..."
-           return ()
+    setupLogging flags
+    watchC <- channel
+    workersWatch <- setupDirWatching flags watchC
+    -- setup channels
+    statusC  <- channel
+    waitC    <- channel
+    supC <- channel
+    pmC <- channel
+    chokeC <- channel
+    chokeInfoC <- channel
+    manageC <- channel
+    debugM "Main" "Created channels"
+    pid <- generatePeerId
+    tid <- allForOne "MainSup"
+              (workersWatch ++
+              [ Worker $ Console.start waitC statusC
+              , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC manageC
+              , Worker $ PeerMgr.start pmC pid
+                             chokeC manageC
+              , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
+                             False -- TODO: Fix this leeching/seeding problem
+              , Worker $ Listen.start defaultPort pmC
+              ]) supC
+    sync $ transmit watchC [DirWatcher.AddedTorrent name]
+    sync $ receive waitC (const True)
+    infoM "Main" "Closing down, giving processes 10 seconds to cool off"
+    sync $ transmit supC (PleaseDie tid)
+    threadDelay $ 10*1000000
+    infoM "Main" "Done..."
+    return ()
 
-startTorrent :: BCode.BCode
-                -> PieceMgr.ChokeInfoChannel
-                -> Channel Status.ST
-                -> PeerId
-                -> PeerMgr.PeerMgrChannel
-                -> Channel PeerMgr.ManageMsg
-                -> IO ThreadId
-startTorrent bc chokeInfoC statusC pid pmC torrentManagerC = do
-           fspC <- channel
-           trackerC   <- channel
-           supC       <- channel
-           chokeInfoC <- channel
-           statInC <- channel
-           pieceMgrC <- channel
-           (handles, haveMap, pieceMap) <- openAndCheckFile bc
-           let left = bytesLeft haveMap pieceMap
-               clientState = determineState haveMap
-           ti <- mkTorrentInfo bc
-           tid <- allForOne "TorrentSup"
-                     [ Worker $ FSP.start handles pieceMap fspC
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
-                                        (PieceMgr.createPieceDb haveMap pieceMap)
-                     , Worker $ Status.start left clientState statusC statInC trackerC
-                     , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC statInC
-                                        trackerC pmC
-                     ] supC
-           sync $ transmit torrentManagerC $ PeerMgr.NewTorrent (infoHash ti)
-                            (PeerMgr.TorrentLocal pieceMgrC fspC statInC pieceMap )
-           sync $ transmit trackerC Status.Start
-           return tid
