@@ -170,7 +170,7 @@ acceptor (h,hn,pn) ih pool pid mgrC cmmap =
                 Just x  -> x
         connector = do
             debugLog "Handling incoming connection"
-            r <- receiveHandshake h pid ihTst ih
+            r <- receiveHandshake h pid ihTst
             debugLog "RecvHandshake run"
             case r of
                 Left err -> do debugLog ("Incoming Peer handshake failure with " ++ show hn ++ "("
