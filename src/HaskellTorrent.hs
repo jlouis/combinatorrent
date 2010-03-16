@@ -27,7 +27,7 @@ import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
-import qualified Process.DirWatcher as DirWatcher (start)
+import qualified Process.DirWatcher as DirWatcher (start, DirWatchChan)
 import qualified Process.TorrentManager as TorrentManager (start)
 import FS
 import Supervisor
@@ -87,16 +87,14 @@ setupLogging flags = do
                                 LogFile _ -> True
                                 _         -> False)
 
-setupDirWatching :: [Flag] -> IO [Child]
-setupDirWatching flags = do
+setupDirWatching :: [Flag] -> DirWatcher.DirWatchChan -> IO [Child]
+setupDirWatching flags watchC = do
     case dirWatchFlag flags of
         Nothing -> return []
         Just (WatchDir dir) -> do
             ex <- doesDirectoryExist dir
             if ex
-                then do watchC <- channel
-                        return [ Worker $ DirWatcher.start dir watchC
-                               , Worker $ TorrentManager.start watchC ]
+                then do return [ Worker $ DirWatcher.start dir watchC ]
                 else do putStrLn $ "Directory does not exist, not watching"
                         return []
   where dirWatchFlag = find (\e -> case e of
@@ -111,7 +109,8 @@ download flags name = do
       Left pe -> print pe
       Right bc -> do
            setupLogging flags
-           workersWatch <- setupDirWatching flags
+           watchC <- channel
+           workersWatch <- setupDirWatching flags watchC
            debugM "Main" (show bc)
            -- setup channels
            statusC  <- channel
@@ -129,6 +128,7 @@ download flags name = do
            tid <- allForOne "MainSup"
                      (workersWatch ++
                      [ Worker $ Console.start waitC statusC
+                     , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC
                      , Worker $ PeerMgr.start pmC pid
                                     chokeC torrentManagerC
                      , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
