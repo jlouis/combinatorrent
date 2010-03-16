@@ -119,7 +119,7 @@ download flags name = do
            statusC  <- channel
            waitC    <- channel
            pieceMgrC <- channel
-           supC <- channel
+           [supC, supC2] <- replicateM 2 channel
            fspC <- channel
            statInC <- channel
            pmC <- channel
@@ -136,20 +136,22 @@ download flags name = do
            tid <- allForOne "MainSup"
                      (workersWatch ++
                      [ Worker $ Console.start waitC statusC
-                     , Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PeerMgr.start pmC pid (infoHash ti)
                                     pieceMap pieceMgrC fspC chokeC statInC (pieceCount ti)
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
-                                        (PieceMgr.createPieceDb haveMap pieceMap)
-                     , Worker $ Status.start left clientState statusC statInC trackerC
-                     , Worker $ Tracker.start ti pid defaultPort statusC statInC
-                                        trackerC pmC
                      , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
                                     (case clientState of
                                         Seeding -> True
                                         Leeching -> False)
                      , Worker $ Listen.start defaultPort pmC
                      ]) supC
+           tid2 <- allForOne "TorrentSup"
+                     [ Worker $ FSP.start handles pieceMap fspC
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
+                                        (PieceMgr.createPieceDb haveMap pieceMap)
+                     , Worker $ Status.start left clientState statusC statInC trackerC
+                     , Worker $ Tracker.start ti pid defaultPort statusC statInC
+                                        trackerC pmC
+                     ] supC2
            sync $ transmit trackerC Status.Start
            sync $ receive waitC (const True)
            infoM "Main" "Closing down, giving processes 10 seconds to cool off"
