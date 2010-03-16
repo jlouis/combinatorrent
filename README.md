@@ -35,11 +35,11 @@ Currently haskell-torrent supports the following BEPs (See the
 [BEP Process](http://www.bittorrent.org/beps/bep_0000.html) document for an
 explanation of these)
 
-   - 004, 020,
+   - 003, 004, 020,
 
 Haskell-torrent is not supporting these BEPs, but strives to do so one day:
 
-   - 003, 005, 006, 007, 010, 012, 015, 009, 023, 018, 021, 022, 024, 026, 027,
+   - 005, 006, 007, 010, 012, 015, 009, 023, 018, 021, 022, 024, 026, 027,
      028, 029, 030, 031, 032
 
 Haskell-torrent will probably never support these BEPs:
