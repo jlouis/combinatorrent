@@ -78,9 +78,9 @@ data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              }
 
 start :: PeerMgrChannel -> PeerId
-      -> ChokeMgrChannel -> StatusChan -> Channel ManageMsg -> SupervisorChan
+      -> ChokeMgrChannel -> Channel ManageMsg -> SupervisorChan
       -> IO ThreadId
-start ch pid chokeMgrC statC tMgrC supC =
+start ch pid chokeMgrC tMgrC supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan

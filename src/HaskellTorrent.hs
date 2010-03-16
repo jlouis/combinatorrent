@@ -22,7 +22,7 @@ import qualified Protocol.BCode as BCode
 import qualified Process.Console as Console
 import qualified Process.FS as FSP
 import qualified Process.PeerMgr as PeerMgr
-import qualified Process.PieceMgr as PieceMgr (start, createPieceDb, PieceMgrChannel)
+import qualified Process.PieceMgr as PieceMgr (start, createPieceDb, ChokeInfoChannel)
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Status as Status
 import qualified Process.Tracker as Tracker
@@ -117,10 +117,7 @@ download flags name = do
            -- setup channels
            statusC  <- channel
            waitC    <- channel
-           pieceMgrC <- channel
-           [supC, supC2] <- replicateM 2 channel
-           fspC <- channel
-           statInC <- channel
+           supC <- channel
            pmC <- channel
            chokeC <- channel
            chokeInfoC <- channel
@@ -137,14 +134,14 @@ download flags name = do
                      (workersWatch ++
                      [ Worker $ Console.start waitC statusC
                      , Worker $ PeerMgr.start pmC pid 
-                                    chokeC statInC torrentManagerC
+                                    chokeC torrentManagerC
                      , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
                                     (case clientState of
                                         Seeding -> True
                                         Leeching -> False)
                      , Worker $ Listen.start defaultPort pmC
                      ]) supC
-           startTorrent handles fspC pieceMgrC chokeInfoC statInC pieceMap haveMap left clientState
+           startTorrent handles chokeInfoC pieceMap haveMap left clientState
                                 statusC ti pid pmC torrentManagerC
            sync $ receive waitC (const True)
            infoM "Main" "Closing down, giving processes 10 seconds to cool off"
@@ -154,10 +151,7 @@ download flags name = do
            return ()
 
 startTorrent :: Handles
-                -> FSP.FSPChannel
-                -> PieceMgr.PieceMgrChannel
-                -> t
-                -> Status.StatusChan
+                -> PieceMgr.ChokeInfoChannel
                 -> PieceMap
                 -> PiecesDoneMap
                 -> Integer
@@ -168,11 +162,14 @@ startTorrent :: Handles
                 -> PeerMgr.PeerMgrChannel
                 -> Channel PeerMgr.ManageMsg
                 -> IO ThreadId
-startTorrent handles fspC pieceMgrC chokeInfoC statInC pieceMap haveMap left clientState
+startTorrent handles chokeInfoC pieceMap haveMap left clientState
               statusC ti pid pmC torrentManagerC = do
+           fspC <- channel
            trackerC   <- channel
            supC       <- channel
            chokeInfoC <- channel
+           statInC <- channel
+           pieceMgrC <- channel
            tid <- allForOne "TorrentSup"
                      [ Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
