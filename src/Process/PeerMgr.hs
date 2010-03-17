@@ -1,8 +1,10 @@
+{-# LANGUAGE TupleSections #-}
 module Process.PeerMgr (
    -- * Types
      Peer(..)
    , PeerMgrMsg(..)
    , PeerMgrChannel
+   , TorrentLocal(..)
    -- * Interface
    , start
 )
@@ -33,11 +35,21 @@ import Protocol.Wire
 import Supervisor
 import Torrent hiding (infoHash)
 
-data PeerMgrMsg = PeersFromTracker [Peer]
+data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
                 | NewIncoming (Handle, HostName, PortNumber)
+                | NewTorrent InfoHash TorrentLocal
+                | StopTorrent InfoHash
 
 instance NFData PeerMgrMsg where
   rnf a = a `seq` ()
+
+data TorrentLocal = TorrentLocal
+                        { tcPcMgrCh :: PieceMgrChannel
+                        , tcFSCh    :: FSPChannel
+                        , tcStatCh  :: StatusChan
+                        , tcPM      :: PieceMap
+                        }
+
 
 
 type PeerMgrChannel = Channel PeerMgrMsg
@@ -51,43 +63,35 @@ data CF = CF { peerCh :: PeerMgrChannel
 instance Logging CF where
     logName _ = "Process.PeerMgr"
 
-data TorrentLocal = TorrentLocal
-                        { tcPcMgrCh :: PieceMgrChannel
-                        , tcFSCh    :: FSPChannel
-                        , tcStatCh    :: StatusChan
-                        , tcPM      :: PieceMap
-                        }
 
 type ChanManageMap = M.Map InfoHash TorrentLocal
 
-data ST = ST { peersInQueue  :: [Peer]
+data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              , peers :: M.Map ThreadId (Channel PeerMessage)
              , peerId :: PeerId
-             , infoHash :: InfoHash
              , cmMap :: ChanManageMap
              }
 
-start :: PeerMgrChannel -> PeerId -> InfoHash -> PieceMap -> PieceMgrChannel -> FSPChannel
-      -> ChokeMgrChannel -> StatusChan -> Int -> SupervisorChan
+start :: PeerMgrChannel -> PeerId
+      -> ChokeMgrChannel -> SupervisorChan
       -> IO ThreadId
-start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
+start ch pid chokeMgrC supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC)
-              (ST [] M.empty pid ih cmap) (catchP (forever lp)
+              (ST [] M.empty pid cmap) (catchP (forever lp)
                                        (defaultStopHandler supC))
   where
-    cmap = M.insert ih initMMap M.empty
-    initMMap = TorrentLocal pieceMgrC fsC statC pm
+    cmap = M.empty
     lp = do chooseP [incomingPeers, peerEvent] >>= syncP
             fillPeers
     incomingPeers =
         recvWrapPC peerCh (\msg ->
             case msg of
-                PeersFromTracker ps -> do
+                PeersFromTracker ih ps -> do
                        debugP "Adding peers to queue"
-                       modify (\s -> s { peersInQueue = ps ++ peersInQueue s })
+                       modify (\s -> s { peersInQueue = (map (ih,) ps) ++ peersInQueue s })
                 NewIncoming conn@(h, _, _) -> do
                     sz <- liftM M.size $ gets peers
                     if sz < numPeers
@@ -95,7 +99,11 @@ start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
                                 addIncoming conn
                                 return ()
                         else do debugP "Already too many peers, closing!"
-                                liftIO $ hClose h)
+                                liftIO $ hClose h
+                NewTorrent ih tl -> do
+                    modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
+                StopTorrent ih -> do
+                    errorP "Not implemented stopping yet")
     peerEvent =
         recvWrapPC mgrCh (\msg -> case msg of
                     Connect tid c -> newPeer tid c
@@ -115,30 +123,26 @@ start ch pid ih pm pieceMgrC fsC chokeMgrC statC nPieces supC =
                 debugP $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
                 mapM_ addPeer toAdd
                 modify (\s -> s { peersInQueue = rest }))
-    addPeer (Peer hn prt) = do
+    addPeer (ih, (Peer hn prt)) = do
         pid <- gets peerId
-        ih  <- gets infoHash
         pool <- asks peerPool
         mgrC <- asks mgrCh
         cmap <- gets cmMap
-        liftIO $ connect (hn, prt, pid, ih, pm) pool mgrC cmap
+        liftIO $ connect (hn, prt, pid, ih) pool mgrC cmap
     addIncoming conn = do
         pid <- gets peerId
-        ih  <- gets infoHash
         pool <- asks peerPool
         mgrC <- asks mgrCh
         cmap <- gets cmMap
-        liftIO $ acceptor conn ih pool pid mgrC cmap
+        liftIO $ acceptor conn pool pid mgrC cmap
 
-type ConnectRecord = (HostName, PortID, PeerId, InfoHash, PieceMap)
+type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 
 connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> ChanManageMap
         -> IO ThreadId
-connect (host, port, pid, ih, pm) pool mgrC cmap =
+connect (host, port, pid, ih) pool mgrC cmap =
     spawn (connector >> return ())
-  where tc = case M.lookup ih cmap of
-                Nothing -> error "Impossible (2)"
-                Just x  -> x
+  where 
         connector =
          do debugM "Process.PeerMgr.connect" $
                 "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
@@ -151,23 +155,23 @@ connect (host, port, pid, ih, pm) pool mgrC cmap =
                                 ("Peer handshake failure at host " ++ host
                                   ++ " with error " ++ err)
                              return ()
-              Right (_caps, _rpid, _ih) ->
+              Right (_caps, _rpid, ih) ->
                   do debugM "Process.PeerMgr.connect" "entering peerP loop code"
                      supC <- channel -- TODO: Should be linked later on
+                     let tc = case M.lookup ih cmap of
+                                    Nothing -> error "Impossible (2), I hope"
+                                    Just x  -> x
                      children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
                                                       (tcPM tc) (M.size (tcPM tc))
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
-acceptor :: (Handle, HostName, PortNumber) -> InfoHash -> SupervisorChan
+acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
          -> PeerId -> MgrChannel -> ChanManageMap
          -> IO ThreadId
-acceptor (h,hn,pn) ih pool pid mgrC cmmap =
+acceptor (h,hn,pn) pool pid mgrC cmmap =
     spawn (connector >> return ())
   where ihTst k = M.member k cmmap
-        tc = case M.lookup ih cmmap of
-                Nothing -> error "Impossible"
-                Just x  -> x
         connector = do
             debugLog "Handling incoming connection"
             r <- receiveHandshake h pid ihTst
@@ -179,6 +183,9 @@ acceptor (h,hn,pn) ih pool pid mgrC cmmap =
                 Right (_caps, _rpid, ih) ->
                     do debugLog "entering peerP loop code"
                        supC <- channel -- TODO: Should be linked later on
+                       let tc = case M.lookup ih cmmap of
+                                  Nothing -> error "Impossible, I hope"
+                                  Just x  -> x
                        children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatCh tc) (tcPM tc) (M.size (tcPM tc))
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)

@@ -1,18 +1,12 @@
 -- | The DirWatcher Process runs a watcher over a directory. It will tell about any change
 --   happening inside that directory.
 module Process.DirWatcher (
-    -- * Types
-      DirWatchMsg(..)
-    -- * Channels
-    , DirWatchChan
     -- * Interface
-    , start
+    start
     )
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
-import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -24,18 +18,11 @@ import System.FilePath
 
 import Prelude hiding (log)
 import Process
+import Process.TorrentManager hiding (start)
 import Supervisor
 
-data DirWatchMsg = AddedTorrent FilePath
-                 | RemovedTorrent FilePath
-  deriving (Eq, Show)
 
-instance NFData DirWatchMsg where
-  rnf a = a `seq` ()
-
-type DirWatchChan = Channel [DirWatchMsg]
-
-data CF = CF { reportCh :: DirWatchChan
+data CF = CF { reportCh :: TorrentMgrChan -- ^ Channel for reporting directory changes
              , dirToWatch :: FilePath }
 
 type ST = S.Set FilePath
@@ -44,7 +31,7 @@ instance Logging CF where
     logName _ = "Process.DirWatcher"
 
 start :: FilePath -- ^ Path to watch
-      -> DirWatchChan -- ^ Channel to return answers on
+      -> TorrentMgrChan -- ^ Channel to return answers on
       -> SupervisorChan
       -> IO ThreadId
 start fp chan supC = do

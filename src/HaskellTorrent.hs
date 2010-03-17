@@ -5,7 +5,6 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.Monad
 
-import qualified Data.ByteString as B
 import Data.List
 
 import System.Environment
@@ -18,18 +17,13 @@ import System.Log.Logger
 import System.Log.Handler.Simple
 import System.IO as SIO
 
-import qualified Protocol.BCode as BCode
 import qualified Process.Console as Console
-import qualified Process.FS as FSP
 import qualified Process.PeerMgr as PeerMgr
-import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
 import qualified Process.ChokeMgr as ChokeMgr (start)
-import qualified Process.Status as Status
-import qualified Process.Tracker as Tracker
 import qualified Process.Listen as Listen
 import qualified Process.DirWatcher as DirWatcher (start)
-import qualified Process.TorrentManager as TorrentManager (start)
-import FS
+import qualified Process.TorrentManager as TorrentManager (start, TorrentMgrChan, TorrentManagerMsg(..))
+
 import Supervisor
 import Torrent
 import Version
@@ -87,73 +81,53 @@ setupLogging flags = do
                                 LogFile _ -> True
                                 _         -> False)
 
-setupDirWatching :: [Flag] -> IO [Child]
-setupDirWatching flags = do
+setupDirWatching :: [Flag] -> TorrentManager.TorrentMgrChan -> IO [Child]
+setupDirWatching flags watchC = do
     case dirWatchFlag flags of
         Nothing -> return []
         Just (WatchDir dir) -> do
             ex <- doesDirectoryExist dir
             if ex
-                then do watchC <- channel
-                        return [ Worker $ DirWatcher.start dir watchC
-                               , Worker $ TorrentManager.start watchC ]
+                then do return [ Worker $ DirWatcher.start dir watchC ]
                 else do putStrLn $ "Directory does not exist, not watching"
                         return []
   where dirWatchFlag = find (\e -> case e of
                                     WatchDir _ -> True
                                     _          -> False)
 
+generatePeerId :: IO PeerId
+generatePeerId = do
+    gen <- getStdGen
+    return $ mkPeerId gen
+
 download :: [Flag] -> String -> IO ()
 download flags name = do
-    torrent <- B.readFile name
-    let bcoded = BCode.decode torrent
-    case bcoded of
-      Left pe -> print pe
-      Right bc -> do
-           setupLogging flags
-           workersWatch <- setupDirWatching flags
-           debugM "Main" (show bc)
-           (handles, haveMap, pieceMap) <- openAndCheckFile bc
-           -- setup channels
-           trackerC <- channel
-           statusC  <- channel
-           waitC    <- channel
-           pieceMgrC <- channel
-           supC <- channel
-           fspC <- channel
-           statInC <- channel
-           pmC <- channel
-           chokeC <- channel
-           chokeInfoC <- channel
-           debugM "Main" "Created channels"
-           -- setup StdGen and Peer data
-           gen <- getStdGen
-           ti <- mkTorrentInfo bc
-           let pid = mkPeerId gen
-               left = bytesLeft haveMap pieceMap
-               clientState = determineState haveMap
-           -- Create main supervisor process
-           tid <- allForOne "MainSup"
-                     (workersWatch ++
-                     [ Worker $ Console.start waitC statusC
-                     , Worker $ FSP.start handles pieceMap fspC
-                     , Worker $ PeerMgr.start pmC pid (infoHash ti)
-                                    pieceMap pieceMgrC fspC chokeC statInC (pieceCount ti)
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
-                                        (PieceMgr.createPieceDb haveMap pieceMap)
-                     , Worker $ Status.start left clientState statusC statInC trackerC
-                     , Worker $ Tracker.start ti pid defaultPort statusC statInC
-                                        trackerC pmC
-                     , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
-                                    (case clientState of
-                                        Seeding -> True
-                                        Leeching -> False)
-                     , Worker $ Listen.start defaultPort pmC
-                     ]) supC
-           sync $ transmit trackerC Status.Start
-           sync $ receive waitC (const True)
-           infoM "Main" "Closing down, giving processes 10 seconds to cool off"
-           sync $ transmit supC (PleaseDie tid)
-           threadDelay $ 10*1000000
-           infoM "Main" "Done..."
-           return ()
+    setupLogging flags
+    watchC <- channel
+    workersWatch <- setupDirWatching flags watchC
+    -- setup channels
+    statusC  <- channel
+    waitC    <- channel
+    supC <- channel
+    pmC <- channel
+    chokeC <- channel
+    chokeInfoC <- channel
+    debugM "Main" "Created channels"
+    pid <- generatePeerId
+    tid <- allForOne "MainSup"
+              (workersWatch ++
+              [ Worker $ Console.start waitC statusC
+              , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC
+              , Worker $ PeerMgr.start pmC pid chokeC
+              , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
+                             False -- TODO: Fix this leeching/seeding problem
+              , Worker $ Listen.start defaultPort pmC
+              ]) supC
+    sync $ transmit watchC [TorrentManager.AddedTorrent name]
+    sync $ receive waitC (const True)
+    infoM "Main" "Closing down, giving processes 10 seconds to cool off"
+    sync $ transmit supC (PleaseDie tid)
+    threadDelay $ 10*1000000
+    infoM "Main" "Done..."
+    return ()
+

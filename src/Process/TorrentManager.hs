@@ -1,32 +1,115 @@
 -- | The Manager Process - Manages the torrents and controls them
 module Process.TorrentManager (
     -- * Types
+      TorrentManagerMsg(..)
     -- * Channels
+    , TorrentMgrChan
     -- * Interface
-    start
+    , start
     )
 where
 
 import Control.Concurrent
+import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 
+import Control.Monad.State
 import Control.Monad.Reader
 
+import qualified Data.ByteString as B
 import Prelude hiding (log)
+
+import Protocol.BCode as BCode
 import Process
-import Process.DirWatcher (DirWatchChan)
-
+import qualified Process.Status as Status
+import qualified Process.PeerMgr as PeerMgr
+import qualified Process.FS as FSP
+import qualified Process.PieceMgr as PieceMgr (start, createPieceDb, ChokeInfoChannel)
+import qualified Process.Tracker as Tracker
+import FS
 import Supervisor
+import Torrent
 
-data CF = CF { tCh :: DirWatchChan }
+data TorrentManagerMsg = AddedTorrent FilePath
+                       | RemovedTorrent FilePath
+  deriving (Eq, Show)
+
+instance NFData TorrentManagerMsg where
+  rnf a = a `seq` ()
+
+type TorrentMgrChan = Channel [TorrentManagerMsg]
+
+data CF = CF { tCh :: TorrentMgrChan
+             , tChokeInfoCh :: PieceMgr.ChokeInfoChannel
+             , tStatusCh    :: Channel Status.ST
+             , tPeerId      :: PeerId
+             , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
+             }
 
 instance Logging CF where
   logName _ = "Process.TorrentManager"
 
-start :: DirWatchChan -- ^ Channel to watch for changes to torrents
+data ST = ST { workQueue :: [TorrentManagerMsg] }
+start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
+      -> PieceMgr.ChokeInfoChannel
+      -> Channel Status.ST
+      -> PeerId
+      -> PeerMgr.PeerMgrChannel
       -> SupervisorChan
       -> IO ThreadId
-start chan supC = spawnP (CF chan) () (catchP (forever pgm) (defaultStopHandler supC))
-  where pgm = syncP =<< changeEvt
-        changeEvt =
+start chan chokeInfoC statusC pid peerC supC =
+    spawnP (CF chan chokeInfoC statusC pid peerC) (ST [])
+                (catchP (forever pgm) (defaultStopHandler supC))
+  where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
+        dirEvt =
             recvWrapPC tCh
-                (\ls -> liftIO $ print ls)
+                (\ls -> modify (\s -> s { workQueue = ls ++ workQueue s}))
+        startStop = do
+            q <- gets workQueue
+            case q of
+                [] -> return ()
+                (AddedTorrent fp : rest) -> do
+                    debugP $ "Adding torrent file: " ++ fp
+                    startTorrent fp
+                    modify (\s -> s { workQueue = rest })
+                (RemovedTorrent fp : _) -> do
+                    errorP "Removal of torrents not yet supported :P"
+                    stopP
+
+readTorrent :: FilePath -> Process CF ST BCode
+readTorrent fp = do
+    torrent <- liftIO $ B.readFile fp
+    let bcoded = BCode.decode torrent
+    case bcoded of
+      Left err -> do liftIO $ print err
+                     stopP
+      Right bc -> return bc
+
+startTorrent :: FilePath -> Process CF ST ThreadId
+startTorrent fp = do
+    bc <- readTorrent fp
+    fspC     <- liftIO channel
+    trackerC <- liftIO channel
+    supC     <- liftIO channel
+    chokeInfoC <- liftIO channel
+    statInC    <- liftIO channel
+    pieceMgrC  <- liftIO channel
+    statusC <- asks tStatusCh
+    pid     <- asks tPeerId
+    pmC     <- asks tPeerMgrCh
+    (handles, haveMap, pieceMap) <- liftIO $ openAndCheckFile bc
+    let left = bytesLeft haveMap pieceMap
+        clientState = determineState haveMap
+    ti <- liftIO $ mkTorrentInfo bc
+    tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
+                     [ Worker $ FSP.start handles pieceMap fspC
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
+                                        (PieceMgr.createPieceDb haveMap pieceMap)
+                     , Worker $ Status.start left clientState statusC statInC trackerC
+                     , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC statInC
+                                        trackerC pmC
+                     ] supC
+    syncP =<< (sendPC tPeerMgrCh $ PeerMgr.NewTorrent (infoHash ti)
+                            (PeerMgr.TorrentLocal pieceMgrC fspC statInC pieceMap ))
+    syncP =<< sendP trackerC Status.Start
+    return tid
