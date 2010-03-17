@@ -72,6 +72,7 @@ start chan chokeInfoC statusC pid peerC supC =
                     debugP $ "Adding torrent file: " ++ fp
                     startTorrent fp
                     modify (\s -> s { workQueue = rest })
+                    startStop
                 (RemovedTorrent fp : _) -> do
                     errorP "Removal of torrents not yet supported :P"
                     stopP

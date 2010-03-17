@@ -61,7 +61,7 @@ run (flags, files) = do
         then progHeader
         else case files of
                 [] -> putStrLn "No torrentfile input"
-                [name] -> progHeader >> download flags name
+                [name] -> progHeader >> download flags [name]
                 _  -> putStrLn "More than one torrent file given"
 
 progHeader :: IO ()
@@ -100,8 +100,8 @@ generatePeerId = do
     gen <- getStdGen
     return $ mkPeerId gen
 
-download :: [Flag] -> String -> IO ()
-download flags name = do
+download :: [Flag] -> [String] -> IO ()
+download flags names = do
     setupLogging flags
     watchC <- channel
     workersWatch <- setupDirWatching flags watchC
@@ -123,7 +123,7 @@ download flags name = do
                              False -- TODO: Fix this leeching/seeding problem
               , Worker $ Listen.start defaultPort pmC
               ]) supC
-    sync $ transmit watchC [TorrentManager.AddedTorrent name]
+    sync $ transmit watchC (map TorrentManager.AddedTorrent names)
     sync $ receive waitC (const True)
     infoM "Main" "Closing down, giving processes 10 seconds to cool off"
     sync $ transmit supC (PleaseDie tid)
