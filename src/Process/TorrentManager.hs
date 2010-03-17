@@ -33,7 +33,6 @@ data CF = CF { tCh :: DirWatchChan
              , tStatusCh    :: Channel Status.ST
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
-             , tManageCh    :: Channel PeerMgr.ManageMsg
              }
 
 instance Logging CF where
@@ -45,11 +44,10 @@ start :: DirWatchChan -- ^ Channel to watch for changes to torrents
       -> Channel Status.ST
       -> PeerId
       -> PeerMgr.PeerMgrChannel
-      -> Channel PeerMgr.ManageMsg
       -> SupervisorChan
       -> IO ThreadId
-start chan chokeInfoC statusC pid peerC manageC supC =
-    spawnP (CF chan chokeInfoC statusC pid peerC manageC) (ST [])
+start chan chokeInfoC statusC pid peerC supC =
+    spawnP (CF chan chokeInfoC statusC pid peerC) (ST [])
                 (catchP (forever pgm) (defaultStopHandler supC))
   where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
         dirEvt =
@@ -100,7 +98,7 @@ startTorrent fp = do
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC statInC
                                         trackerC pmC
                      ] supC
-    syncP =<< (sendPC tManageCh $ PeerMgr.NewTorrent (infoHash ti)
+    syncP =<< (sendPC tPeerMgrCh $ PeerMgr.NewTorrent (infoHash ti)
                             (PeerMgr.TorrentLocal pieceMgrC fspC statInC pieceMap ))
     syncP =<< sendP trackerC Status.Start
     return tid

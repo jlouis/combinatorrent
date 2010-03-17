@@ -5,7 +5,6 @@ module Process.PeerMgr (
    , PeerMgrMsg(..)
    , PeerMgrChannel
    , TorrentLocal(..)
-   , ManageMsg(..)
    -- * Interface
    , start
 )
@@ -38,22 +37,11 @@ import Torrent hiding (infoHash)
 
 data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
                 | NewIncoming (Handle, HostName, PortNumber)
+                | NewTorrent InfoHash TorrentLocal
+                | StopTorrent InfoHash
 
 instance NFData PeerMgrMsg where
   rnf a = a `seq` ()
-
-
-type PeerMgrChannel = Channel PeerMgrMsg
-
-data CF = CF { peerCh :: PeerMgrChannel
-             , mgrCh :: Channel MgrMessage
-             , peerPool :: SupervisorChan
-             , chokeMgrCh :: ChokeMgrChannel
-             , tmanagerCh :: Channel ManageMsg
-             }
-
-instance Logging CF where
-    logName _ = "Process.PeerMgr"
 
 data TorrentLocal = TorrentLocal
                         { tcPcMgrCh :: PieceMgrChannel
@@ -62,14 +50,21 @@ data TorrentLocal = TorrentLocal
                         , tcPM      :: PieceMap
                         }
 
+
+
+type PeerMgrChannel = Channel PeerMgrMsg
+
+data CF = CF { peerCh :: PeerMgrChannel
+             , mgrCh :: Channel MgrMessage
+             , peerPool :: SupervisorChan
+             , chokeMgrCh :: ChokeMgrChannel
+             }
+
+instance Logging CF where
+    logName _ = "Process.PeerMgr"
+
+
 type ChanManageMap = M.Map InfoHash TorrentLocal
-
-data ManageMsg = NewTorrent InfoHash TorrentLocal
-               | StopTorrent InfoHash
-
-instance NFData ManageMsg where
-    rnf a = a `seq` ()
-
 
 data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              , peers :: M.Map ThreadId (Channel PeerMessage)
@@ -78,26 +73,19 @@ data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              }
 
 start :: PeerMgrChannel -> PeerId
-      -> ChokeMgrChannel -> Channel ManageMsg -> SupervisorChan
+      -> ChokeMgrChannel -> SupervisorChan
       -> IO ThreadId
-start ch pid chokeMgrC tMgrC supC =
+start ch pid chokeMgrC supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
-       spawnP (CF ch mgrC pool chokeMgrC tMgrC)
+       spawnP (CF ch mgrC pool chokeMgrC)
               (ST [] M.empty pid cmap) (catchP (forever lp)
                                        (defaultStopHandler supC))
   where
     cmap = M.empty
-    lp = do chooseP [incomingPeers, peerEvent, manageEvt] >>= syncP
+    lp = do chooseP [incomingPeers, peerEvent] >>= syncP
             fillPeers
-    manageEvt =
-        recvWrapPC tmanagerCh (\msg ->
-            case msg of
-                NewTorrent ih tl -> do
-                    modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
-                StopTorrent ih -> do
-                    errorP "Not implemented stopping yet")
     incomingPeers =
         recvWrapPC peerCh (\msg ->
             case msg of
@@ -111,7 +99,11 @@ start ch pid chokeMgrC tMgrC supC =
                                 addIncoming conn
                                 return ()
                         else do debugP "Already too many peers, closing!"
-                                liftIO $ hClose h)
+                                liftIO $ hClose h
+                NewTorrent ih tl -> do
+                    modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
+                StopTorrent ih -> do
+                    errorP "Not implemented stopping yet")
     peerEvent =
         recvWrapPC mgrCh (\msg -> case msg of
                     Connect tid c -> newPeer tid c

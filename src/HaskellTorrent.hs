@@ -112,15 +112,13 @@ download flags name = do
     pmC <- channel
     chokeC <- channel
     chokeInfoC <- channel
-    manageC <- channel
     debugM "Main" "Created channels"
     pid <- generatePeerId
     tid <- allForOne "MainSup"
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
-              , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC manageC
-              , Worker $ PeerMgr.start pmC pid
-                             chokeC manageC
+              , Worker $ TorrentManager.start watchC chokeInfoC statusC pid pmC
+              , Worker $ PeerMgr.start pmC pid chokeC
               , Worker $ ChokeMgr.start chokeC chokeInfoC 100 -- 100 is upload rate in KB
                              False -- TODO: Fix this leeching/seeding problem
               , Worker $ Listen.start defaultPort pmC
