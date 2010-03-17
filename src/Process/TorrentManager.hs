@@ -1,14 +1,17 @@
 -- | The Manager Process - Manages the torrents and controls them
 module Process.TorrentManager (
     -- * Types
+      TorrentManagerMsg(..)
     -- * Channels
+    , TorrentMgrChan
     -- * Interface
-    start
+    , start
     )
 where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.DeepSeq
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -26,9 +29,17 @@ import qualified Process.Tracker as Tracker
 import FS
 import Supervisor
 import Torrent
-import Process.DirWatcher (DirWatchChan, DirWatchMsg(..))
 
-data CF = CF { tCh :: DirWatchChan
+data TorrentManagerMsg = AddedTorrent FilePath
+                       | RemovedTorrent FilePath
+  deriving (Eq, Show)
+
+instance NFData TorrentManagerMsg where
+  rnf a = a `seq` ()
+
+type TorrentMgrChan = Channel [TorrentManagerMsg]
+
+data CF = CF { tCh :: TorrentMgrChan
              , tChokeInfoCh :: PieceMgr.ChokeInfoChannel
              , tStatusCh    :: Channel Status.ST
              , tPeerId      :: PeerId
@@ -38,8 +49,8 @@ data CF = CF { tCh :: DirWatchChan
 instance Logging CF where
   logName _ = "Process.TorrentManager"
 
-data ST = ST { workQueue :: [DirWatchMsg] }
-start :: DirWatchChan -- ^ Channel to watch for changes to torrents
+data ST = ST { workQueue :: [TorrentManagerMsg] }
+start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
       -> PieceMgr.ChokeInfoChannel
       -> Channel Status.ST
       -> PeerId

@@ -21,8 +21,8 @@ import qualified Process.Console as Console
 import qualified Process.PeerMgr as PeerMgr
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Listen as Listen
-import qualified Process.DirWatcher as DirWatcher (start, DirWatchChan, DirWatchMsg(..))
-import qualified Process.TorrentManager as TorrentManager (start)
+import qualified Process.DirWatcher as DirWatcher (start)
+import qualified Process.TorrentManager as TorrentManager (start, TorrentMgrChan, TorrentManagerMsg(..))
 
 import Supervisor
 import Torrent
@@ -81,7 +81,7 @@ setupLogging flags = do
                                 LogFile _ -> True
                                 _         -> False)
 
-setupDirWatching :: [Flag] -> DirWatcher.DirWatchChan -> IO [Child]
+setupDirWatching :: [Flag] -> TorrentManager.TorrentMgrChan -> IO [Child]
 setupDirWatching flags watchC = do
     case dirWatchFlag flags of
         Nothing -> return []
@@ -123,7 +123,7 @@ download flags name = do
                              False -- TODO: Fix this leeching/seeding problem
               , Worker $ Listen.start defaultPort pmC
               ]) supC
-    sync $ transmit watchC [DirWatcher.AddedTorrent name]
+    sync $ transmit watchC [TorrentManager.AddedTorrent name]
     sync $ receive waitC (const True)
     infoM "Main" "Closing down, giving processes 10 seconds to cool off"
     sync $ transmit supC (PleaseDie tid)
