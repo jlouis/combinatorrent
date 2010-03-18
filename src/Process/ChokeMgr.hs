@@ -35,9 +35,10 @@ import Process.Timer as Timer
 -- DATA STRUCTURES
 ----------------------------------------------------------------------
 
-data ChokeMgrMsg = Tick
-                 | RemovePeer PeerPid
-                 | AddPeer PeerPid PeerChannel
+-- | Messages to the Choke Manager
+data ChokeMgrMsg = Tick                        -- ^ Request that we run another round
+                 | RemovePeer PeerPid          -- ^ Request that this peer is removed
+                 | AddPeer PeerPid PeerChannel -- ^ Request that this peer is added
 
 instance NFData ChokeMgrMsg where
   rnf a = a `seq` ()
@@ -51,6 +52,7 @@ data CF = CF { mgrCh :: ChokeMgrChannel
 instance Logging CF where
   logName _ = "Process.ChokeMgr"
 
+-- PeerDB described below
 type ChokeMgrProcess a = Process CF PeerDB a
 
 -- INTERFACE
@@ -98,7 +100,6 @@ start ch infoC ur weSeed supC = do
 ----------------------------------------------------------------------
 
 type PeerPid = ThreadId -- For now, should probably change
-
 
 -- | The PeerDB is the database we keep over peers. It maps all the information necessary to determine
 --   which peers are interesting to keep uploading to and which are slow. It also keeps track of how

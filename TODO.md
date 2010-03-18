@@ -80,11 +80,15 @@ Planned for the next release
    - Add support for multiple torrents at once we need to at least hack in
      these processes to make it possible:
         Global Processes:
-            PeerMgr,
-            TorrentManager
+            ChokeMgr
 
      We will have to check all the global processes to make sure they
      understand the concept of having multiple torrents at their disposal.
+
+     *ChokeMgr*: This process is not currently very good at running choking
+     in a multi-torrent setting. It has the wrong idea of what it means to
+     be seeding and what it means to be leeching. It requires some
+     rethinking in order to make it correct.
 
 
 Items for later (no particular order)
