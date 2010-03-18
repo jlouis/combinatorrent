@@ -258,7 +258,7 @@ selectPeers uploadSlots downPeers seedPeers = do
         debugP $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
         debugP $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
         return $ assertSlots (nDownSlots + nSeedSlots) (S.union downPids seedPids)
-  where assertSlots slots = assert (uploadSlots < slots)
+  where assertSlots slots = assert (uploadSlots >= slots)
 
 -- | Send a message to the peer process at PeerChannel. Message is sent asynchronously
 --   to the peer in question. If the system is really loaded, this might
