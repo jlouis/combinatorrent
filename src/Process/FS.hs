@@ -76,10 +76,3 @@ start handles pm fspC supC =
                     fh <- gets fileHandles
                     pm <- gets pieceMap
                     liftIO $ FS.writeBlock fh pn blk pm bs)
-
-checkPiece :: FSPChannel -> PieceNum -> IO (Maybe Bool)
-checkPiece fspC n = do
-    ch <- channel
-    sync . transmit fspC $ CheckPiece n ch
-    sync $ receive ch (const True)
-

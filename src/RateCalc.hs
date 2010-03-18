@@ -26,9 +26,6 @@ data Rate = Rate
 fudge :: NominalDiffTime
 fudge = fromInteger 5 -- Seconds
 
-rateUpdate :: Integer
-rateUpdate = 5 * 1000 -- Millisecs
-
 maxRatePeriod :: NominalDiffTime
 maxRatePeriod = fromInteger 20 -- Seconds
 

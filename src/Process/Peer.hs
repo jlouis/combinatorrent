@@ -63,18 +63,17 @@ peerChildren handle pMgrC pieceMgrC fsC statusC pm nPieces = do
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
-data SPCF = SPCF { spMsgCh :: Channel B.ByteString
-                 }
+data SPCF = SPCF
 
 instance Logging SPCF where
     logName _ = "Process.Peer.Sender"
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 senderP :: Handle -> Channel B.ByteString -> SupervisorChan -> IO ThreadId
-senderP h ch supC = spawnP (SPCF ch) h (catchP (foreverP pgm)
-                                                    (do t <- liftIO $ myThreadId
-                                                        syncP =<< (sendP supC $ IAmDying t)
-                                                        liftIO $ hClose h))
+senderP h ch supC = spawnP SPCF h (catchP (foreverP pgm)
+                                              (do t <- liftIO $ myThreadId
+                                                  syncP =<< (sendP supC $ IAmDying t)
+                                                  liftIO $ hClose h))
   where
     pgm :: Process SPCF Handle ()
     pgm = {-# SCC "Peer.Sender" #-} do
@@ -84,7 +83,7 @@ senderP h ch supC = spawnP (SPCF ch) h (catchP (foreverP pgm)
             Nothing -> putMsg (encodePacket KeepAlive)
             Just m  -> putMsg m
         liftIO $ hFlush h
-    defaultTimeout = 120 * 10^6
+    defaultTimeout = 120 * 1000000
     putMsg m = liftIO $ B.hPut h m
     s = sync $ receive ch (const True)
 
@@ -411,6 +410,3 @@ createPeerPieces = IS.fromList . map fromIntegral . concat . decodeBytes 0 . L.u
             in fmap dBit [0..7]
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
-
-disconnectPeer :: MgrChannel -> ThreadId -> IO ()
-disconnectPeer c t = sync $ transmit c $ Disconnect t

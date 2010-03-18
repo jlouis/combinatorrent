@@ -3,6 +3,7 @@
     cereal package.
 -}
 
+{-# LANGUAGE EmptyDataDecls #-}
 
 module Protocol.Wire
     ( Message(..)
@@ -42,7 +43,6 @@ import Torrent
 ------------------------------------------------------------
 
 type BitField    = L.ByteString
-type PieceLength = Int
 
 data Message = KeepAlive
              | Choke
@@ -71,19 +71,12 @@ instance Arbitrary Message where
                        Port <$> choose (0,16383)]
 
 
-data HandShake = HandShake 
-                  String -- Protocol Header
-                  Word64 -- Extension Bias
-
 -- | The Protocol header for the Peer Wire Protocol
 protocolHeader :: String
 protocolHeader = "BitTorrent protocol"
 
 extensionBasis :: Word64
 extensionBasis = 0
-
-extensionFast :: Word64
-extensionFast = 4
 
 p8 :: Word8 -> Put
 p8 = putWord8
@@ -192,8 +185,7 @@ headerParser ihTst = do
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid, ihR)
 
-
-data Capabilities = Fast
+data Capabilities
 decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities _ = []
 

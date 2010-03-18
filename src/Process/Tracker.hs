@@ -20,7 +20,6 @@ import Control.Monad.State
 
 import Data.Char (ord)
 import Data.List (intersperse)
-import Data.Time.Clock.POSIX
 import qualified Data.ByteString as B
 
 import Network
@@ -92,7 +91,6 @@ data ST = ST {
       , peerId :: PeerId
       , state :: TrackerEvent
       , localPort :: PortID
-      , nextContactTime :: POSIXTime
       , nextTick :: Integer
       }
 
@@ -100,8 +98,7 @@ start :: InfoHash -> TorrentInfo -> PeerId -> PortID -> Channel Status.ST
       -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
 start ih ti pid port sc statusC msgC pc supC =
-    do tm <- getPOSIXTime
-       spawnP (CF sc statusC msgC pc ih) (ST ti pid Stopped port tm 0)
+       spawnP (CF sc statusC msgC pc ih) (ST ti pid Stopped port 0)
                     (cleanupP (forever loop)
                         (defaultStopHandler supC)
                         stopEvent)
