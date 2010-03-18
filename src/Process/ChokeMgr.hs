@@ -215,28 +215,32 @@ calcUploadSlots rate Nothing | rate <= 0 = 7 -- This is just a guess
 assignUploadSlots :: Int -> [RechokeData] -> [RechokeData] -> (Int, Int)
 assignUploadSlots slots downloaderPeers seederPeers =
     -- Shuffle surplus slots around so all gets used
-    shuffleSeeders downloaderPeers seederPeers $ shuffleDownloaders
-                                                   downloaderPeers
-                                                   (downloaderSlots, seederSlots)
+    shuffleSeeders . shuffleDownloaders $ (downloaderSlots, seederSlots)
   where
     -- Calculate the slots available for the downloaders and seeders
+    --   We allocate 70% of them to leeching and 30% of the to seeding
+    --   though we assign at least one slot to both
     downloaderSlots = max 1 $ round $ fromIntegral slots * 0.7
     seederSlots     = max 1 $ round $ fromIntegral slots * 0.3
 
+    -- Calculate the amount of peers wanting to download and seed
+    numDownPeers = length downloaderPeers
+    numSeedPeers = length seederPeers
+
     -- If there is a surplus of downloader slots, then assign them to
     --  the seeder slots
-    shuffleDownloaders dPeers (dSlots, sSlots) =
-        case max 0 (dSlots - length dPeers) of
+    shuffleDownloaders (dSlots, sSlots) =
+        case max 0 (dSlots - numDownPeers) of
           0 -> (dSlots, sSlots)
           k -> (dSlots - k, sSlots + k)
 
     -- If there is a surplus of seeder slots, then assign these to
     --   the downloader slots. Limit the downloader slots to the number
     --   of downloaders, however
-    shuffleSeeders dPeers sPeers (dSlots, sSlots) =
-        case max 0 (sSlots - length sPeers) of
+    shuffleSeeders (dSlots, sSlots) =
+        case max 0 (sSlots - numSeedPeers) of
           0 -> (dSlots, sSlots)
-          k -> (min (dSlots + k) (length dPeers), sSlots - k)
+          k -> (min (dSlots + k) numDownPeers, sSlots - k)
 
 -- | @selectPeers upSlots d s@ selects peers from a list of downloader peers @d@ and a list of seeder
 --   peers @s@. The value of @upSlots@ defines the number of upload slots available
