@@ -27,7 +27,6 @@ import Prelude hiding (catch, log)
 import System.Random
 
 import PeerTypes
-import Process.PieceMgr hiding (start)
 import Process
 import Supervisor
 import Torrent hiding (infoHash)
@@ -40,15 +39,16 @@ import Process.Timer as Timer
 data ChokeMgrMsg = Tick                        -- ^ Request that we run another round
                  | RemovePeer PeerPid          -- ^ Request that this peer is removed
                  | AddPeer PeerPid PeerChannel -- ^ Request that this peer is added
+                 | PieceDone PieceNum          -- ^ Note that a given piece is done
+                 | BlockComplete PieceNum Block -- ^ Note that a block is complete (endgame)
+                 | TorrentComplete              -- ^ Note that the torrent in question is complete
 
 instance NFData ChokeMgrMsg where
   rnf a = a `seq` ()
 
 type ChokeMgrChannel = Channel ChokeMgrMsg
 
-data CF = CF { mgrCh :: ChokeMgrChannel
-             , infoCh :: ChokeInfoChannel
-             }
+data CF = CF { mgrCh :: ChokeMgrChannel }
 
 instance Logging CF where
   logName _ = "Process.ChokeMgr"
@@ -59,28 +59,26 @@ type ChokeMgrProcess a = Process CF PeerDB a
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: ChokeMgrChannel -> ChokeInfoChannel -> Int -> Bool -> SupervisorChan
+start :: ChokeMgrChannel -> Int -> Bool -> SupervisorChan
       -> IO ThreadId
-start ch infoC ur weSeed supC = do
+start ch ur weSeed supC = do
     Timer.register 10 Tick ch
-    spawnP (CF ch infoC) (initPeerDB $ calcUploadSlots ur Nothing)
+    spawnP (CF ch) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
               (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 weSeed slots M.empty []
-    pgm = {-# SCC "ChokeMgr" #-} do chooseP [mgrEvent, infoEvent] >>= syncP
+    pgm = {-# SCC "ChokeMgr" #-} mgrEvent >>= syncP
     mgrEvent =
           recvWrapPC mgrCh
-            (\msg -> case msg of
-                        Tick          -> tick
-                        RemovePeer t  -> removePeer t
-                        AddPeer t pCh -> do
+            (\msg ->
+                case msg of
+                    Tick          -> tick
+                    RemovePeer t  -> removePeer t
+                    AddPeer t pCh -> do
                             debugP $ "Adding peer " ++ show t
                             weSeed <- gets seeding
-                            addPeer pCh weSeed t)
-    infoEvent =
-          recvWrapPC infoCh
-            (\m -> case m of
+                            addPeer pCh weSeed t
                     BlockComplete pn blk -> informBlockComplete pn blk
                     PieceDone pn -> informDone pn
                     TorrentComplete -> do
@@ -202,7 +200,9 @@ calcUploadSlots rate Nothing | rate <= 0 = 7 -- This is just a guess
                              | rate <  9 = 2
                              | rate < 15 = 3
                              | rate < 42 = 4
-                             | otherwise = round . sqrt $ fromIntegral rate * 0.6
+                             | otherwise = calcRate $ fromIntegral rate
+  where calcRate :: Double -> Int
+        calcRate x = round $ sqrt (x * 0.6)
 
 -- | The call @assignUploadSlots c ds ss@ will assume that we have @c@
 --   slots for uploading at our disposal. The list @ds@ will be peers
@@ -221,8 +221,11 @@ assignUploadSlots slots downloaderPeers seederPeers =
     -- Calculate the slots available for the downloaders and seeders
     --   We allocate 70% of them to leeching and 30% of the to seeding
     --   though we assign at least one slot to both
-    downloaderSlots = max 1 $ round $ fromIntegral slots * 0.7
-    seederSlots     = max 1 $ round $ fromIntegral slots * 0.3
+    slotRound :: Double -> Double -> Int
+    slotRound slots fraction = max 1 $ round $ slots * fraction
+
+    downloaderSlots = slotRound (fromIntegral slots) 0.7
+    seederSlots     = slotRound (fromIntegral slots) 0.3
 
     -- Calculate the amount of peers wanting to download and seed
     numDownPeers = length downloaderPeers
@@ -271,12 +274,8 @@ performChokingUnchoking elected peers =
   where
     -- Partition the peers in elected and non-elected
     (electedPeers, nonElectedPeers) = partition (\rd -> S.member (fst rd) elected) peers
-    -- Choke and unchoke helpers.
-    --   If we block on the sync, it means that the process in the other end must
-    --   be dead. Thus we can just skip it. We will eventually receive this knowledge
-    --   through another channel.
     unchoke pi = unchokePeer (pChannel pi)
-    choke   pi = chokePeer (pChannel pi)
+
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first
     -- @k@ peers interested in us. The rest will either be unchoked if they are
     -- not interested (ensuring fast start should they become interested); or

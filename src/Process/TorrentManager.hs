@@ -24,7 +24,7 @@ import Process
 import qualified Process.Status as Status
 import qualified Process.PeerMgr as PeerMgr
 import qualified Process.FS as FSP
-import qualified Process.PieceMgr as PieceMgr (start, createPieceDb, ChokeInfoChannel)
+import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
 import qualified Process.Tracker as Tracker
 import FS
 import Supervisor
@@ -40,7 +40,6 @@ instance NFData TorrentManagerMsg where
 type TorrentMgrChan = Channel [TorrentManagerMsg]
 
 data CF = CF { tCh :: TorrentMgrChan
-             , tChokeInfoCh :: PieceMgr.ChokeInfoChannel
              , tStatusCh    :: Channel Status.ST
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
@@ -51,14 +50,13 @@ instance Logging CF where
 
 data ST = ST { workQueue :: [TorrentManagerMsg] }
 start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
-      -> PieceMgr.ChokeInfoChannel
       -> Channel Status.ST
       -> PeerId
       -> PeerMgr.PeerMgrChannel
       -> SupervisorChan
       -> IO ThreadId
-start chan chokeInfoC statusC pid peerC supC =
-    spawnP (CF chan chokeInfoC statusC pid peerC) (ST [])
+start chan statusC pid peerC supC =
+    spawnP (CF chan statusC pid peerC) (ST [])
                 (catchP (forever pgm) (defaultStopHandler supC))
   where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
         dirEvt =

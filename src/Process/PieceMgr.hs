@@ -1,8 +1,6 @@
 module Process.PieceMgr
     ( PieceMgrMsg(..)
     , PieceMgrChannel
-    , ChokeInfoChannel
-    , ChokeInfoMsg(..)
     , Blocks(..)
     , start
     , createPieceDb
@@ -28,6 +26,7 @@ import System.Random.Shuffle
 
 import Process.FS hiding (start)
 import Process.Status as STP hiding (start) 
+import Process.ChokeMgr (ChokeMgrMsg(..), ChokeMgrChannel)
 import Supervisor
 import Torrent
 import Process
@@ -45,13 +44,13 @@ import Process
 data PieceDB = PieceDB
     { pendingPieces :: IS.IntSet -- ^ Pieces currently pending download
     , donePiece     :: IS.IntSet -- ^ Pieces that are done
-    , donePush      :: [ChokeInfoMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
+    , donePush      :: [ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
     , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
     , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
     , infoMap       :: PieceMap   -- ^ Information about pieces
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
     , assertCount   :: Int        -- ^ When to next check the database for consistency
-    } deriving Show
+    }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
 --   we keep track of blocks which are pending as well as blocks which are done. We
@@ -96,21 +95,12 @@ instance NFData PieceMgrMsg where
               (GrabBlocks _ is _) -> rnf is
               a                   -> a `seq` ()
 
-data ChokeInfoMsg = PieceDone PieceNum
-                  | BlockComplete PieceNum Block
-                  | TorrentComplete
-    deriving (Eq, Show)
-
-instance NFData ChokeInfoMsg where
-  rnf a = a `seq` ()
-
 type PieceMgrChannel = Channel PieceMgrMsg
-type ChokeInfoChannel = Channel ChokeInfoMsg
 
 data PieceMgrCfg = PieceMgrCfg
     { pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
-    , chokeCh :: ChokeInfoChannel
+    , chokeCh :: ChokeMgrChannel
     , statusCh :: StatusChan
     }
 
@@ -119,7 +109,7 @@ instance Logging PieceMgrCfg where
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 
-start :: PieceMgrChannel -> FSPChannel -> ChokeInfoChannel -> StatusChan -> PieceDB
+start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> PieceDB
       -> SupervisorChan -> IO ThreadId
 start mgrC fspC chokeC statC db supC =
     {-# SCC "PieceMgr" #-}
@@ -129,7 +119,7 @@ start mgrC fspC chokeC statC db supC =
   where pgm = do
           assertPieceDB
           dl <- gets donePush
-          (if dl == []
+          (if null dl
               then receiveEvt
               else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
         sendEvt elem = do
