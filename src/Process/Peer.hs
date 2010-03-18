@@ -255,12 +255,16 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC supC = do
                 case msg of
                     PieceCompleted pn -> do
                         syncP =<< (sendPC outCh $ SendQMsg $ Have pn)
-                    ChokePeer -> do syncP =<< sendPC outCh SendOChoke
-                                    debugP "Choke Peer"
-                                    modify (\s -> s {weChoke = True})
-                    UnchokePeer -> do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
-                                      debugP "UnchokePeer"
-                                      modify (\s -> s {weChoke = False})
+                    ChokePeer -> do choking <- gets weChoke
+                                    when (not choking)
+                                         (do syncP =<< sendPC outCh SendOChoke
+                                             debugP "Choke Peer"
+                                             modify (\s -> s {weChoke = True}))
+                    UnchokePeer -> do choking <- gets weChoke
+                                      when choking
+                                           (do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
+                                               debugP "UnchokePeer"
+                                               modify (\s -> s {weChoke = False}))
                     PeerStats t retCh -> do
                         i <- gets peerInterested
                         ur <- gets upRate
