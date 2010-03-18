@@ -76,7 +76,7 @@ executable HaskellTorrent
     test-framework-quickcheck2,
     time
 
-  ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures
+  ghc-options: -fwarn-unused-imports -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures -fno-ignore-asserts
   if !flag(debug)
       cpp-options: "-DNDEBUG"
 

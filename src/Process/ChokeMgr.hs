@@ -17,6 +17,7 @@ import Data.Traversable as T
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
+import Control.Exception (assert)
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -246,48 +247,40 @@ assignUploadSlots slots downloaderPeers seederPeers =
 --   peers @s@. The value of @upSlots@ defines the number of upload slots available
 selectPeers :: Int -> [RechokeData] -> [RechokeData] -> ChokeMgrProcess (S.Set PeerPid)
 selectPeers uploadSlots downPeers seedPeers = do
+        -- Construct a set of downloaders (leechers) and a Set of seeders, which have the
+        --  current best rates
         let (nDownSlots, nSeedSlots) = assignUploadSlots uploadSlots downPeers seedPeers
             downPids = S.fromList $ map fst $ take nDownSlots $ sortLeech downPeers
             seedPids = S.fromList $ map fst $ take nSeedSlots $ sortSeeds seedPeers
         debugP $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
-        when (uploadSlots < nDownSlots + nSeedSlots)
-            (fail "Wrong calculation of slots")
         debugP $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
-        rm <- rateMap
-        debugP $ "Peer rates: " ++ rm
-        return $ S.union downPids seedPids
-    where
-        rateMap :: ChokeMgrProcess String
-        rateMap = do
-            pm <- gets peerMap
-            rts <- return $ map (\(pid, pi) ->
-                show pid ++ " Up: " ++ show (pUpRate pi) ++ " Down: " ++ show (pDownRate pi))
-                $ M.toList pm
-            return $ show rts
+        return $ assertSlots (nDownSlots + nSeedSlots) (S.union downPids seedPids)
+  where assertSlots slots = assert (uploadSlots < slots)
 
--- | Send a message to the peer process at PeerChannel. May raise
---   exceptions if the peer is not running anymore.
+-- | Send a message to the peer process at PeerChannel. Message is sent asynchronously
+--   to the peer in question. If the system is really loaded, this might
+--   actually fail since the order in which messages arrive might be inverted.
 msgPeer :: PeerChannel -> PeerMessage -> ChokeMgrProcess ThreadId
-msgPeer ch msg = liftIO $ spawn proc
-  where proc = sync $ transmit ch msg
+msgPeer ch = liftIO . spawn . sync . (transmit ch)
 
--- | This function carries out the choking and unchoking of peers in a round.
+-- | This function performs the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set PeerPid -> [RechokeData] -> ChokeMgrProcess ()
 performChokingUnchoking elected peers =
-    do T.mapM (unchoke . snd) unchokers
-       optChoke defaultOptimisticSlots chokers
+    do T.mapM (unchoke . snd) electedPeers
+       optChoke defaultOptimisticSlots nonElectedPeers
   where
-    -- Partition the peers based on they were selected or not
-    (unchokers, chokers) = partition (\rd -> S.member (fst rd) elected) peers
+    -- Partition the peers in elected and non-elected
+    (electedPeers, nonElectedPeers) = partition (\rd -> S.member (fst rd) elected) peers
     -- Choke and unchoke helpers.
     --   If we block on the sync, it means that the process in the other end must
     --   be dead. Thus we can just skip it. We will eventually receive this knowledge
     --   through another channel.
     unchoke pi = unchokePeer (pChannel pi)
     choke   pi = chokePeer (pChannel pi)
-    -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first @k@ interested
-    --  in us. The rest will either be unchoked if they are not interested (ensuring fast start
-    --    should they become interested); or they will be choked to avoid TCP/IP congestion.
+    -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first
+    -- @k@ peers interested in us. The rest will either be unchoked if they are
+    -- not interested (ensuring fast start should they become interested); or
+    -- they will be choked to avoid TCP/IP congestion.
     optChoke _ [] = return ()
     optChoke 0 ((_, pi) : ps) = do if pInterestedInUs pi
                                      then chokePeer (pChannel pi)
@@ -299,7 +292,7 @@ performChokingUnchoking elected peers =
     chokePeer = flip msgPeer ChokePeer
     unchokePeer = flip msgPeer UnchokePeer
 
--- | Function to split peers into those where we are seeding and those were we are leeching.
+-- | Function to split peers into those where we are seeding and those where we are leeching.
 --   also prunes the list for peers which are not interesting.
 --   TODO: Snubbed peers
 splitSeedLeech :: [RechokeData] -> ([RechokeData], [RechokeData])
