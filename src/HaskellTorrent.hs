@@ -62,8 +62,7 @@ run (flags, files) = do
         then progHeader
         else case files of
                 [] -> putStrLn "No torrentfile input"
-                [name] -> progHeader >> download flags [name]
-                _  -> putStrLn "More than one torrent file given"
+                names -> progHeader >> download flags names
 
 progHeader :: IO ()
 progHeader = putStrLn $ "This is Haskell-torrent version " ++ version ++ "\n" ++

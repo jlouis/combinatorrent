@@ -77,9 +77,6 @@ Planned for the next release
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
-   - Multi-torrent support:
-        Update the Console to do Status show messages Correctly.
-        Test Support
    - Play with the code coverage in GHC
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
