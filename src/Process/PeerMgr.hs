@@ -106,11 +106,11 @@ start ch pid chokeMgrC supC =
                     errorP "Not implemented stopping yet")
     peerEvent =
         recvWrapPC mgrCh (\msg -> case msg of
-                    Connect tid c -> newPeer tid c
+                    Connect ih tid c -> newPeer ih tid c
                     Disconnect tid -> removePeer tid)
-    newPeer tid c = do debugP $ "Adding new peer " ++ show tid
-                       sendPC chokeMgrCh (AddPeer tid c) >>= syncP
-                       modify (\s -> s { peers = M.insert tid c (peers s)})
+    newPeer ih tid c = do debugP $ "Adding new peer " ++ show tid
+                          sendPC chokeMgrCh (AddPeer ih tid c) >>= syncP
+                          modify (\s -> s { peers = M.insert tid c (peers s)})
     removePeer tid = do debugP $ "Removing peer " ++ show tid
                         sendPC chokeMgrCh (RemovePeer tid) >>= syncP
                         modify (\s -> s { peers = M.delete tid (peers s)})
@@ -162,7 +162,7 @@ connect (host, port, pid, ih) pool mgrC cmap =
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
                      children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
-                                                      (tcPM tc) (M.size (tcPM tc))
+                                                      (tcPM tc) (M.size (tcPM tc)) ih
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
@@ -187,7 +187,7 @@ acceptor (h,hn,pn) pool pid mgrC cmmap =
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
                        children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc)
-                                                        (tcStatCh tc) (tcPM tc) (M.size (tcPM tc))
+                                                        (tcStatCh tc) (tcPM tc) (M.size (tcPM tc)) ih
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"

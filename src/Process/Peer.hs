@@ -49,8 +49,9 @@ import Protocol.Wire
 ----------------------------------------------------------------------
 
 peerChildren :: Handle -> MgrChannel -> PieceMgrChannel
-             -> FSPChannel -> StatusChan -> PieceMap -> Int -> IO Children
-peerChildren handle pMgrC pieceMgrC fsC statusC pm nPieces = do
+             -> FSPChannel -> StatusChan -> PieceMap -> Int -> InfoHash
+             -> IO Children
+peerChildren handle pMgrC pieceMgrC fsC statusC pm nPieces ih = do
     queueC <- channel
     senderC <- channel
     receiverC <- channel
@@ -59,7 +60,7 @@ peerChildren handle pMgrC pieceMgrC fsC statusC pm nPieces = do
             Worker $ sendQueueP queueC senderC sendBWC,
             Worker $ receiverP handle receiverC,
             Worker $ peerP pMgrC pieceMgrC fsC pm nPieces handle
-                                queueC receiverC sendBWC statusC]
+                                queueC receiverC sendBWC statusC ih]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
@@ -219,9 +220,9 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
 
 peerP :: MgrChannel -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int -> Handle
          -> Channel SendQueueMessage -> Channel (Message, Integer) -> BandwidthChannel
-         -> StatusChan
+         -> StatusChan -> InfoHash
          -> SupervisorChan -> IO ThreadId
-peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC supC = do
+peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = do
     ch <- channel
     tch <- channel
     ct <- getCurrentTime
@@ -231,7 +232,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC supC = do
   where startup = do
             tid <- liftIO $ myThreadId
             debugP "Syncing a connectBack"
-            asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect tid ch) >>= syncP
+            asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect ih tid ch) >>= syncP
             pieces <- getPiecesDone
             syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
             -- Install the StatusP timer

@@ -103,7 +103,7 @@ startTorrent fp = do
     tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
-                                        (PieceMgr.createPieceDb haveMap pieceMap)
+                                        (PieceMgr.createPieceDb haveMap pieceMap) (infoHash ti)
                      , Worker $ Status.start left clientState statusC statInC trackerC
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC statInC
                                         trackerC pmC

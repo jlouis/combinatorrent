@@ -12,6 +12,7 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
 
+import Control.Monad.Reader
 import Control.Monad.State
 import Data.List
 import qualified Data.ByteString as B
@@ -102,6 +103,7 @@ data PieceMgrCfg = PieceMgrCfg
     , fspCh :: FSPChannel
     , chokeCh :: ChokeMgrChannel
     , statusCh :: StatusChan
+    , pMgrInfoHash :: InfoHash
     }
 
 instance Logging PieceMgrCfg where
@@ -109,11 +111,11 @@ instance Logging PieceMgrCfg where
 
 type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
 
-start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> PieceDB
+start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> PieceDB -> InfoHash
       -> SupervisorChan -> IO ThreadId
-start mgrC fspC chokeC statC db supC =
+start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
-    spawnP (PieceMgrCfg mgrC fspC chokeC statC) db
+    spawnP (PieceMgrCfg mgrC fspC chokeC statC ih) db
                     (catchP (forever pgm)
                         (defaultStopHandler supC))
   where pgm = do
@@ -175,11 +177,13 @@ start mgrC fspC chokeC statC db supC =
                                    $ IS.union inProg pend
                     syncP =<< sendP retC (not i))
         storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
-        endgameBroadcast pn blk =
+        endgameBroadcast pn blk = do
+            ih <- asks pMgrInfoHash
             gets endGaming >>=
-              flip when (modify (\db -> db { donePush = (BlockComplete pn blk) : donePush db }))
+              flip when (modify (\db -> db { donePush = (BlockComplete ih pn blk) : donePush db }))
         markDone pn = do
-            modify (\db -> db { donePush = (PieceDone pn) : donePush db })
+            ih <- asks pMgrInfoHash
+            modify (\db -> db { donePush = (PieceDone ih pn) : donePush db })
         checkPiece n = do
             ch <- liftIO channel
             syncP =<< (sendPC fspCh $ CheckPiece n ch)
@@ -206,10 +210,11 @@ checkFullCompletion :: PieceMgrProcess ()
 checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
+    ih    <- asks pMgrInfoHash
     when (M.size im == IS.size doneP)
         (do liftIO $ putStrLn "Torrent Completed"
             sendPC statusCh STP.TorrentCompleted >>= syncP
-            sendPC chokeCh  TorrentComplete >>= syncP)
+            sendPC chokeCh  (TorrentComplete ih) >>= syncP)
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again.

@@ -89,7 +89,9 @@ Planned for the next release
      in a multi-torrent setting. It has the wrong idea of what it means to
      be seeding and what it means to be leeching. It requires some
      rethinking in order to make it correct.
+
    - Play with the code coverage in GHC
+   - Propagate the seeding/leeching state to the chokeMgr for peers.
 
 
 Items for later (no particular order)

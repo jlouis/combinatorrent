@@ -32,7 +32,7 @@ instance NFData PeerMessage where
 type PeerChannel = Channel PeerMessage
 
 
-data MgrMessage = Connect ThreadId (Channel PeerMessage)
+data MgrMessage = Connect InfoHash ThreadId (Channel PeerMessage)
                 | Disconnect ThreadId
 
 instance NFData MgrMessage where
