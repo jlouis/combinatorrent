@@ -77,12 +77,13 @@ Planned for the next release
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
-   - Play with the code coverage in GHC
+   - Play with the code coverage in GHC.
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
    - Seeding has a bug. Find and eradicate.
    - The "Uploaded" status count is not reported correctly. Find and fix.
      This probably affects seeding as well.
+   - We have seen various Deaths due to wrong IP decoding. Investigate.
 
 Items for later (no particular order)
 -------------------------------------
