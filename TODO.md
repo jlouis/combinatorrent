@@ -66,7 +66,7 @@ wish-list.
    - Add support for selecting what port to use for the listen. Also add
      random port support.
    - Investigate and use the Event Library of Bryan O'Sullivan and Johan
-     Tibbel:
+     Tibell:
 
      [A Haskell event notification library - Github](http://github.com/tibbe/event)
 
@@ -77,22 +77,13 @@ Planned for the next release
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
-   - Add support for multiple torrents at once we need to at least hack in
-     these processes to make it possible:
-        Global Processes:
-            ChokeMgr
-
-     We will have to check all the global processes to make sure they
-     understand the concept of having multiple torrents at their disposal.
-
-     *ChokeMgr*: This process is not currently very good at running choking
-     in a multi-torrent setting. It has the wrong idea of what it means to
-     be seeding and what it means to be leeching. It requires some
-     rethinking in order to make it correct.
-
+   - Multi-torrent support:
+        Update the Console to do Status show messages Correctly.
+        Test Support
+   - Propagate Seeding status from Peers if we realize they are seeders.
    - Play with the code coverage in GHC
-   - Propagate the seeding/leeching state to the chokeMgr for peers.
-
+   - Should the PieceManager know about the InfoHash? We could run a version
+     without this knowledge.
 
 Items for later (no particular order)
 -------------------------------------
