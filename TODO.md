@@ -80,10 +80,12 @@ Planned for the next release
    - Multi-torrent support:
         Update the Console to do Status show messages Correctly.
         Test Support
-   - Propagate Seeding status from Peers if we realize they are seeders.
    - Play with the code coverage in GHC
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
+   - Seeding has a bug. Find and eradicate.
+   - The "Uploaded" status count is not reported correctly. Find and fix.
+     This probably affects seeding as well.
 
 Items for later (no particular order)
 -------------------------------------

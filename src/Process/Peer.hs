@@ -269,14 +269,18 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
                         i <- gets peerInterested
                         ur <- gets upRate
                         dr <- gets downRate
+                        seed <- isASeeder
                         let (up, nur) = RC.extractRate t ur
                             (down, ndr) = RC.extractRate t dr
                         infoP $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
-                        sendP retCh (up, down, i) >>= syncP
+                        sendP retCh (up, down, i, seed) >>= syncP
                         modify (\s -> s { upRate = nur , downRate = ndr })
                     CancelBlock pn blk -> do
                         modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
                         syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
+        isASeeder = do
+            pm <- asks pieceMap
+            return $ M.size pm == nPieces
         timerEvent = do
             evt <- recvPC timerCh
             wrapP evt (\() -> do

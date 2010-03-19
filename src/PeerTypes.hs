@@ -22,7 +22,8 @@ data Peer = Peer { peerHost :: HostName,
 
 data PeerMessage = ChokePeer
                  | UnchokePeer
-                 | PeerStats UTCTime (Channel (Double, Double, Bool)) -- Up/Down/Interested
+                 | PeerStats UTCTime (Channel (Double, Double, Bool, Bool))
+                            -- ^ Up/Down/Interested/Seeder
                  | PieceCompleted PieceNum
                  | CancelBlock PieceNum Block
 

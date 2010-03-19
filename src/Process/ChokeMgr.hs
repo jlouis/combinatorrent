@@ -140,9 +140,10 @@ updateDB = traversePeers gatherRate
         ignoreProcessBlock pi (gather t ch pi)
       gather t ch pi = do
         (sendP (pChannel pi) $ PeerStats t ch) >>= syncP
-        (uprt, downrt, interested) <- recvP ch (const True) >>= syncP
+        (uprt, downrt, interested, seeder) <- recvP ch (const True) >>= syncP
         let rt = PRate { pUpRate = uprt, pDownRate = downrt }
-            st = (pState pi) { pInterestedInUs = interested }
+            st = (pState pi) { pInterestedInUs = interested,
+                               pIsASeeder      = seeder }
         return $ pi { pRate = rt, pState = st }
 
 addPeer :: PeerChannel -> InfoHash -> ThreadId -> ChokeMgrProcess ()
