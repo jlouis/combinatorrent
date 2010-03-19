@@ -40,7 +40,7 @@ instance Logging CF where
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> Channel St.ST -> SupervisorChan -> IO ThreadId
+start :: Channel () -> Channel St.StatusMsg -> SupervisorChan -> IO ThreadId
 start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP
@@ -72,8 +72,10 @@ start waitC statusC supC = do
         ev <- recvP ch (==Show)
         wrapP ev
             (\_ -> do
-                st <- syncP =<< recvP statusC (const True)
-                syncP =<< sendPC wrtCh (show st))
+                ch <- liftIO $ channel
+                syncP =<< sendP statusC (St.RequestAllTorrents ch)
+                sts <- syncP =<< recvP ch (const True)
+                syncP =<< sendPC wrtCh (show sts))
 
 helpMessage :: String
 helpMessage = concat

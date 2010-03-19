@@ -156,7 +156,10 @@ start mgrC fspC chokeC statC db ih supC =
                                     (\pm -> case M.lookup pn pm of
                                                     Nothing -> fail "Storeblock: M.lookup"
                                                     Just x -> return $ len x)
-                               sendPC statusCh (CompletedPiece l) >>= syncP
+                               ih <- asks pMgrInfoHash
+                               debugP "Sending to StatusP a completePiece"
+                               sendPC statusCh (CompletedPiece ih l) >>= syncP
+                               debugP "Completing Send Done"
                                pieceOk <- checkPiece pn
                                case pieceOk of
                                  Nothing ->
@@ -213,7 +216,8 @@ checkFullCompletion = do
     ih    <- asks pMgrInfoHash
     when (M.size im == IS.size doneP)
         (do liftIO $ putStrLn "Torrent Completed"
-            sendPC statusCh STP.TorrentCompleted >>= syncP
+            ih <- asks pMgrInfoHash
+            sendPC statusCh (STP.TorrentCompleted ih) >>= syncP
             sendPC chokeCh  (TorrentComplete ih) >>= syncP)
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete

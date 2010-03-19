@@ -75,8 +75,7 @@ failTimerInterval = 15 * 60
 
 -- | Configuration of the tracker process
 data CF = CF {
-        statusCh :: Channel Status.ST
-      , statusPCh :: Channel Status.StatusMsg
+        statusPCh :: Channel Status.StatusMsg
       , trackerMsgCh :: Channel Status.TrackerMsg
       , peerMgrCh :: PeerMgr.PeerMgrChannel
       , cfInfoHash :: InfoHash
@@ -94,11 +93,11 @@ data ST = ST {
       , nextTick :: Integer
       }
 
-start :: InfoHash -> TorrentInfo -> PeerId -> PortID -> Channel Status.ST
+start :: InfoHash -> TorrentInfo -> PeerId -> PortID
       -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
-start ih ti pid port sc statusC msgC pc supC =
-       spawnP (CF sc statusC msgC pc ih) (ST ti pid Stopped port 0)
+start ih ti pid port statusC msgC pc supC =
+       spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
                     (cleanupP (forever loop)
                         (defaultStopHandler supC)
                         stopEvent)
@@ -137,7 +136,10 @@ eventTransition = do
 -- | Poke the tracker. It returns the new timer intervals to use
 pokeTracker :: Process CF ST (Integer, Maybe Integer)
 pokeTracker = do
-    upDownLeft <- syncP =<< recvPC statusCh
+    ch <- liftIO $ channel
+    ih <- asks cfInfoHash
+    syncP =<< sendPC statusPCh (Status.RequestStatus ih ch)
+    upDownLeft <- syncP =<< recvP ch (const True)
     url <- buildRequestURL upDownLeft
     debugP $ "Request URL: " ++ url
     uri <- case parseURI url of
@@ -158,8 +160,10 @@ pokeTracker = do
                        return (failTimerInterval, Just failTimerInterval)
         Right bc -> do ih <- asks cfInfoHash
                        sendPC peerMgrCh (PeerMgr.PeersFromTracker ih $ newPeers bc) >>= syncP
-                       let trackerStats = Status.TrackerStat { Status.trackComplete = completeR bc,
-                                                               Status.trackIncomplete = incompleteR bc }
+                       let trackerStats = Status.TrackerStat
+                            { Status.trackInfoHash = ih
+                            , Status.trackComplete = completeR bc
+                            , Status.trackIncomplete = incompleteR bc }
                        sendPC statusPCh trackerStats  >>= syncP
                        eventTransition
                        return (timeoutInterval bc, timeoutMinInterval bc)
@@ -230,7 +234,7 @@ trackerRequest uri =
                            rqBody = ""}
 
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
-buildRequestURL :: Status.ST -> Process CF ST String
+buildRequestURL :: Status.StatusState -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
                         hdrs <- headers
                         let hl = concat $ hlist hdrs

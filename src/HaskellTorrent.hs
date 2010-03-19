@@ -22,6 +22,7 @@ import qualified Process.PeerMgr as PeerMgr
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Listen as Listen
 import qualified Process.DirWatcher as DirWatcher (start)
+import qualified Process.Status as Status (start)
 import qualified Process.TorrentManager as TorrentManager (start, TorrentMgrChan, TorrentManagerMsg(..))
 
 import Supervisor
@@ -117,6 +118,7 @@ download flags names = do
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
               , Worker $ TorrentManager.start watchC statusC pid pmC
+              , Worker $ Status.start statusC
               , Worker $ PeerMgr.start pmC pid chokeC
               , Worker $ ChokeMgr.start chokeC 100 -- 100 is upload rate in KB
                              False -- TODO: Fix this leeching/seeding problem

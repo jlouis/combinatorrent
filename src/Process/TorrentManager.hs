@@ -40,7 +40,7 @@ instance NFData TorrentManagerMsg where
 type TorrentMgrChan = Channel [TorrentManagerMsg]
 
 data CF = CF { tCh :: TorrentMgrChan
-             , tStatusCh    :: Channel Status.ST
+             , tStatusCh    :: Channel Status.StatusMsg
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
              }
@@ -50,7 +50,7 @@ instance Logging CF where
 
 data ST = ST { workQueue :: [TorrentManagerMsg] }
 start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
-      -> Channel Status.ST
+      -> Channel Status.StatusMsg
       -> PeerId
       -> PeerMgr.PeerMgrChannel
       -> SupervisorChan
@@ -91,24 +91,21 @@ startTorrent fp = do
     trackerC <- liftIO channel
     supC     <- liftIO channel
     chokeInfoC <- liftIO channel
-    statInC    <- liftIO channel
     pieceMgrC  <- liftIO channel
     statusC <- asks tStatusCh
     pid     <- asks tPeerId
     pmC     <- asks tPeerMgrCh
     (handles, haveMap, pieceMap) <- liftIO $ openAndCheckFile bc
     let left = bytesLeft haveMap pieceMap
-        clientState = determineState haveMap
     ti <- liftIO $ mkTorrentInfo bc
     tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statInC
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statusC
                                         (PieceMgr.createPieceDb haveMap pieceMap) (infoHash ti)
-                     , Worker $ Status.start left clientState statusC statInC trackerC
-                     , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC statInC
-                                        trackerC pmC
+                     , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC trackerC pmC
                      ] supC
+    syncP =<< (sendP statusC $ Status.InsertTorrent (infoHash ti) left trackerC)
     syncP =<< (sendPC tPeerMgrCh $ PeerMgr.NewTorrent (infoHash ti)
-                            (PeerMgr.TorrentLocal pieceMgrC fspC statInC pieceMap ))
+                            (PeerMgr.TorrentLocal pieceMgrC fspC statusC pieceMap ))
     syncP =<< sendP trackerC Status.Start
     return tid

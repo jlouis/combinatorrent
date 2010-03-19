@@ -4,6 +4,7 @@
 --   information about data uploaded, downloaded and how much is
 --   left. The tracker is then responsible for using this data
 --   correctly to tell the tracker what to do
+{-# LANGUAGE FlexibleInstances #-}
 module Process.Status (
     -- * Types
       StatusMsg(..)
@@ -11,7 +12,7 @@ module Process.Status (
     -- * Channels
     , StatusChan
     -- * State
-    , ST(uploaded, downloaded, state, left)
+    , StatusState(uploaded, downloaded, left)
     -- * Interface
     , start
     )
@@ -23,17 +24,25 @@ import Control.DeepSeq
 
 import Control.Monad.State
 
+import qualified Data.Map as M
+
 import Prelude hiding (log)
 import Process
 import Supervisor
 import Torrent
 
-data StatusMsg = TrackerStat { trackIncomplete :: Maybe Integer
+data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
+                             , trackIncomplete :: Maybe Integer
                              , trackComplete   :: Maybe Integer }
-               | CompletedPiece Integer
-               | PeerStat { peerUploaded :: Integer
+               | CompletedPiece InfoHash Integer
+               | InsertTorrent InfoHash Integer (Channel TrackerMsg)
+               | RemoveTorrent InfoHash
+               | PeerStat { peerInfoHash :: InfoHash
+                          , peerUploaded :: Integer
                           , peerDownloaded :: Integer }
-               | TorrentCompleted
+               | TorrentCompleted InfoHash
+               | RequestStatus InfoHash (Channel StatusState)
+               | RequestAllTorrents (Channel [(InfoHash, StatusState)])
 
 instance NFData StatusMsg where
   rnf a = a `seq` ()
@@ -46,51 +55,77 @@ data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 instance NFData TrackerMsg where
    rnf a = a `seq` ()
 
-data CF  = CF { statusCh :: Channel StatusMsg
-              , trackerCh1 :: Channel TrackerMsg
-              , trackerCh :: Channel ST }
+data CF  = CF { statusCh :: Channel StatusMsg }
 
 instance Logging CF where
     logName _ = "Process.Status"
 
-data ST = ST { uploaded :: Integer,
-               downloaded :: Integer,
-               left :: Integer,
-               incomplete :: Maybe Integer,
-               complete :: Maybe Integer,
-               state :: TorrentState }
-    deriving Show
+type ST = M.Map InfoHash StatusState
 
-instance NFData ST where
+data StatusState = SState
+             { uploaded :: Integer
+             , downloaded :: Integer
+             , left :: Integer
+             , incomplete :: Maybe Integer
+             , complete :: Maybe Integer
+             , state :: TorrentState
+             , trackerMsgCh :: Channel TrackerMsg
+             }
+
+instance Show StatusState where
+    show (SState up down left inc comp st _) = concat
+        ["{ Uploaded:   " ++ show up ++ "\n"
+        ,"  Downloaded: " ++ show down ++ "\n"
+        ,"  Left:       " ++ show left ++ "\n"
+        ,"  State:      " ++ show st ++ "\n"
+        ,"  Complete:   " ++ show comp ++ "\n"
+        ,"  Incomplete: " ++ show inc ++ " }"]
+
+instance NFData StatusState where
+  rnf a = a `seq` ()
+
+instance NFData (Channel StatusState) where
   rnf a = a `seq` ()
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Integer -> TorrentState -> Channel ST
-      -> Channel StatusMsg -> Channel TrackerMsg -> SupervisorChan -> IO ThreadId
-start l tState trackerC statusC trackerC1 supC = do
-    spawnP (CF statusC trackerC1 trackerC) (ST 0 0 l Nothing Nothing tState)
+start :: Channel StatusMsg -> SupervisorChan -> IO ThreadId
+start statusC supC = do
+    spawnP (CF statusC) M.empty
         (catchP (foreverP pgm) (defaultStopHandler supC))
   where
-    pgm = {-# SCC "StatusP" #-} syncP =<< chooseP [sendEvent, recvEvent]
-    sendEvent = get >>= sendPC trackerCh
+    newMap left trackerMsgC =
+        SState 0 0 left Nothing Nothing (if left == 0 then Seeding else Leeching) trackerMsgC
+    pgm = {-# SCC "StatusP" #-} syncP =<< recvEvent
+    recvEvent :: Process CF ST (Event ((), ST))
     recvEvent = do evt <- recvPC statusCh
                    wrapP evt (\m ->
                     case m of
-                        TrackerStat ic c ->
-                           modify (\s -> s { incomplete = ic, complete = c })
-                        CompletedPiece bytes -> do
-                            debugP "StatusProcess updated left"
-                            modify (\s -> s { left = (left s) - bytes })
-                        PeerStat up down -> do
-                           modify (\s -> s { uploaded = (uploaded s) + up,
-                                             downloaded = (downloaded s) + down })
-                           u <- gets uploaded
-                           d <- gets downloaded
-                           debugP $ "StatusProcess up/down count: " ++ show u ++ ", " ++ show d
-                        TorrentCompleted -> do
-                           debugP "TorrentCompletion at StatusP"
-                           l <- gets left
-                           when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
-                           syncP =<< sendPC trackerCh1 Complete
-                           modify (\s -> s { state = Seeding }))
+                        TrackerStat ih ic c -> do
+                            modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
+                        CompletedPiece ih bytes -> do
+                            modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
+                        PeerStat ih up down -> do
+                           modify (\s -> M.adjust (\st -> st { uploaded = (uploaded st) + up
+                                                             , downloaded = (downloaded st) + down }) ih
+                                                  s)
+                        InsertTorrent ih left trackerMsgC ->
+                            modify (\s -> M.insert ih (newMap left trackerMsgC) s)
+                        RemoveTorrent ih -> modify (\s -> M.delete ih s)
+                        RequestStatus ih retC -> do
+                            s <- get
+                            case M.lookup ih s of
+                                Nothing -> fail "Unknown InfoHash"
+                                Just st -> sendP retC st >>= syncP
+                        RequestAllTorrents retC -> do
+                            s <- get
+                            sendP retC (M.toList s) >>= syncP
+                        TorrentCompleted ih -> do
+                            mp <- get
+                            let q = M.lookup ih mp
+                            ns  <- maybe (fail "Unknown Torrent") return q
+                            let l = left ns
+                            -- TODO: This is an assertion
+                            when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
+                            syncP =<< sendP (trackerMsgCh ns) Complete
+                            modify (\s -> M.insert ih (ns { state = Seeding}) s))
