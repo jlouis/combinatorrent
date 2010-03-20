@@ -20,6 +20,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Exception (assert)
 import Control.DeepSeq
 
 import Control.Monad.State
@@ -124,8 +125,6 @@ start statusC supC = do
                             mp <- get
                             let q = M.lookup ih mp
                             ns  <- maybe (fail "Unknown Torrent") return q
-                            let l = left ns
-                            -- TODO: This is an assertion
-                            when (l /= 0) (fail "Warning: Left is not 0 upon Torrent Completion")
+                            let l = assert (l /= 0) (left ns)
                             syncP =<< sendP (trackerMsgCh ns) Complete
                             modify (\s -> M.insert ih (ns { state = Seeding}) s))
