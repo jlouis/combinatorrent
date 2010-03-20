@@ -20,13 +20,16 @@ where
 
 import Control.DeepSeq
 import qualified Data.IntSet as IS
+import Data.List (nub)
+import Data.Word
 import Prelude hiding (null)
 
---import Test.QuickCheck
+import Test.QuickCheck
 import Test.Framework
---import Test.Framework.Providers.QuickCheck2
---import Test.Framework.Providers.HUnit
---import Test.HUnit hiding (Path, Test)
+import Test.Framework.Providers.QuickCheck2
+import Test.Framework.Providers.HUnit
+import Test.HUnit hiding (Path, Test)
+import TestInstance() -- Pull arbitraries
 
 data PieceSet = PSet { unPSet :: IS.IntSet
                      , unSz   :: Int }
@@ -77,5 +80,24 @@ elems = toList
 
 testSuite :: Test
 testSuite = testGroup "Data/PieceSet"
-    []
+    [ testCase "New/Size" testNewSize
+    , testProperty "Build" testBuild
+    , testProperty "Full"  testFull
+    ]
 
+testNewSize :: Assertion
+testNewSize = do
+    assertEqual "For a new PieceSet" (size (new 1337)) 0
+
+testFull :: Positive Word8 -> Bool
+testFull positive =
+    let maxElem = fromIntegral positive
+        pieceSet = foldl (flip insert) (new maxElem) [0..maxElem-1]
+    in all (flip member pieceSet) [0..maxElem-1]
+
+testBuild :: [Positive Int] -> Bool
+testBuild []        = True
+testBuild positives =
+    let m = fromIntegral $ maximum positives
+        nubbed = nub positives
+    in length nubbed == size (fromList m $ map fromIntegral nubbed)
