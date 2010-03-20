@@ -279,8 +279,8 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
                         modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
                         syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
         isASeeder = do
-            pm <- asks pieceMap
-            return $ M.size pm == nPieces
+            pps <- gets peerPieces
+            return $ PS.size pps == nPieces
         timerEvent = do
             evt <- recvPC timerCh
             wrapP evt (\() -> do
