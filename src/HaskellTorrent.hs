@@ -116,7 +116,7 @@ download flags names = do
     tid <- allForOne "MainSup"
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
-              , Worker $ TorrentManager.start watchC statusC pid pmC
+              , Worker $ TorrentManager.start watchC statusC chokeC pid pmC
               , Worker $ Status.start statusC
               , Worker $ PeerMgr.start pmC pid chokeC
               , Worker $ ChokeMgr.start chokeC 100 -- 100 is upload rate in KB

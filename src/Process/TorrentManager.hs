@@ -25,6 +25,7 @@ import qualified Process.Status as Status
 import qualified Process.PeerMgr as PeerMgr
 import qualified Process.FS as FSP
 import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
+import qualified Process.ChokeMgr as ChokeMgr (ChokeMgrChannel)
 import qualified Process.Tracker as Tracker
 import FS
 import Supervisor
@@ -43,6 +44,7 @@ data CF = CF { tCh :: TorrentMgrChan
              , tStatusCh    :: Channel Status.StatusMsg
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
+             , tChokeCh     :: ChokeMgr.ChokeMgrChannel
              }
 
 instance Logging CF where
@@ -51,12 +53,13 @@ instance Logging CF where
 data ST = ST { workQueue :: [TorrentManagerMsg] }
 start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
       -> Channel Status.StatusMsg
+      -> ChokeMgr.ChokeMgrChannel
       -> PeerId
       -> PeerMgr.PeerMgrChannel
       -> SupervisorChan
       -> IO ThreadId
-start chan statusC pid peerC supC =
-    spawnP (CF chan statusC pid peerC) (ST [])
+start chan statusC chokeC pid peerC supC =
+    spawnP (CF chan statusC pid peerC chokeC) (ST [])
                 (catchP (forever pgm) (defaultStopHandler supC))
   where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
         dirEvt =
@@ -90,8 +93,8 @@ startTorrent fp = do
     fspC     <- liftIO channel
     trackerC <- liftIO channel
     supC     <- liftIO channel
-    chokeInfoC <- liftIO channel
     pieceMgrC  <- liftIO channel
+    chokeC  <- asks tChokeCh
     statusC <- asks tStatusCh
     pid     <- asks tPeerId
     pmC     <- asks tPeerMgrCh
@@ -100,7 +103,7 @@ startTorrent fp = do
     ti <- liftIO $ mkTorrentInfo bc
     tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeInfoC statusC
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeC statusC
                                         (PieceMgr.createPieceDb haveMap pieceMap) (infoHash ti)
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC trackerC pmC
                      ] supC
