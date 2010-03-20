@@ -18,7 +18,7 @@ import Data.List
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.IntSet as IS
+import qualified Data.PieceSet as PS
 
 import Prelude hiding (log)
 
@@ -43,8 +43,8 @@ import Process
 --   Better implementations for selecting among the pending Pieces is probably crucial
 --   to an effective client, but we keep it simple for now.
 data PieceDB = PieceDB
-    { pendingPieces :: IS.IntSet -- ^ Pieces currently pending download
-    , donePiece     :: IS.IntSet -- ^ Pieces that are done
+    { pendingPieces :: PS.PieceSet -- ^ Pieces currently pending download
+    , donePiece     :: PS.PieceSet -- ^ Pieces that are done
     , donePush      :: [ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
     , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
     , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
@@ -80,13 +80,13 @@ instance NFData Blocks where
   rnf a = a `seq` ()
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int IS.IntSet (Channel Blocks)
+data PieceMgrMsg = GrabBlocks Int PS.PieceSet (Channel Blocks)
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | AskInterested IS.IntSet (Channel Bool)
+                 | AskInterested PS.PieceSet (Channel Bool)
                    -- ^ Ask if any of these pieces are interesting
                  | GetDone (Channel [PieceNum])
                    -- ^ Get the pieces which are already done
@@ -150,7 +150,7 @@ start mgrC fspC chokeC statC db ih supC =
                                iprog <- gets inProgress
                                infoP $ "Piece #" ++ show pn
                                          ++ " completed, there are " 
-                                         ++ (show $ IS.size pend) ++ " pending "
+                                         ++ (show $ PS.size pend) ++ " pending "
                                          ++ (show $ M.size iprog) ++ " in progress"
                                l <- gets infoMap >>=
                                     (\pm -> case M.lookup pn pm of
@@ -170,14 +170,14 @@ start mgrC fspC chokeC statC db ih supC =
                                  Just False -> putbackPiece pn)
                 PutbackBlocks blks ->
                     mapM_ putbackBlock blks
-                GetDone c -> do done <- liftM IS.toList $ gets donePiece
+                GetDone c -> do done <- liftM PS.toList $ gets donePiece
                                 syncP =<< sendP c done
                 AskInterested pieces retC -> do
-                    inProg <- liftM (IS.fromList . M.keys) $ gets inProgress
+                    inProg <- liftM (PS.fromList . M.keys) $ gets inProgress
                     pend   <- gets pendingPieces
                     -- @i@ is the intersection with with we need and the peer has.
-                    let i = IS.null $ IS.intersection pieces
-                                   $ IS.union inProg pend
+                    let i = PS.null $ PS.intersection pieces
+                                   $ PS.union inProg pend
                     syncP =<< sendP retC (not i))
         storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
         endgameBroadcast pn blk = do
@@ -199,14 +199,14 @@ createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
 createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False 0
   where pending = filt (==False)
         done    = filt (==True)
-        filt f  = IS.fromList . M.keys $ M.filter f mmap
+        filt f  = PS.fromList . M.keys $ M.filter f mmap
 
 ----------------------------------------------------------------------
 
 -- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
 completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
-                                       donePiece  = IS.insert pn $ donePiece db })
+                                       donePiece  = PS.insert pn $ donePiece db })
 
 -- | Handle torrent completion
 checkFullCompletion :: PieceMgrProcess ()
@@ -214,7 +214,7 @@ checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
     ih    <- asks pMgrInfoHash
-    when (M.size im == IS.size doneP)
+    when (M.size im == PS.size doneP)
         (do liftIO $ putStrLn "Torrent Completed"
             ih <- asks pMgrInfoHash
             sendPC statusCh (STP.TorrentCompleted ih) >>= syncP
@@ -224,14 +224,14 @@ checkFullCompletion = do
 --   and put it back into the download queue again.
 putbackPiece :: PieceNum -> PieceMgrProcess ()
 putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
-                                      pendingPieces = IS.insert pn $ pendingPieces db })
+                                      pendingPieces = PS.insert pn $ pendingPieces db })
 
 -- | Put back a block for downloading.
 --   TODO: This is rather slow, due to the (\\) call, but hopefully happens rarely.
 putbackBlock :: (PieceNum, Block) -> PieceMgrProcess ()
 putbackBlock (pn, blk) = do
     done <- gets donePiece
-    unless (IS.member pn done) -- Happens at endgame, stray block
+    unless (PS.member pn done) -- Happens at endgame, stray block
       $ modify (\db -> db { inProgress = ndb (inProgress db)
                           , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
@@ -303,11 +303,11 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
 --   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
 --   db with these blocks removed.
-grabBlocks' :: Int -> IS.IntSet -> PieceMgrProcess Blocks
+grabBlocks' :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
 grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     blocks <- tryGrabProgress k eligible []
     pend <- gets pendingPieces
-    if blocks == [] && IS.null pend
+    if blocks == [] && PS.null pend
         then do blks <- grabEndGame k eligible
                 modify (\db -> db { endGaming = True })
                 debugP $ "PieceMgr entered endgame."
@@ -320,10 +320,10 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     tryGrabProgress 0 _  captured = return captured
     tryGrabProgress n ps captured = do
         inProg <- gets inProgress
-        let is = IS.intersection ps (IS.fromList $ M.keys inProg)
-        case IS.null is of
+        let is = PS.intersection ps (PS.fromList $ M.keys inProg)
+        case PS.null is of
             True -> tryGrabPending n ps captured
-            False -> grabFromProgress n ps (head $ IS.elems is) captured
+            False -> grabFromProgress n ps (head $ PS.elems is) captured
     -- The Piece @p@ was found, grab it
     grabFromProgress n ps p captured = do
         inprog <- gets inProgress
@@ -335,27 +335,27 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         -- This rather ugly piece of code should be substituted with something better
         if grabbed == []
              -- All pieces are taken, try the next one.
-             then tryGrabProgress n (IS.delete p ps) captured
+             then tryGrabProgress n (PS.delete p ps) captured
              else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
                      tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
     -- Try grabbing pieces from the pending blocks
     tryGrabPending n ps captured = do
         pending <- gets pendingPieces
-        let isn = IS.intersection ps pending
-        case IS.null isn of
+        let isn = PS.intersection ps pending
+        case PS.null isn of
             True -> return $ captured -- No (more) pieces to download, return
             False -> do
-              h <- pickRandom (IS.toList isn)
+              h <- pickRandom (PS.toList isn)
               infMap <- gets infoMap
               inProg <- gets inProgress
               blockList <- createBlock h
               let sz  = length blockList
                   ipp = InProgressPiece sz S.empty blockList
-              modify (\db -> db { pendingPieces = IS.delete h (pendingPieces db),
+              modify (\db -> db { pendingPieces = PS.delete h (pendingPieces db),
                                   inProgress    = M.insert h ipp inProg })
               tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
-        dls <- liftM (filter (\(p, _) -> IS.member p ps)) $ gets downloading
+        dls <- liftM (filter (\(p, _) -> PS.member p ps)) $ gets downloading
         g <- liftIO newStdGen
         let shuffled = shuffle' dls (length dls) g
         return $ take n shuffled
@@ -390,22 +390,22 @@ assertPieceDB = {-# SCC "assertPieceDB" #-} do
     assertSets = do
         pending <- gets pendingPieces
         done    <- gets donePiece
-        down    <- liftM (IS.fromList . map fst) $ gets downloading
-        iprog   <- liftM (IS.fromList . M.keys) $ gets inProgress
-        let pdis = IS.intersection pending done
-            pdownis = IS.intersection pending down
-            piprogis = IS.intersection pending iprog
-            doneprogis = IS.intersection done iprog
-            donedownis = IS.intersection done down
-        unless (IS.null pdis)
+        down    <- liftM (PS.fromList . map fst) $ gets downloading
+        iprog   <- liftM (PS.fromList . M.keys) $ gets inProgress
+        let pdis = PS.intersection pending done
+            pdownis = PS.intersection pending down
+            piprogis = PS.intersection pending iprog
+            doneprogis = PS.intersection done iprog
+            donedownis = PS.intersection done down
+        unless (PS.null pdis)
             (fail $ "Pending/Done violation of pieces: " ++ show pdis)
-        unless (IS.null pdownis)
+        unless (PS.null pdownis)
             (fail $ "Pending/Downloading violation of pieces: " ++ show pdownis)
-        unless (IS.null piprogis)
+        unless (PS.null piprogis)
             (fail $ "Pending/InProgress violation of pieces: " ++ show piprogis)
-        unless (IS.null doneprogis)
+        unless (PS.null doneprogis)
             (fail $ "Done/InProgress violation of pieces: " ++ show doneprogis)
-        unless (IS.null donedownis)
+        unless (PS.null donedownis)
             (fail $ "Done/Downloading violation of pieces: " ++ show donedownis)
 
     -- If a piece is in Progress, we have:

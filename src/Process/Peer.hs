@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Serialize.Get as G
 
 import qualified Data.Map as M
-import qualified Data.IntSet as IS
+import qualified Data.PieceSet as PS
 import Data.Maybe
 
 import Data.Set as S hiding (map)
@@ -212,7 +212,7 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
                , blockQueue :: S.Set (PieceNum, Block) -- ^ Blocks queued at the peer
                , peerChoke :: Bool -- ^ Is the peer choking us? True if yes
                , peerInterested :: Bool -- ^ True if the peer is interested
-               , peerPieces :: IS.IntSet -- ^ List of pieces the peer has access to
+               , peerPieces :: PS.PieceSet -- ^ List of pieces the peer has access to
                , upRate :: Rate -- ^ Upload rate towards the peer (estimated)
                , downRate :: Rate -- ^ Download rate from the peer (estimated)
                , runningEndgame :: Bool -- ^ True if we are in endgame
@@ -227,7 +227,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
     tch <- channel
     ct <- getCurrentTime
     spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch statC pm)
-           (PST True False S.empty True False IS.empty (RC.new ct) (RC.new ct) False)
+           (PST True False S.empty True False (PS.new nPieces) (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
             tid <- liftIO $ myThreadId
@@ -327,13 +327,13 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         haveMsg pn = do
             pm <- asks pieceMap
             if M.member pn pm
-                then do modify (\s -> s { peerPieces = IS.insert pn $ peerPieces s})
+                then do modify (\s -> s { peerPieces = PS.insert pn $ peerPieces s})
                         considerInterest
                 else do warningP "Unknown Piece"
                         stopP
         bitfieldMsg bf = do
             pieces <- gets peerPieces
-            if IS.null pieces
+            if PS.null pieces
                 -- TODO: Don't trust the bitfield
                 then do modify (\s -> s { peerPieces = createPeerPieces bf})
                         considerInterest
@@ -406,8 +406,8 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         endgameLoMark = 1
         hiMark = 15 -- These three values are chosen rather arbitrarily at the moment.
 
-createPeerPieces :: L.ByteString -> IS.IntSet
-createPeerPieces = IS.fromList . map fromIntegral . concat . decodeBytes 0 . L.unpack
+createPeerPieces :: L.ByteString -> PS.PieceSet
+createPeerPieces = PS.fromList . map fromIntegral . concat . decodeBytes 0 . L.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]
         decodeByte soFar w =
             let dBit n = if testBit w (7-n)
