@@ -100,7 +100,8 @@ data Block = Block { blockOffset :: Int        -- ^ offset of this block within 
                    } deriving (Eq, Ord, Show)
 
 instance Arbitrary Block where
-  arbitrary = Block <$> arbitrary <*> arbitrary
+  arbitrary = Block <$> pos <*> pos
+    where pos = choose (0, 4294967296 - 1)
 
 
 defaultBlockSize :: BlockSize

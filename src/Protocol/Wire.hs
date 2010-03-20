@@ -63,12 +63,15 @@ instance NFData Message where
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
                        return NotInterested,
-                       Have <$> arbitrary,
+                       Have <$> pos,
                        BitField <$> arbitrary,
-                       Request <$> arbitrary <*> arbitrary,
-                       Piece <$> arbitrary <*> arbitrary <*> arbitrary,
-                       Cancel <$> arbitrary <*> arbitrary,
+                       Request <$> pos <*> arbitrary,
+                       Piece <$> pos <*> pos <*> arbitrary,
+                       Cancel <$> pos <*> arbitrary,
                        Port <$> choose (0,16383)]
+        where
+            pos :: Gen Int
+            pos = choose (0, 4294967296 - 1)
 
 
 -- | The Protocol header for the Peer Wire Protocol

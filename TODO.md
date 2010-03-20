@@ -69,6 +69,7 @@ wish-list.
      Tibell:
 
      [A Haskell event notification library - Github](http://github.com/tibbe/event)
+   - Be explicit and use Word32 in the Wire Protocol.
 
 Planned for the next release
 ----------------------------
