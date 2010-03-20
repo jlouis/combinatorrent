@@ -325,7 +325,7 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         let is = PS.intersection ps (PS.fromList nPieces $ M.keys inProg)
         case PS.null is of
             True -> tryGrabPending n ps captured
-            False -> grabFromProgress n ps (head $ PS.elems is) captured
+            False -> grabFromProgress n ps (head $ PS.toList is) captured
     -- The Piece @p@ was found, grab it
     grabFromProgress n ps p captured = do
         inprog <- gets inProgress

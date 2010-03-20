@@ -12,7 +12,6 @@ module Data.PieceSet
     , member
     , fromList
     , toList
-    , elems
     -- * Tests
     , testSuite
     )
@@ -31,50 +30,49 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path, Test)
 import TestInstance() -- Pull arbitraries
 
-data PieceSet = PSet { unPSet :: IS.IntSet
-                     , unSz   :: Int }
+data PieceSet = PSet { unPSet :: !IS.IntSet
+                     , unSz   :: !Int }
   deriving Show
 
 instance NFData PieceSet where
     rnf (PSet is _) = rnf is
 
 new :: Int -> PieceSet
-new n = PSet IS.empty n
+new n = {-# SCC "Data.PieceSet/new" #-} PSet IS.empty n
 
 null :: PieceSet -> Bool
 null = IS.null . unPSet
 
 insert :: Int -> PieceSet -> PieceSet
-insert n (PSet ps i) = PSet (IS.insert n ps) i
+insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} PSet (IS.insert n ps) i
 
 full :: PieceSet -> Bool
-full ps = all (flip IS.member (unPSet ps)) [1..unSz ps]
+full ps = {-# SCC "Data.PieceSet/full" #-} all (flip IS.member (unPSet ps)) [1..unSz ps]
 
 size :: PieceSet -> Int
-size = IS.size . unPSet
+size = {-# SCC "Data.PieceSet/size" #-} IS.size . unPSet
 
 member :: Int -> PieceSet -> Bool
-member n = IS.member n . unPSet
+member n = {-# SCC "Data.PieceSet/member" #-} IS.member n . unPSet
 
 delete :: Int -> PieceSet -> PieceSet
-delete n (PSet ps i) = PSet (IS.delete n ps) i
+delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-} PSet (IS.delete n ps) i
 
 intersection :: PieceSet -> PieceSet -> PieceSet
 intersection (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet intersection"
-                                         | otherwise = PSet (IS.intersection ps1 ps2) i1
+                                         | otherwise = {-# SCC "Data.PieceSet/intersection" #-}
+                                                            PSet (IS.intersection ps1 ps2) i1
 
 union :: PieceSet -> PieceSet -> PieceSet
 union (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet union"
-                                  | otherwise = PSet (IS.union ps1 ps2) i1
+                                  | otherwise = {-# SCC "Data.PieceSet/union" #-}
+                                                    PSet (IS.union ps1 ps2) i1
 
 fromList :: Int -> [Int] -> PieceSet
-fromList n elems = PSet (IS.fromList elems) n
+fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} PSet (IS.fromList elems) n
 
 toList :: PieceSet -> [Int]
-toList = IS.toList . unPSet
-
-elems :: PieceSet -> [Int]
-elems = toList
+toList = {-# SCC "Data.PieceSet/toList" #-} IS.toList . unPSet
 
 -- Tests
 
