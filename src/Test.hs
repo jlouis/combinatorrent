@@ -10,6 +10,7 @@ import Test.Framework.Providers.QuickCheck2
 
 import qualified Protocol.BCode (testSuite)
 import qualified Protocol.Wire  (testSuite)
+import qualified Data.Queue     (testSuite)
 
 
 runTests :: IO ()
@@ -17,6 +18,7 @@ runTests =
  do args <- filter (/= "--tests") `fmap` getArgs
     flip defaultMainWithArgs args
      [ testSuite
+     , Data.Queue.testSuite
      , Protocol.BCode.testSuite
      , Protocol.Wire.testSuite
      ]
