@@ -7,7 +7,7 @@ module Process.PieceMgr
     )
 where
 
-
+import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
@@ -173,7 +173,8 @@ start mgrC fspC chokeC statC db ih supC =
                 GetDone c -> do done <- liftM PS.toList $ gets donePiece
                                 syncP =<< sendP c done
                 AskInterested pieces retC -> do
-                    inProg <- liftM (PS.fromList . M.keys) $ gets inProgress
+                    nPieces <- M.size <$> gets infoMap
+                    inProg <- liftM (PS.fromList nPieces . M.keys) $ gets inProgress
                     pend   <- gets pendingPieces
                     -- @i@ is the intersection with with we need and the peer has.
                     let i = PS.null $ PS.intersection pieces
@@ -199,7 +200,7 @@ createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
 createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False 0
   where pending = filt (==False)
         done    = filt (==True)
-        filt f  = PS.fromList . M.keys $ M.filter f mmap
+        filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
 
 ----------------------------------------------------------------------
 
@@ -320,7 +321,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     tryGrabProgress 0 _  captured = return captured
     tryGrabProgress n ps captured = do
         inProg <- gets inProgress
-        let is = PS.intersection ps (PS.fromList $ M.keys inProg)
+        nPieces <- M.size <$> gets infoMap
+        let is = PS.intersection ps (PS.fromList nPieces $ M.keys inProg)
         case PS.null is of
             True -> tryGrabPending n ps captured
             False -> grabFromProgress n ps (head $ PS.elems is) captured
@@ -390,8 +392,9 @@ assertPieceDB = {-# SCC "assertPieceDB" #-} do
     assertSets = do
         pending <- gets pendingPieces
         done    <- gets donePiece
-        down    <- liftM (PS.fromList . map fst) $ gets downloading
-        iprog   <- liftM (PS.fromList . M.keys) $ gets inProgress
+        nPieces <- M.size <$> gets infoMap
+        down    <- liftM (PS.fromList nPieces . map fst) $ gets downloading
+        iprog   <- liftM (PS.fromList nPieces . M.keys) $ gets inProgress
         let pdis = PS.intersection pending done
             pdownis = PS.intersection pending down
             piprogis = PS.intersection pending iprog

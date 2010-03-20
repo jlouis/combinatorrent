@@ -335,7 +335,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
             pieces <- gets peerPieces
             if PS.null pieces
                 -- TODO: Don't trust the bitfield
-                then do modify (\s -> s { peerPieces = createPeerPieces bf})
+                then do modify (\s -> s { peerPieces = createPeerPieces nPieces bf})
                         considerInterest
                 else do infoP "Got out of band Bitfield request, dying"
                         stopP
@@ -406,8 +406,9 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         endgameLoMark = 1
         hiMark = 15 -- These three values are chosen rather arbitrarily at the moment.
 
-createPeerPieces :: L.ByteString -> PS.PieceSet
-createPeerPieces = PS.fromList . map fromIntegral . concat . decodeBytes 0 . L.unpack
+createPeerPieces :: Int -> L.ByteString -> PS.PieceSet
+createPeerPieces nPieces =
+    PS.fromList nPieces . map fromIntegral . concat . decodeBytes 0 . L.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]
         decodeByte soFar w =
             let dBit n = if testBit w (7-n)

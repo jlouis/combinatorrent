@@ -8,9 +8,10 @@ import System.Environment ( getArgs )
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 
+import qualified Data.PieceSet  (testSuite)
+import qualified Data.Queue     (testSuite)
 import qualified Protocol.BCode (testSuite)
 import qualified Protocol.Wire  (testSuite)
-import qualified Data.Queue     (testSuite)
 
 
 runTests :: IO ()
@@ -19,6 +20,7 @@ runTests =
     flip defaultMainWithArgs args
      [ testSuite
      , Data.Queue.testSuite
+     , Data.PieceSet.testSuite
      , Protocol.BCode.testSuite
      , Protocol.Wire.testSuite
      ]
