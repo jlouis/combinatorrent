@@ -227,8 +227,9 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
     ch <- channel
     tch <- channel
     ct <- getCurrentTime
+    pieceSet <- PS.new nPieces
     spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch statC pm)
-           (PST True False S.empty True False (PS.new nPieces) (RC.new ct) (RC.new ct) False)
+           (PST True False S.empty True False pieceSet (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
             tid <- liftIO $ myThreadId

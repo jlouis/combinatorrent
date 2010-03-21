@@ -17,6 +17,7 @@ module Data.PieceSet
     )
 where
 
+--import Control.Applicative
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
@@ -36,8 +37,8 @@ data PieceSet = PSet { unPSet :: !IS.IntSet
 instance NFData PieceSet where
     rnf (PSet is _) = rnf is
 
-new :: Int -> PieceSet
-new n = {-# SCC "Data.PieceSet/new" #-} PSet IS.empty n
+new :: MonadIO m => Int -> m PieceSet
+new n = {-# SCC "Data.PieceSet/new" #-} liftIO $ return $ PSet IS.empty n
 
 null :: MonadIO m => PieceSet -> m Bool
 null = liftIO . return . IS.null . unPSet
@@ -82,7 +83,7 @@ testSuite = testGroup "Data/PieceSet"
     [ testCase "New/Size" testNewSize
     , testProperty "Full"  testFull
     , testCase "Build" testBuild
---    , testProperty "Full"  testFull
+    , testCase "Full" testFull
     , testCase "Membership" testMember
     ]
 
@@ -91,13 +92,12 @@ testNewSize = do
     sz <- size (new 1337)
     assertEqual "For a new PieceSet" sz 0
 
-{-
-testFull :: Positive Word8 -> Bool
-testFull positive =
-    let maxElem = fromIntegral positive
-        pieceSet = foldl (flip insert) (new maxElem) [0..maxElem-1]
-    in all (flip member pieceSet) [0..maxElem-1]
--}
+testFull :: Assertion
+testFull = do
+    let maxElem = 1337
+    ps <- new maxElem
+    let pieceSet = foldl (flip insert) ps [0..maxElem-1]
+    assertBool "for a full PieceSet" $ all (flip member pieceSet) [0..maxElem-1]
 
 testBuild :: Assertion
 testBuild = do
