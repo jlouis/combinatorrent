@@ -111,6 +111,8 @@ Items for later (no particular order)
    - Write a fuzzing framework for bittorrent.
    - shapr wants this to be combinatorrent. Change to this name. It rocks
      and people I've talked to really likes it.
+   - ksf wants this to be named torroid, a torroid is a torrent in the
+     category of haskell programs.
    - Consider using STM, MVars/Chans in the long run and Push back on the
      CML use.
 
