@@ -232,7 +232,8 @@ putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
 putbackBlock :: (PieceNum, Block) -> PieceMgrProcess ()
 putbackBlock (pn, blk) = do
     done <- gets donePiece
-    unless (PS.member pn done) -- Happens at endgame, stray block
+    doneMember <- PS.member pn done
+    unless (doneMember) -- Happens at endgame, stray block
       $ modify (\db -> db { inProgress = ndb (inProgress db)
                           , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
@@ -360,7 +361,7 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
                                   inProgress    = M.insert h ipp inProg })
               tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
-        dls <- liftM (filter (\(p, _) -> PS.member p ps)) $ gets downloading
+        dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
         g <- liftIO newStdGen
         let shuffled = shuffle' dls (length dls) g
         return $ take n shuffled

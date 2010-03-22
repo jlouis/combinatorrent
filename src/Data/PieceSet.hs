@@ -18,6 +18,7 @@ module Data.PieceSet
 where
 
 import Control.DeepSeq
+import Control.Monad
 import Control.Monad.Trans
 import qualified Data.IntSet as IS
 import Data.List (nub)
@@ -53,8 +54,8 @@ full ps = {-# SCC "Data.PieceSet/full" #-} all (flip IS.member (unPSet ps)) [1..
 size :: PieceSet -> Int
 size = {-# SCC "Data.PieceSet/size" #-} IS.size . unPSet
 
-member :: Int -> PieceSet -> Bool
-member n = {-# SCC "Data.PieceSet/member" #-} IS.member n . unPSet
+member :: MonadIO m => Int -> PieceSet -> m Bool
+member n = {-# SCC "Data.PieceSet/member" #-} liftIO . return . IS.member n . unPSet
 
 delete :: Int -> PieceSet -> PieceSet
 delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-} PSet (IS.delete n ps) i
@@ -82,17 +83,21 @@ testSuite = testGroup "Data/PieceSet"
     [ testCase "New/Size" testNewSize
     , testProperty "Build" testBuild
     , testProperty "Full"  testFull
+--    , testProperty "Full"  testFull
+    , testCase "Membership" testMember
     ]
 
 testNewSize :: Assertion
 testNewSize = do
     assertEqual "For a new PieceSet" (size (new 1337)) 0
 
+{-
 testFull :: Positive Word8 -> Bool
 testFull positive =
     let maxElem = fromIntegral positive
         pieceSet = foldl (flip insert) (new maxElem) [0..maxElem-1]
     in all (flip member pieceSet) [0..maxElem-1]
+-}
 
 testBuild :: [Positive Int] -> Bool
 testBuild []        = True
@@ -100,3 +105,15 @@ testBuild positives =
     let m = fromIntegral $ maximum positives
         nubbed = nub positives
     in length nubbed == size (fromList m $ map fromIntegral nubbed)
+
+testMember :: Assertion
+testMember = do
+    let evens = filter (\x -> x `mod` 2 == 0) [1..1000]
+        m     = maximum evens
+        ps    = fromList m evens
+        notThere = [1..m] \\ evens
+    a <- liftM and $ mapM (flip member ps) evens
+    b <- liftM and $ mapM (liftM not . flip member ps) notThere
+    assertBool "for members" a
+    assertBool "for non-members" b
+
