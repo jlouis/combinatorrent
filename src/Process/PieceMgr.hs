@@ -171,7 +171,7 @@ start mgrC fspC chokeC statC db ih supC =
                                  Just False -> putbackPiece pn)
                 PutbackBlocks blks ->
                     mapM_ putbackBlock blks
-                GetDone c -> do done <- liftM PS.toList $ gets donePiece
+                GetDone c -> do done <- PS.toList =<< gets donePiece
                                 syncP =<< sendP c done
                 AskInterested pieces retC -> do
                     nPieces <- M.size <$> gets infoMap
@@ -333,7 +333,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         isN <- PS.null is
         case isN of
             True -> tryGrabPending n ps captured
-            False -> grabFromProgress n ps (head $ PS.toList is) captured
+            False -> do psLst <- PS.toList is
+                        grabFromProgress n ps (head psLst) captured
     -- The Piece @p@ was found, grab it
     grabFromProgress n ps p captured = do
         inprog <- gets inProgress
@@ -356,7 +357,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         case isnN of
             True -> return $ captured -- No (more) pieces to download, return
             False -> do
-              h <- pickRandom (PS.toList isn)
+              psLst <- PS.toList isn
+              h <- pickRandom psLst
               infMap <- gets infoMap
               inProg <- gets inProgress
               blockList <- createBlock h

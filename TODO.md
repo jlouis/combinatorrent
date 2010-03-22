@@ -74,6 +74,9 @@ wish-list.
 Planned for the next release
 ----------------------------
 
+   - Improve Data.PieceSet. We need to handle picking off random pieces and
+     such effectively. Best solution is to make this part of Data.PieceSet
+     and then assume any valid implementation handles it correctly.
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various

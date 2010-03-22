@@ -73,8 +73,9 @@ union (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet union"
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
 fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO . return $ PSet (IS.fromList elems) n
 
-toList :: PieceSet -> [Int]
-toList = {-# SCC "Data.PieceSet/toList" #-} IS.toList . unPSet
+toList :: MonadIO m => PieceSet -> m [Int]
+toList = {-# SCC "Data.PieceSet/toList" #-}
+    liftIO . return . IS.toList . unPSet
 
 -- Tests
 
