@@ -16,8 +16,8 @@ The main program is just to make Cabal lift it. But we will override testing.
 > main = defaultMainWithHooks hooks
 >   where hooks = autoconfUserHooks { runTests = runTests' }
 
-Running tests is to call HaskellTorrent with its parameters for tests:
+Running tests is to call Combinatorrent with its parameters for tests:
 
 > runTests' :: Args -> Bool -> PackageDescription -> LocalBuildInfo -> IO ()
 > runTests' _ _ _ lbi = system testprog >> return ()
->   where testprog = (buildDir lbi) </> "HaskellTorrent" </> "HaskellTorrent --tests"
+>   where testprog = (buildDir lbi) </> "Combinatorrent" </> "Combinatorrent --tests"

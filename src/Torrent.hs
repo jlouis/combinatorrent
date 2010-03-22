@@ -115,7 +115,9 @@ defaultOptimisticSlots = 2
 defaultPort :: PortID
 defaultPort = PortNumber $ fromInteger 1579
 
--- | The current version of Haskell-Torrent. It should be be here.
+-- | The current version of the Combinatorrent protocol string. This is bumped
+--   whenever we make a radical change to the protocol communication or fix a grave bug.
+--   It provides a way for trackers to disallow versions of the client which are misbehaving.
 haskellTorrentVersion :: String
 haskellTorrentVersion = "d001"
 

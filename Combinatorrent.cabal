@@ -1,8 +1,8 @@
-name: HaskellTorrent
+name: Combinatorrent
 category: Network
-version: 0.1.1
+version: 0.2.0
 category: Network
-description:   HaskellTorrent provides a BitTorrent client, based on the CML library
+description:   Combinatorrent provides a BitTorrent client, based on the CML library
                for concurrency. This is an early preview release which is capable of
                downloading files from various torrent trackers, but have not yet
                demonstrated to be correct in all aspects.
@@ -36,9 +36,9 @@ flag threadscope
   description: Enable the eventlog necessary for ThreadScope
   default: False
 
-executable HaskellTorrent
+executable Combinatorrent
   hs-source-dirs: src
-  main-is: HaskellTorrent.hs
+  main-is: Combinatorrent.hs
   other-modules: Protocol.BCode, Protocol.Wire,
     Data.Queue,
     Process.ChokeMgr, Process.Console, Process.FS, Process.Listen,

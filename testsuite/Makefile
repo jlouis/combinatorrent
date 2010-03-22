@@ -1,3 +1,3 @@
 dummytest:
-	../dist/build/HaskellTorrent/HaskellTorrent testfile.txt.torrent
+	../dist/build/Combinatorrent/Combinatorrent testfile.txt.torrent
 

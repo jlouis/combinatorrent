@@ -1,4 +1,4 @@
--- | Haskell-torrent version
+-- | Combinatorrent version
 module Version (version) where
 
 githead :: String

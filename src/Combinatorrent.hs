@@ -54,7 +54,7 @@ progOpts args = do
     case getOpt Permute options args of
         (o,n,[]  ) -> return (o, n)
         (_,_,errs) -> ioError (userError (concat errs ++ usageInfo header options))
-  where header = "Usage: HaskellTorrent [OPTION...] file"
+  where header = "Usage: Combinatorrent [OPTION...] file"
 
 run :: ([Flag], [String]) -> IO ()
 run (flags, files) = do

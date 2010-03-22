@@ -1,11 +1,11 @@
-Haskell Torrent - a haskell bittorrent client.
-==========
+Combinatorrent - a bittorrent client.
+=====================================
 
 Introduction
 ----------
 
-This is a Haskell bittorrent client. I am the introduction document
-and I need to be written by some generous soul!
+This is a bittorrent client. I am the introduction document and I need to be
+written by some generous soul!
 
 Installation
 ------------
@@ -20,9 +20,9 @@ torrent in our $HOME/bin directory.
 Usage
 -----------------
 
-Haskell torrent can currently only do one very simple thing. If you call it with
+Combinatorrent can currently only do one very simple thing. If you call it with
 
-    HaskellTorrent foo.torrent
+    Combinatorrent foo.torrent
 
 then it will begin downloading the file in foo.torrent to the current
 directory via the Bittorrent protocol.
@@ -36,14 +36,10 @@ explanation of these)
 
    - 003, 004, 020,
 
-Haskell-torrent is not supporting these BEPs, but strives to do so one day:
+Combinatorrent is not supporting these BEPs, but strives to do so one day:
 
-   - 005, 006, 007, 010, 012, 015, 009, 023, 018, 021, 022, 024, 026, 027,
-     028, 029, 030, 031, 032
-
-Haskell-torrent will probably never support these BEPs:
-
-   - 016, 017, 019
+   - 005, 006, 007, 009, 010, 012, 015, 016, 017, 018, 019, 023, 021, 022,
+     024, 026, 027, 028, 029, 030, 031, 032
 
 Debugging
 ---------
@@ -52,12 +48,12 @@ For debugging, jlouis tends to use the following:
 
     make conf build test
 
-This builds HaskellTorrent with the *Debug* flag set and also builds the
+This builds Combinatorrent with the *Debug* flag set and also builds the
 software with profiling by default so it is easy to hunt down performance
 regressions. It also runs the internal test-suite for various values. There
 are a couple of interesting targets in the top-level Makefile
 
-Reading material for hacking HaskellTorrent:
+Reading material for hacking Combinatorrent:
 --------------------------------------------
 
    - [Protocol specification - BEP0003](http://www.bittorrent.org/beps/bep_0003.html):
@@ -81,7 +77,7 @@ Reading material for hacking HaskellTorrent:
      quite a lot.
 
    - ["Concurrent Programming in ML" - John. H. Reppy](http://www.amazon.com/Concurrent-Programming-ML-John-Reppy/dp/0521480892)
-     This book describes the CML system which HaskellTorrent uses. The basic
+     This book describes the CML system which Combinatorrent use. The basic
      idea of CML is that of higher order events. That is, events which can
      be abstractly manipulated before being synchronized on. For instance,
      CML events are a Functor instance, though the code currently does not
@@ -89,14 +85,14 @@ Reading material for hacking HaskellTorrent:
      with dynamic choice of which events may fire.
 
    - ["A Concurrent ML library in Concurrent Haskell" - Avik Chaudhuri, ICFP 2009](http://www.cs.umd.edu/~avik/projects/cmllch/)
-     The paper behind the CML library which HaskellTorrent uses. It
+     The paper behind the CML library which Combinatorrent use. It
      describes a way to transform the first-order MVar and ForkIO structures
      of concurrent haskell into a higher order CML language by use of a
      clever matchmaking algorithm.
 
    - ["Supervisor Behaviour"](http://erlang.org/doc/design_principles/sup_princ.html)
      From the Erlang documentation. How the Erlang Supervisor behaviour
-     works. The Supervisor and process structure of HaskellTorrent is
+     works. The Supervisor and process structure of Combinatorrent is
      somewhat inspired by the Erlang ditto.
 
 Source code Hierarchy
@@ -105,7 +101,8 @@ Source code Hierarchy
    - **Data**: Data structures.
       - **Queue**: Functional queues. Standard variant with two lists.
 
-   - **Process**: Process definitions for the different processes comprising Haskell Torrent
+   - **Process**: Process definitions for the different processes comprising
+                  Combinatorrent
       - **ChokeMgr**: Manages choking and unchoking of peers, based upon the current speed of the peer
         and its current state. Global for multiple torrents.
       - **Console**: Simple console process. Only responds to 'quit' at the moment.
@@ -127,7 +124,7 @@ Source code Hierarchy
    - **Top Level**:
       - **Digest**: SHA1 digests as used in the bittorrent protocol.
       - **FS**: Low level Filesystem code. Interacts with files.
-      - **HaskellTorrent**: Main entry point to the code. Sets up processes.
+      - **Combinatorrent**: Main entry point to the code. Sets up processes.
       - **Logging**: Logging interface.
       - **LoggingTypes**: Types and instances used by the Logging framework.
       - **PeerTypes**: Types used by peers.

@@ -1,4 +1,4 @@
--- Define a set of test instances of common things used in HaskellTorrent
+-- Define a set of test instances of common types
 -- Portions of this code is taken from "Real World Haskell"
 module TestInstance
     ()
