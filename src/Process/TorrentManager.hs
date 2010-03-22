@@ -101,10 +101,10 @@ startTorrent fp = do
     (handles, haveMap, pieceMap) <- liftIO $ openAndCheckFile bc
     let left = bytesLeft haveMap pieceMap
     ti <- liftIO $ mkTorrentInfo bc
+    pieceDb <- PieceMgr.createPieceDb haveMap pieceMap
     tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
-                     , Worker $ PieceMgr.start pieceMgrC fspC chokeC statusC
-                                        (PieceMgr.createPieceDb haveMap pieceMap) (infoHash ti)
+                     , Worker $ PieceMgr.start pieceMgrC fspC chokeC statusC pieceDb (infoHash ti)
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC trackerC pmC
                      ] supC
     syncP =<< (sendP statusC $ Status.InsertTorrent (infoHash ti) left trackerC)

@@ -70,8 +70,8 @@ union (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet union"
                                   | otherwise = {-# SCC "Data.PieceSet/union" #-}
                                                     PSet (IS.union ps1 ps2) i1
 
-fromList :: Int -> [Int] -> PieceSet
-fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} PSet (IS.fromList elems) n
+fromList :: MonadIO m => Int -> [Int] -> m PieceSet
+fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO . return $ PSet (IS.fromList elems) n
 
 toList :: PieceSet -> [Int]
 toList = {-# SCC "Data.PieceSet/toList" #-} IS.toList . unPSet
@@ -81,7 +81,7 @@ toList = {-# SCC "Data.PieceSet/toList" #-} IS.toList . unPSet
 testSuite :: Test
 testSuite = testGroup "Data/PieceSet"
     [ testCase "New/Size" testNewSize
-    , testProperty "Full"  testFull
+    , testCase "Full"  testFull
     , testCase "Build" testBuild
     , testCase "Full" testFull
     , testCase "Membership" testMember
@@ -89,7 +89,7 @@ testSuite = testGroup "Data/PieceSet"
 
 testNewSize :: Assertion
 testNewSize = do
-    sz <- size (new 1337)
+    sz <- size =<< new 1337
     assertEqual "For a new PieceSet" sz 0
 
 testFull :: Assertion
@@ -97,13 +97,14 @@ testFull = do
     let maxElem = 1337
     ps <- new maxElem
     let pieceSet = foldl (flip insert) ps [0..maxElem-1]
-    assertBool "for a full PieceSet" $ all (flip member pieceSet) [0..maxElem-1]
+    tst <- liftM and $ mapM (flip member pieceSet) [0..maxElem-1]
+    assertBool "for a full PieceSet" tst
 
 testBuild :: Assertion
 testBuild = do
     let positives = [1..1337]
         m = maximum positives
-    ps <- return $ fromList m positives
+    ps <- fromList m positives
     sz <- size ps
     assertEqual "for size" sz (length positives)
 
@@ -111,8 +112,8 @@ testMember :: Assertion
 testMember = do
     let evens = filter (\x -> x `mod` 2 == 0) [1..1000]
         m     = maximum evens
-        ps    = fromList m evens
         notThere = [1..m] \\ evens
+    ps <- fromList m evens
     a <- liftM and $ mapM (flip member ps) evens
     b <- liftM and $ mapM (liftM not . flip member ps) notThere
     assertBool "for members" a

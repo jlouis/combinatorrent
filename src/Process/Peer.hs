@@ -336,7 +336,8 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
             piecesNull <- PS.null pieces
             if piecesNull
                 -- TODO: Don't trust the bitfield
-                then do modify (\s -> s { peerPieces = createPeerPieces nPieces bf})
+                then do peerP <- createPeerPieces nPieces bf
+                        modify (\s -> s { peerPieces = peerP })
                         considerInterest
                 else do infoP "Got out of band Bitfield request, dying"
                         stopP
@@ -407,7 +408,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         endgameLoMark = 1
         hiMark = 15 -- These three values are chosen rather arbitrarily at the moment.
 
-createPeerPieces :: Int -> L.ByteString -> PS.PieceSet
+createPeerPieces :: MonadIO m => Int -> L.ByteString -> m PS.PieceSet
 createPeerPieces nPieces =
     PS.fromList nPieces . map fromIntegral . concat . decodeBytes 0 . L.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]

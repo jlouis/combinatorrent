@@ -175,7 +175,7 @@ start mgrC fspC chokeC statC db ih supC =
                                 syncP =<< sendP c done
                 AskInterested pieces retC -> do
                     nPieces <- M.size <$> gets infoMap
-                    inProg <- liftM (PS.fromList nPieces . M.keys) $ gets inProgress
+                    inProg <- (PS.fromList nPieces . M.keys) =<< gets inProgress
                     pend   <- gets pendingPieces
                     -- @i@ is the intersection with with we need and the peer has.
                     let intsct = PS.intersection pieces $ PS.union inProg pend
@@ -197,11 +197,13 @@ start mgrC fspC chokeC statC db ih supC =
 -- HELPERS
 ----------------------------------------------------------------------
 
-createPieceDb :: PiecesDoneMap -> PieceMap -> PieceDB
-createPieceDb mmap pmap = PieceDB pending done [] M.empty [] pmap False 0
-  where pending = filt (==False)
-        done    = filt (==True)
-        filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
+createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m PieceDB
+createPieceDb mmap pmap = do
+    pending <- filt (==False)
+    done    <- filt (==True)
+    return $ PieceDB pending done [] M.empty [] pmap False 0
+  where
+    filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
 
 ----------------------------------------------------------------------
 
@@ -326,7 +328,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     tryGrabProgress n ps captured = do
         inProg <- gets inProgress
         nPieces <- M.size <$> gets infoMap
-        let is = PS.intersection ps (PS.fromList nPieces $ M.keys inProg)
+        inProgPs <- PS.fromList nPieces $ M.keys inProg
+        let is = PS.intersection ps inProgPs
         isN <- PS.null is
         case isN of
             True -> tryGrabPending n ps captured
@@ -399,8 +402,8 @@ assertPieceDB = {-# SCC "assertPieceDB" #-} do
         pending <- gets pendingPieces
         done    <- gets donePiece
         nPieces <- M.size <$> gets infoMap
-        down    <- liftM (PS.fromList nPieces . map fst) $ gets downloading
-        iprog   <- liftM (PS.fromList nPieces . M.keys) $ gets inProgress
+        down    <- PS.fromList nPieces . map fst =<< gets downloading
+        iprog   <- PS.fromList nPieces . M.keys  =<< gets inProgress
         let pdis = PS.intersection pending done
             pdownis = PS.intersection pending down
             piprogis = PS.intersection pending iprog
