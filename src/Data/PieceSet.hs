@@ -18,6 +18,7 @@ module Data.PieceSet
 where
 
 import Control.DeepSeq
+import Control.Monad.Trans
 import qualified Data.IntSet as IS
 import Data.List (nub)
 import Data.Word
@@ -40,8 +41,8 @@ instance NFData PieceSet where
 new :: Int -> PieceSet
 new n = {-# SCC "Data.PieceSet/new" #-} PSet IS.empty n
 
-null :: PieceSet -> Bool
-null = IS.null . unPSet
+null :: MonadIO m => PieceSet -> m Bool
+null = liftIO . return . IS.null . unPSet
 
 insert :: Int -> PieceSet -> PieceSet
 insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} PSet (IS.insert n ps) i

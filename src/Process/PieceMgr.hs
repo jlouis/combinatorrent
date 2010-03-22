@@ -177,8 +177,8 @@ start mgrC fspC chokeC statC db ih supC =
                     inProg <- liftM (PS.fromList nPieces . M.keys) $ gets inProgress
                     pend   <- gets pendingPieces
                     -- @i@ is the intersection with with we need and the peer has.
-                    let i = PS.null $ PS.intersection pieces
-                                   $ PS.union inProg pend
+                    let intsct = PS.intersection pieces $ PS.union inProg pend
+                    i <- PS.null intsct
                     syncP =<< sendP retC (not i))
         storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
         endgameBroadcast pn blk = do
@@ -308,7 +308,8 @@ grabBlocks' :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
 grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     blocks <- tryGrabProgress k eligible []
     pend <- gets pendingPieces
-    if blocks == [] && PS.null pend
+    pendN <- PS.null pend
+    if blocks == [] && pendN
         then do blks <- grabEndGame k eligible
                 modify (\db -> db { endGaming = True })
                 debugP $ "PieceMgr entered endgame."
@@ -323,7 +324,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         inProg <- gets inProgress
         nPieces <- M.size <$> gets infoMap
         let is = PS.intersection ps (PS.fromList nPieces $ M.keys inProg)
-        case PS.null is of
+        isN <- PS.null is
+        case isN of
             True -> tryGrabPending n ps captured
             False -> grabFromProgress n ps (head $ PS.toList is) captured
     -- The Piece @p@ was found, grab it
@@ -344,7 +346,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     tryGrabPending n ps captured = do
         pending <- gets pendingPieces
         let isn = PS.intersection ps pending
-        case PS.null isn of
+        isnN <- PS.null isn
+        case isnN of
             True -> return $ captured -- No (more) pieces to download, return
             False -> do
               h <- pickRandom (PS.toList isn)
@@ -400,15 +403,20 @@ assertPieceDB = {-# SCC "assertPieceDB" #-} do
             piprogis = PS.intersection pending iprog
             doneprogis = PS.intersection done iprog
             donedownis = PS.intersection done down
-        unless (PS.null pdis)
+        pdisN <- PS.null pdis
+        pdownisN <- PS.null pdownis
+        piprogisN <- PS.null piprogis
+        doneprogisN <- PS.null doneprogis
+        donedownisN <- PS.null donedownis
+        unless pdisN
             (fail $ "Pending/Done violation of pieces: " ++ show pdis)
-        unless (PS.null pdownis)
+        unless pdownisN
             (fail $ "Pending/Downloading violation of pieces: " ++ show pdownis)
-        unless (PS.null piprogis)
+        unless piprogisN
             (fail $ "Pending/InProgress violation of pieces: " ++ show piprogis)
-        unless (PS.null doneprogis)
+        unless doneprogisN
             (fail $ "Done/InProgress violation of pieces: " ++ show doneprogis)
-        unless (PS.null donedownis)
+        unless donedownisN
             (fail $ "Done/Downloading violation of pieces: " ++ show donedownis)
 
     -- If a piece is in Progress, we have:

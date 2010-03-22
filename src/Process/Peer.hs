@@ -333,7 +333,8 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
                         stopP
         bitfieldMsg bf = do
             pieces <- gets peerPieces
-            if PS.null pieces
+            piecesNull <- PS.null pieces
+            if piecesNull
                 -- TODO: Don't trust the bitfield
                 then do modify (\s -> s { peerPieces = createPeerPieces nPieces bf})
                         considerInterest
