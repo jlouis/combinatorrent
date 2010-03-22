@@ -148,9 +148,10 @@ start mgrC fspC chokeC statC db ih supC =
                            (do assertPieceComplete pn
                                pend <- gets pendingPieces
                                iprog <- gets inProgress
+                               pendSz <- PS.size pend
                                infoP $ "Piece #" ++ show pn
                                          ++ " completed, there are " 
-                                         ++ (show $ PS.size pend) ++ " pending "
+                                         ++ (show pendSz) ++ " pending "
                                          ++ (show $ M.size iprog) ++ " in progress"
                                l <- gets infoMap >>=
                                     (\pm -> case M.lookup pn pm of
@@ -215,7 +216,8 @@ checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
     ih    <- asks pMgrInfoHash
-    when (M.size im == PS.size doneP)
+    donePSz <- PS.size doneP
+    when (M.size im == donePSz)
         (do liftIO $ putStrLn "Torrent Completed"
             ih <- asks pMgrInfoHash
             sendPC statusCh (STP.TorrentCompleted ih) >>= syncP

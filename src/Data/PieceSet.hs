@@ -21,13 +21,10 @@ import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import qualified Data.IntSet as IS
-import Data.List (nub)
-import Data.Word
+import Data.List ((\\))
 import Prelude hiding (null)
 
-import Test.QuickCheck
 import Test.Framework
-import Test.Framework.Providers.QuickCheck2
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path, Test)
 import TestInstance() -- Pull arbitraries
@@ -48,11 +45,13 @@ null = liftIO . return . IS.null . unPSet
 insert :: Int -> PieceSet -> PieceSet
 insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} PSet (IS.insert n ps) i
 
-full :: PieceSet -> Bool
-full ps = {-# SCC "Data.PieceSet/full" #-} all (flip IS.member (unPSet ps)) [1..unSz ps]
+full :: MonadIO m => PieceSet -> m Bool
+full ps = {-# SCC "Data.PieceSet/full" #-}
+    liftIO . return $ all (flip IS.member (unPSet ps)) [1..unSz ps]
 
-size :: PieceSet -> Int
-size = {-# SCC "Data.PieceSet/size" #-} IS.size . unPSet
+size :: MonadIO m => PieceSet -> m Int
+size = {-# SCC "Data.PieceSet/size" #-}
+    liftIO . return . IS.size . unPSet
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
 member n = {-# SCC "Data.PieceSet/member" #-} liftIO . return . IS.member n . unPSet
@@ -81,15 +80,16 @@ toList = {-# SCC "Data.PieceSet/toList" #-} IS.toList . unPSet
 testSuite :: Test
 testSuite = testGroup "Data/PieceSet"
     [ testCase "New/Size" testNewSize
-    , testProperty "Build" testBuild
     , testProperty "Full"  testFull
+    , testCase "Build" testBuild
 --    , testProperty "Full"  testFull
     , testCase "Membership" testMember
     ]
 
 testNewSize :: Assertion
 testNewSize = do
-    assertEqual "For a new PieceSet" (size (new 1337)) 0
+    sz <- size (new 1337)
+    assertEqual "For a new PieceSet" sz 0
 
 {-
 testFull :: Positive Word8 -> Bool
@@ -99,12 +99,13 @@ testFull positive =
     in all (flip member pieceSet) [0..maxElem-1]
 -}
 
-testBuild :: [Positive Int] -> Bool
-testBuild []        = True
-testBuild positives =
-    let m = fromIntegral $ maximum positives
-        nubbed = nub positives
-    in length nubbed == size (fromList m $ map fromIntegral nubbed)
+testBuild :: Assertion
+testBuild = do
+    let positives = [1..1337]
+        m = maximum positives
+    ps <- return $ fromList m positives
+    sz <- size ps
+    assertEqual "for size" sz (length positives)
 
 testMember :: Assertion
 testMember = do

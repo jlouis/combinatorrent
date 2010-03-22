@@ -8,6 +8,7 @@ module Process.Peer (
     )
 where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
@@ -278,9 +279,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
                     CancelBlock pn blk -> do
                         modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
                         syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
-        isASeeder = do
-            pps <- gets peerPieces
-            return $ PS.size pps == nPieces
+        isASeeder = (== nPieces) <$> (gets peerPieces >>= PS.size)
         timerEvent = do
             evt <- recvPC timerCh
             wrapP evt (\() -> do
