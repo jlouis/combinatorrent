@@ -175,10 +175,11 @@ start mgrC fspC chokeC statC db ih supC =
                                 syncP =<< sendP c done
                 AskInterested pieces retC -> do
                     nPieces <- M.size <$> gets infoMap
-                    inProg <- (PS.fromList nPieces . M.keys) =<< gets inProgress
-                    pend   <- gets pendingPieces
+                    inProg <- M.keys <$> gets inProgress
+                    pend   <- gets pendingPieces >>= PS.toList
+                    tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
                     -- @i@ is the intersection with with we need and the peer has.
-                    let intsct = PS.intersection pieces $ PS.union inProg pend
+                    let intsct = PS.intersection pieces tmp
                     i <- PS.null intsct
                     syncP =<< sendP retC (not i))
         storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)

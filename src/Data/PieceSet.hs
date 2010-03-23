@@ -5,7 +5,6 @@ module Data.PieceSet
     , size
     , full
     , delete
-    , union
     , null
     , insert
     , intersection
@@ -64,11 +63,6 @@ intersection :: PieceSet -> PieceSet -> PieceSet
 intersection (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet intersection"
                                          | otherwise = {-# SCC "Data.PieceSet/intersection" #-}
                                                             PSet (IS.intersection ps1 ps2) i1
-
-union :: PieceSet -> PieceSet -> PieceSet
-union (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet union"
-                                  | otherwise = {-# SCC "Data.PieceSet/union" #-}
-                                                    PSet (IS.union ps1 ps2) i1
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
 fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO . return $ PSet (IS.fromList elems) n
