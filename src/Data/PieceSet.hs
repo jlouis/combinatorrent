@@ -5,7 +5,7 @@ module Data.PieceSet
     , size
     , full
     , delete
-    , null
+    , Data.PieceSet.null
     , insert
     , intersection
     , member
@@ -21,7 +21,7 @@ import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import qualified Data.IntSet as IS
-import Data.List ((\\))
+import Data.List ((\\), partition, sort, null)
 import Prelude hiding (null)
 
 import Test.Framework
@@ -59,10 +59,11 @@ member n = {-# SCC "Data.PieceSet/member" #-} liftIO . return . IS.member n . un
 delete :: Int -> PieceSet -> PieceSet
 delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-} PSet (IS.delete n ps) i
 
-intersection :: PieceSet -> PieceSet -> PieceSet
-intersection (PSet ps1 i1) (PSet ps2 i2) | i1 /= i2 = error "Wrong PSet intersection"
-                                         | otherwise = {-# SCC "Data.PieceSet/intersection" #-}
-                                                            PSet (IS.intersection ps1 ps2) i1
+intersection :: MonadIO m => PieceSet -> PieceSet -> m [Int]
+intersection (PSet ps1 i1) (PSet ps2 i2)
+                | i1 /= i2 = error "Wrong PSet intersection"
+                | otherwise = {-# SCC "Data.PieceSet/intersection" #-}
+                           toList $ PSet (IS.intersection ps1 ps2) i1
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
 fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO . return $ PSet (IS.fromList elems) n
@@ -79,6 +80,7 @@ testSuite = testGroup "Data/PieceSet"
     , testCase "Full"  testFull
     , testCase "Build" testBuild
     , testCase "Full" testFull
+    , testCase "Intersection" testIntersect
     , testCase "Membership" testMember
     ]
 
@@ -102,6 +104,18 @@ testBuild = do
     ps <- fromList m positives
     sz <- size ps
     assertEqual "for size" sz (length positives)
+
+testIntersect :: Assertion
+testIntersect = do
+    let (evens, odds) = partition (\x -> x `mod` 2 == 0) [1..100]
+    evPS <- fromList 100 evens
+    oddPS <- fromList 100 odds
+    is1 <- intersection evPS oddPS
+    assertBool "for intersection" (Data.List.null is1)
+    ps1 <- fromList 10 [1,2,3,4,10]
+    ps2 <- fromList 10 [0,2,5,4,8 ]
+    is2 <- intersection ps1 ps2
+    assertBool "for simple intersection" (sort is2 == [2,4])
 
 testMember :: Assertion
 testMember = do
