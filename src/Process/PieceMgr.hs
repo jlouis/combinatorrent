@@ -209,8 +209,9 @@ createPieceDb mmap pmap = do
 
 -- | The call @completePiece db pn@ will mark that the piece @pn@ is completed
 completePiece :: PieceNum -> PieceMgrProcess ()
-completePiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
-                                       donePiece  = PS.insert pn $ donePiece db })
+completePiece pn = do
+    PS.insert pn =<< gets donePiece
+    modify (\db -> db { inProgress = M.delete pn (inProgress db) })
 
 -- | Handle torrent completion
 checkFullCompletion :: PieceMgrProcess ()
@@ -228,8 +229,9 @@ checkFullCompletion = do
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again.
 putbackPiece :: PieceNum -> PieceMgrProcess ()
-putbackPiece pn = modify (\db -> db { inProgress = M.delete pn (inProgress db),
-                                      pendingPieces = PS.insert pn $ pendingPieces db })
+putbackPiece pn = do
+    PS.insert pn =<< gets pendingPieces
+    modify (\db -> db { inProgress = M.delete pn (inProgress db) })
 
 -- | Put back a block for downloading.
 --   TODO: This is rather slow, due to the (\\) call, but hopefully happens rarely.
@@ -344,7 +346,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         -- This rather ugly piece of code should be substituted with something better
         if grabbed == []
              -- All pieces are taken, try the next one.
-             then tryGrabProgress n (PS.delete p ps) captured
+             then do PS.delete p ps
+                     tryGrabProgress n ps captured
              else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
                      tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
     -- Try grabbing pieces from the pending blocks
@@ -360,8 +363,8 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
               blockList <- createBlock h
               let sz  = length blockList
                   ipp = InProgressPiece sz S.empty blockList
-              modify (\db -> db { pendingPieces = PS.delete h (pendingPieces db),
-                                  inProgress    = M.insert h ipp inProg })
+              PS.delete h =<< gets pendingPieces
+              modify (\db -> db { inProgress    = M.insert h ipp inProg })
               tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
         dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading

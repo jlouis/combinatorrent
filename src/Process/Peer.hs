@@ -327,7 +327,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         haveMsg pn = do
             pm <- asks pieceMap
             if M.member pn pm
-                then do modify (\s -> s { peerPieces = PS.insert pn $ peerPieces s})
+                then do PS.insert pn =<< gets peerPieces
                         considerInterest
                 else do warningP "Unknown Piece"
                         stopP

@@ -16,11 +16,11 @@ module Data.PieceSet
     )
 where
 
---import Control.Applicative
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import qualified Data.IntSet as IS
+import Data.IORef
 import Data.List ((\\), partition, sort, null)
 import Prelude hiding (null)
 
@@ -29,48 +29,59 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path, Test)
 import TestInstance() -- Pull arbitraries
 
-data PieceSet = PSet { unPSet :: !IS.IntSet
+data PieceSet = PSet { unPSet :: IORef IS.IntSet
                      , unSz   :: !Int }
-  deriving Show
 
 instance NFData PieceSet where
-    rnf (PSet is _) = rnf is
+    rnf (PSet is _) = is `seq` ()
 
 new :: MonadIO m => Int -> m PieceSet
-new n = {-# SCC "Data.PieceSet/new" #-} liftIO $ return $ PSet IS.empty n
+new n = {-# SCC "Data.PieceSet/new" #-} do
+    s <- liftIO $ newIORef IS.empty
+    liftIO . return $ PSet s n
 
 null :: MonadIO m => PieceSet -> m Bool
-null = liftIO . return . IS.null . unPSet
+null ps = do
+    s <- (liftIO . readIORef . unPSet) ps
+    liftIO $ return $ IS.null s
 
-insert :: Int -> PieceSet -> PieceSet
-insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} PSet (IS.insert n ps) i
+insert :: MonadIO m => Int -> PieceSet -> m ()
+insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} do
+    liftIO $ modifyIORef ps (IS.insert n)
 
 full :: MonadIO m => PieceSet -> m Bool
-full ps = {-# SCC "Data.PieceSet/full" #-}
-    liftIO . return $ all (flip IS.member (unPSet ps)) [1..unSz ps]
+full ps = {-# SCC "Data.PieceSet/full" #-} do
+    s <- liftIO . readIORef . unPSet $ ps
+    liftIO . return $ all (flip IS.member s) [1..unSz ps]
 
 size :: MonadIO m => PieceSet -> m Int
 size = {-# SCC "Data.PieceSet/size" #-}
-    liftIO . return . IS.size . unPSet
+    liftIO . liftM IS.size . readIORef . unPSet
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
-member n = {-# SCC "Data.PieceSet/member" #-} liftIO . return . IS.member n . unPSet
+member n = {-# SCC "Data.PieceSet/member" #-}
+    liftIO . liftM (IS.member n) . readIORef . unPSet
 
-delete :: Int -> PieceSet -> PieceSet
-delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-} PSet (IS.delete n ps) i
+delete :: MonadIO m => Int -> PieceSet -> m ()
+delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-}
+    liftIO $ modifyIORef ps (IS.delete n)
 
 intersection :: MonadIO m => PieceSet -> PieceSet -> m [Int]
 intersection (PSet ps1 i1) (PSet ps2 i2)
                 | i1 /= i2 = error "Wrong PSet intersection"
-                | otherwise = {-# SCC "Data.PieceSet/intersection" #-}
-                           toList $ PSet (IS.intersection ps1 ps2) i1
+                | otherwise = {-# SCC "Data.PieceSet/intersection" #-} do
+                            ps11 <- liftIO $ readIORef ps1
+                            ps21 <- liftIO $ readIORef ps2
+                            return $ IS.toList $ IS.intersection ps11 ps21
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
-fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO . return $ PSet (IS.fromList elems) n
+fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} do
+    s <- liftIO $ newIORef (IS.fromList elems)
+    liftIO . return $ PSet s n
 
 toList :: MonadIO m => PieceSet -> m [Int]
 toList = {-# SCC "Data.PieceSet/toList" #-}
-    liftIO . return . IS.toList . unPSet
+    liftIO . liftM IS.toList . readIORef . unPSet
 
 -- Tests
 
@@ -93,8 +104,8 @@ testFull :: Assertion
 testFull = do
     let maxElem = 1337
     ps <- new maxElem
-    let pieceSet = foldl (flip insert) ps [0..maxElem-1]
-    tst <- liftM and $ mapM (flip member pieceSet) [0..maxElem-1]
+    forM [0..maxElem-1] (flip insert ps)
+    tst <- liftM and $ mapM (flip member ps) [0..maxElem-1]
     assertBool "for a full PieceSet" tst
 
 testBuild :: Assertion
