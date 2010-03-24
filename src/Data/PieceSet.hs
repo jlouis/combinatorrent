@@ -4,6 +4,7 @@ module Data.PieceSet
     , new
     , size
     , full
+    , copy
     , delete
     , Data.PieceSet.null
     , insert
@@ -53,6 +54,12 @@ full :: MonadIO m => PieceSet -> m Bool
 full ps = {-# SCC "Data.PieceSet/full" #-} do
     s <- liftIO . readIORef . unPSet $ ps
     liftIO . return $ all (flip IS.member s) [1..unSz ps]
+
+copy :: MonadIO m => PieceSet -> m PieceSet
+copy (PSet ps sz) = do
+    s <- liftIO . readIORef $ ps
+    o <- liftIO $ newIORef s
+    liftIO $ return $ PSet o sz
 
 size :: MonadIO m => PieceSet -> m Int
 size = {-# SCC "Data.PieceSet/size" #-}

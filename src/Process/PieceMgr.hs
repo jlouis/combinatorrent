@@ -135,7 +135,8 @@ start mgrC fspC chokeC statC db ih supC =
               case msg of
                 GrabBlocks n eligible c ->
                     do debugP "Grabbing Blocks"
-                       blocks <- grabBlocks' n eligible
+                       eligible' <- PS.copy eligible
+                       blocks <- grabBlocks' n eligible'
                        debugP "Grabbed..."
                        syncP =<< sendP c blocks
                 StoreBlock pn blk d ->
