@@ -307,10 +307,9 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
                                            $ Block os blockSz : accum
                                  | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
 
--- | The call @grabBlocks' n eligible db@ tries to pick off up to @n@ pieces from
---   the @n@. In doing so, it will only consider pieces in @eligible@. It returns a
---   pair @(blocks, db')@, where @blocks@ are the blocks it picked and @db'@ is the resulting
---   db with these blocks removed.
+-- | The call @grabBlocks' n eligible@ tries to pick off up to @n@ pieces from
+--   to download. In doing so, it will only consider pieces in @eligible@. It
+--   returns a list of Blocks which where grabbed.
 grabBlocks' :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
 grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
     blocks <- tryGrabProgress k eligible []
@@ -346,7 +345,7 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
         -- This rather ugly piece of code should be substituted with something better
         if grabbed == []
              -- All pieces are taken, try the next one.
-             then do PS.delete p ps
+             then do PS.delete p ps --TODO: Dangerous since we will NEVER reconsider that piece then!
                      tryGrabProgress n ps captured
              else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
                      tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
@@ -368,18 +367,22 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
               tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
         dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
-        g <- liftIO newStdGen
-        let shuffled = shuffle' dls (length dls) g
-        return $ take n shuffled
-    pickRandom pieces = do
-        n <- liftIO $ getStdRandom (\gen -> randomR (0, length pieces - 1) gen)
-        return $ pieces !! n
-    createBlock :: Int -> PieceMgrProcess [Block]
-    createBlock pn = do
-        gets infoMap >>= (\im -> case M.lookup pn im of
-                                    Nothing -> fail "createBlock: could not lookup piece"
-                                    Just ipp -> return $ cBlock ipp)
-            where cBlock = blockPiece defaultBlockSize . fromInteger . len
+        take n . shuffle' dls (length dls) <$> liftIO newStdGen
+
+-- | Pick a random element among a finite list af them.
+pickRandom :: MonadIO m => [a] -> m a
+pickRandom ls = do
+    n <- liftIO $ getStdRandom (\gen -> randomR (0, length ls - 1) gen)
+    return $ ls !! n
+
+-- | If given a Piece number, convert said number into its list of blocks to
+-- download at peers.
+createBlock :: PieceNum -> PieceMgrProcess [Block]
+createBlock pn = do
+     gets infoMap >>= (\im -> case M.lookup pn im of
+                                 Nothing -> fail "createBlock: could not lookup piece"
+                                 Just ipp -> return $ cBlock ipp)
+         where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 assertPieceDB :: PieceMgrProcess ()
 assertPieceDB = {-# SCC "assertPieceDB" #-} do
