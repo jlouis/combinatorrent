@@ -34,7 +34,7 @@ data PieceSet = PSet { unPSet :: IORef IS.IntSet
                      , unSz   :: !Int }
 
 instance NFData PieceSet where
-    rnf (PSet is _) = is `seq` ()
+    rnf (PSet is _) = ()
 
 new :: MonadIO m => Int -> m PieceSet
 new n = {-# SCC "Data.PieceSet/new" #-} do
@@ -48,7 +48,7 @@ null ps = do
 
 insert :: MonadIO m => Int -> PieceSet -> m ()
 insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} do
-    liftIO $ modifyIORef ps (IS.insert n)
+    liftIO $ atomicModifyIORef ps (\ps -> (IS.insert n ps, ()))
 
 full :: MonadIO m => PieceSet -> m Bool
 full ps = {-# SCC "Data.PieceSet/full" #-} do
@@ -71,7 +71,7 @@ member n = {-# SCC "Data.PieceSet/member" #-}
 
 delete :: MonadIO m => Int -> PieceSet -> m ()
 delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-}
-    liftIO $ modifyIORef ps (IS.delete n)
+    liftIO $ atomicModifyIORef ps (\ps -> (IS.delete n ps, ()))
 
 intersection :: MonadIO m => PieceSet -> PieceSet -> m [Int]
 intersection (PSet ps1 i1) (PSet ps2 i2)
@@ -100,6 +100,8 @@ testSuite = testGroup "Data/PieceSet"
     , testCase "Full" testFull
     , testCase "Intersection" testIntersect
     , testCase "Membership" testMember
+    , testCase "Insert/Delete" testInsertDelete
+    , testCase "Copy" testCopy
     ]
 
 testNewSize :: Assertion
@@ -145,4 +147,30 @@ testMember = do
     b <- liftM and $ mapM (liftM not . flip member ps) notThere
     assertBool "for members" a
     assertBool "for non-members" b
+
+testInsertDelete :: Assertion
+testInsertDelete = do
+    ps <- new 10
+    insert 3 ps
+    insert 4 ps
+    assertBool "Ins/del #1" =<< member 3 ps
+    assertBool "Ins/del #2" =<< liftM not (member 5 ps)
+    delete 3 ps
+    assertBool "Ins/del #3" =<< member 4 ps
+    assertBool "Ins/del #4" =<< liftM not (member 3 ps)
+    insert 5 ps
+    assertBool "Ins/del #5" =<< member 5 ps
+
+testCopy :: Assertion
+testCopy = do
+    ps <- new 10
+    insert 3 ps
+    pc <- copy ps
+    insert 4 pc
+    delete 3 pc
+    assertBool "#1" =<< member 3 ps
+    assertBool "#2" =<< liftM not (member 3 pc)
+    assertBool "#3" =<< member 4 pc
+    assertBool "#4" =<< liftM not (member 4 ps)
+
 

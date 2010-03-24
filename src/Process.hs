@@ -181,7 +181,7 @@ class Logging a where
 logP :: Logging a => Priority -> String -> Process a b ()
 logP prio msg = do
     n <- asks logName
-    liftIO $ logM n prio msg
+    liftIO $ logM n prio (n ++ ":\t" ++ msg)
 
 infoP, debugP, criticalP, warningP, errorP :: Logging a => String -> Process a b ()
 infoP  = logP INFO

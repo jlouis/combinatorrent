@@ -10,6 +10,7 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Exception (assert)
 import Control.DeepSeq
 
 import Control.Monad.Reader
@@ -116,29 +117,31 @@ start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> Piece
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
     spawnP (PieceMgrCfg mgrC fspC chokeC statC ih) db
-                    (catchP (forever pgm)
+                    (catchP ((forever pgm) >> debugP "Closing!")
                         (defaultStopHandler supC))
   where pgm = do
+          debugP "Asserting"
           assertPieceDB
+          debugP "Asserted"
           dl <- gets donePush
           (if null dl
               then receiveEvt
-              else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
+              else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP >> debugP "Synced"
         sendEvt elem = do
             ev <- sendPC chokeCh elem
             wrapP ev remDone
-        remDone :: () -> Process PieceMgrCfg PieceDB ()
         remDone () = modify (\db -> db { donePush = tail (donePush db) })
         receiveEvt = do
             ev <- recvPC pieceMgrCh
-            wrapP ev (\msg ->
+            wrapP ev (\msg -> do
+              debugP "Receiving!"
               case msg of
                 GrabBlocks n eligible c ->
                     do debugP "Grabbing Blocks"
-                       eligible' <- PS.copy eligible
-                       blocks <- grabBlocks' n eligible'
+                       blocks <- grabBlocks' n eligible
                        debugP "Grabbed..."
                        syncP =<< sendP c blocks
+                       debugP "Returned"
                 StoreBlock pn blk d ->
                     do debugP $ "Storing block: " ++ show (pn, blk)
                        storeBlock pn blk d
@@ -313,11 +316,13 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   returns a list of Blocks which where grabbed.
 grabBlocks' :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
 grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
-    blocks <- tryGrabProgress k eligible []
+    ps' <- PS.copy eligible
+    blocks <- tryGrabProgress k ps' []
     pend <- gets pendingPieces
     pendN <- PS.null pend
     if blocks == [] && pendN
-        then do blks <- grabEndGame k eligible
+        then do ps' <- PS.copy eligible
+                blks <- grabEndGame k ps'
                 modify (\db -> db { endGaming = True })
                 debugP $ "PieceMgr entered endgame."
                 return $ Endgame blks
@@ -414,16 +419,11 @@ assertPieceDB = {-# SCC "assertPieceDB" #-} do
         piprogis <- PS.intersection pending iprog
         doneprogis <- PS.intersection done iprog
         donedownis <- PS.intersection done down
-        unless (null pdis)
-            (fail $ "Pending/Done violation of pieces: " ++ show pdis)
-        unless (null pdownis)
-            (fail $ "Pending/Downloading violation of pieces: " ++ show pdownis)
-        unless (null piprogis)
-            (fail $ "Pending/InProgress violation of pieces: " ++ show piprogis)
-        unless (null doneprogis)
-            (fail $ "Done/InProgress violation of pieces: " ++ show doneprogis)
-        unless (null donedownis)
-            (fail $ "Done/Downloading violation of pieces: " ++ show donedownis)
+        return $ assert (null pdis) ()
+        return $ assert (null pdownis) ()
+        return $ assert (null piprogis) ()
+        return $ assert (null doneprogis) ()
+        return $ assert (null donedownis) ()
 
     -- If a piece is in Progress, we have:
     --

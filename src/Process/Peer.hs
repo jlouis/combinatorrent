@@ -398,8 +398,11 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
         grabBlocks n = do
             c <- liftIO $ channel
             ps <- gets peerPieces
+            debugP "Grabbing send"
             syncP =<< sendPC pieceMgrCh (GrabBlocks n ps c)
+            debugP "Grabbing recv"
             blks <- syncP =<< recvP c (const True)
+            debugP "Got them!"
             case blks of
                 Leech blks -> return blks
                 Endgame blks ->
