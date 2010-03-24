@@ -117,16 +117,14 @@ start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> Piece
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
     spawnP (PieceMgrCfg mgrC fspC chokeC statC ih) db
-                    (catchP ((forever pgm) >> debugP "Closing!")
+                    (catchP (forever pgm)
                         (defaultStopHandler supC))
   where pgm = do
-          debugP "Asserting"
           assertPieceDB
-          debugP "Asserted"
           dl <- gets donePush
           (if null dl
               then receiveEvt
-              else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP >> debugP "Synced"
+              else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
         sendEvt elem = do
             ev <- sendPC chokeCh elem
             wrapP ev remDone
@@ -134,14 +132,10 @@ start mgrC fspC chokeC statC db ih supC =
         receiveEvt = do
             ev <- recvPC pieceMgrCh
             wrapP ev (\msg -> do
-              debugP "Receiving!"
               case msg of
                 GrabBlocks n eligible c ->
-                    do debugP "Grabbing Blocks"
-                       blocks <- grabBlocks' n eligible
-                       debugP "Grabbed..."
+                    do blocks <- grabBlocks' n eligible
                        syncP =<< sendP c blocks
-                       debugP "Returned"
                 StoreBlock pn blk d ->
                     do debugP $ "Storing block: " ++ show (pn, blk)
                        storeBlock pn blk d
@@ -162,9 +156,7 @@ start mgrC fspC chokeC statC db ih supC =
                                                     Nothing -> fail "Storeblock: M.lookup"
                                                     Just x -> return $ len x)
                                ih <- asks pMgrInfoHash
-                               debugP "Sending to StatusP a completePiece"
                                sendPC statusCh (CompletedPiece ih l) >>= syncP
-                               debugP "Completing Send Done"
                                pieceOk <- checkPiece pn
                                case pieceOk of
                                  Nothing ->
