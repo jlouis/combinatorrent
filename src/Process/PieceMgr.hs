@@ -16,6 +16,7 @@ import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List
+import Data.PendingSet()
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Set as S

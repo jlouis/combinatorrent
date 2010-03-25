@@ -68,6 +68,7 @@ executable Combinatorrent
     network,
     parsec,
     pretty,
+    PSQueue,
     QuickCheck >= 2,
     random,
     random-shuffle,
