@@ -30,11 +30,6 @@ wish-list.
      pruned set of pieces we can ask with later. This way, we only need to
      consider pieces we already have once and we get a faster system.
      When doing this, only prune pieces which are done and checked.
-   - Send keepalives every two minutes as per the spec.
-   - For the histogram code, look at
-     [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
-      Hinze has a paper on that at [Hinze, R., A Simple Implementation
-     Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
    - Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
      of the PeerMgr code.
    - Do not send HAVE messages if the Peer already has the Piece Number.
@@ -74,6 +69,15 @@ wish-list.
 Planned for the next release
 ----------------------------
 
+   - For the histogram code, look at
+     [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
+      Hinze has a paper on that at [Hinze, R., A Simple Implementation
+     Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
+   - Improve Data.PieceSet. We need to handle picking off random pieces and
+     such effectively. Best solution is to make this part of Data.PieceSet
+     and then assume any valid implementation handles it correctly.
+   - Improve parallel execution. We are currently extremely synchronous.
+     Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
    - Play with the code coverage in GHC.
