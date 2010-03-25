@@ -69,13 +69,6 @@ wish-list.
 Planned for the next release
 ----------------------------
 
-   - For the histogram code, look at
-     [Data.PSQueue](http://hackage.haskell.org/packages/archive/PSQueue/1.1/doc/html/Data-PSQueue.html). Ralf
-      Hinze has a paper on that at [Hinze, R., A Simple Implementation
-     Technique for Priority Search Queues, ICFP 2001, pp. 110-121](http://citeseer.ist.psu.edu/hinze01simple.html).
-   - Improve Data.PieceSet. We need to handle picking off random pieces and
-     such effectively. Best solution is to make this part of Data.PieceSet
-     and then assume any valid implementation handles it correctly.
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
