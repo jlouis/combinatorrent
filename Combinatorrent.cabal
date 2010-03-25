@@ -50,6 +50,7 @@ executable Combinatorrent
   extensions: CPP
 
   build-depends:
+    array >= 0.3,
     base >= 3.0,
     base <= 5.0,
     bytestring,

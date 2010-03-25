@@ -17,11 +17,12 @@ module Data.PieceSet
     )
 where
 
+import Control.Applicative
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
-import qualified Data.IntSet as IS
-import Data.IORef
+import Data.Array.IO
+import qualified Data.Foldable as F
 import Data.List ((\\), partition, sort, null)
 import Prelude hiding (null)
 
@@ -30,65 +31,74 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path, Test)
 import TestInstance() -- Pull arbitraries
 
-data PieceSet = PSet { unPSet :: IORef IS.IntSet
-                     , unSz   :: !Int }
+newtype PieceSet = PieceSet { unPieceSet :: IOUArray Int Bool }
 
 instance NFData PieceSet where
-    rnf (PSet is _) = ()
+    rnf (PieceSet arr) = arr `seq` ()
 
 new :: MonadIO m => Int -> m PieceSet
-new n = {-# SCC "Data.PieceSet/new" #-} do
-    s <- liftIO $ newIORef IS.empty
-    liftIO . return $ PSet s n
+new n = {-# SCC "Data.PieceSet/new" #-}
+    liftIO $ PieceSet <$> newArray (0, n-1) False
+
+all :: MonadIO m => (Bool -> Bool) -> PieceSet -> m Bool
+all f ps = liftIO $ do
+    elems <- getElems $ unPieceSet ps
+    return $ Prelude.all f elems
 
 null :: MonadIO m => PieceSet -> m Bool
-null ps = do
-    s <- (liftIO . readIORef . unPSet) ps
-    liftIO $ return $ IS.null s
-
-insert :: MonadIO m => Int -> PieceSet -> m ()
-insert n (PSet ps i) = {-# SCC "Data.PieceSet/insert" #-} do
-    liftIO $ atomicModifyIORef ps (\ps -> (IS.insert n ps, ()))
+null = Data.PieceSet.all (==False) 
 
 full :: MonadIO m => PieceSet -> m Bool
-full ps = {-# SCC "Data.PieceSet/full" #-} do
-    s <- liftIO . readIORef . unPSet $ ps
-    liftIO . return $ all (flip IS.member s) [1..unSz ps]
+full = {-# SCC "Data.PieceSet/full" #-} Data.PieceSet.all (==True)
+
+insert :: MonadIO m => Int -> PieceSet -> m ()
+insert n (PieceSet ps) = {-# SCC "Data.PieceSet/insert" #-}
+    liftIO $ writeArray ps n True
 
 copy :: MonadIO m => PieceSet -> m PieceSet
-copy (PSet ps sz) = do
-    s <- liftIO . readIORef $ ps
-    o <- liftIO $ newIORef s
-    liftIO $ return $ PSet o sz
+copy (PieceSet ps) = liftIO $ do
+    newArr <- mapArray id ps
+    return $ PieceSet $ newArr
 
 size :: MonadIO m => PieceSet -> m Int
-size = {-# SCC "Data.PieceSet/size" #-}
-    liftIO . liftM IS.size . readIORef . unPSet
+size (PieceSet arr) = {-# SCC "Data.PieceSet/size" #-}
+    liftIO $ do
+        elems <- getElems arr
+        return $ length $ filter (==True) elems
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
-member n = {-# SCC "Data.PieceSet/member" #-}
-    liftIO . liftM (IS.member n) . readIORef . unPSet
+member n (PieceSet arr) = {-# SCC "Data.PieceSet/member" #-}
+    liftIO $ readArray arr n
 
 delete :: MonadIO m => Int -> PieceSet -> m ()
-delete n (PSet ps i) = {-# SCC "Data.PieceSet/delete" #-}
-    liftIO $ atomicModifyIORef ps (\ps -> (IS.delete n ps, ()))
+delete n (PieceSet arr) = {-# SCC "Data.PieceSet/delete" #-} liftIO $
+    writeArray arr n False
 
 intersection :: MonadIO m => PieceSet -> PieceSet -> m [Int]
-intersection (PSet ps1 i1) (PSet ps2 i2)
-                | i1 /= i2 = error "Wrong PSet intersection"
-                | otherwise = {-# SCC "Data.PieceSet/intersection" #-} do
-                            ps11 <- liftIO $ readIORef ps1
-                            ps21 <- liftIO $ readIORef ps2
-                            return $ IS.toList $ IS.intersection ps11 ps21
+intersection (PieceSet arr1) (PieceSet arr2) = liftIO $ do
+    eqSize <- (==) <$> getBounds arr1 <*> getBounds arr2
+    if not eqSize
+        then error "Wrong intersection sizes"
+        else do
+            elems <- getAssocs arr1
+            F.foldlM mem [] elems
+  where
+    mem ls (i, False) = return ls
+    mem ls (i, True)  = do
+            m <- readArray arr2 i
+            return $ if m then (i : ls) else ls
+
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
-fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} do
-    s <- liftIO $ newIORef (IS.fromList elems)
-    liftIO . return $ PSet s n
+fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO $ do
+    nArr <- newArray (0, n-1) False
+    mapM_ (flip (writeArray nArr) True) elems
+    return $ PieceSet nArr
 
 toList :: MonadIO m => PieceSet -> m [Int]
-toList = {-# SCC "Data.PieceSet/toList" #-}
-    liftIO . liftM IS.toList . readIORef . unPSet
+toList (PieceSet arr) = {-# SCC "Data.PieceSet/toList" #-} liftIO $ do
+    elems <- getAssocs arr
+    return [i | (i, e) <- elems, e == True]
 
 -- Tests
 
@@ -119,29 +129,29 @@ testFull = do
 
 testBuild :: Assertion
 testBuild = do
-    let positives = [1..1337]
-        m = maximum positives
-    ps <- fromList m positives
+    let nums = [0..1336]
+        m = 1336 + 1
+    ps <- fromList m nums
     sz <- size ps
-    assertEqual "for size" sz (length positives)
+    assertEqual "for size" sz (length nums)
 
 testIntersect :: Assertion
 testIntersect = do
-    let (evens, odds) = partition (\x -> x `mod` 2 == 0) [1..100]
+    let (evens, odds) = partition (\x -> x `mod` 2 == 0) [0..99]
     evPS <- fromList 100 evens
     oddPS <- fromList 100 odds
     is1 <- intersection evPS oddPS
     assertBool "for intersection" (Data.List.null is1)
-    ps1 <- fromList 10 [1,2,3,4,10]
+    ps1 <- fromList 10 [1,2,3,4,9]
     ps2 <- fromList 10 [0,2,5,4,8 ]
     is2 <- intersection ps1 ps2
     assertBool "for simple intersection" (sort is2 == [2,4])
 
 testMember :: Assertion
 testMember = do
-    let evens = filter (\x -> x `mod` 2 == 0) [1..1000]
-        m     = maximum evens
-        notThere = [1..m] \\ evens
+    let evens = filter (\x -> x `mod` 2 == 0) [0..999]
+        m     = 1000
+        notThere = [0..999] \\ evens
     ps <- fromList m evens
     a <- liftM and $ mapM (flip member ps) evens
     b <- liftM and $ mapM (liftM not . flip member ps) notThere
