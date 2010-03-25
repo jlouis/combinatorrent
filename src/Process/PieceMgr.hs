@@ -359,20 +359,26 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
                      tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
     -- Try grabbing pieces from the pending blocks
     tryGrabPending n ps captured = do
+        histo <- gets histogram
         pending <- gets pendingPieces
-        isn <- PS.intersection ps pending
-        case null isn of
-            True -> return $ captured -- No (more) pieces to download, return
-            False -> do
-              h <- pickRandom isn
-              infMap <- gets infoMap
-              inProg <- gets inProgress
-              blockList <- createBlock h
-              let sz  = length blockList
-                  ipp = InProgressPiece sz S.empty blockList
-              PS.delete h =<< gets pendingPieces
-              modify (\db -> db { inProgress    = M.insert h ipp inProg })
-              tryGrabProgress n ps captured
+        selector <- PS.freeze ps
+        pendingS <- PS.freeze pending
+        let culprits = PendS.pick (\p -> selector p && pendingS p) histo
+        case culprits of
+            Nothing -> do
+                isn <- PS.intersection ps pending
+                assert (null isn) (return ())
+                return captured
+            Just pieces -> do
+                h <- pickRandom pieces
+                infMap <- gets infoMap
+                inProg <- gets inProgress
+                blockList <- createBlock h
+                let sz  = length blockList
+                    ipp = InProgressPiece sz S.empty blockList
+                PS.delete h =<< gets pendingPieces
+                modify (\db -> db { inProgress    = M.insert h ipp inProg })
+                tryGrabProgress n ps captured
     grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
         dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
         take n . shuffle' dls (length dls) <$> liftIO newStdGen

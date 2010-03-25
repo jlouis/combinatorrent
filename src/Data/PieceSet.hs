@@ -12,6 +12,7 @@ module Data.PieceSet
     , member
     , fromList
     , toList
+    , Data.PieceSet.freeze
     -- * Tests
     , testSuite
     )
@@ -22,6 +23,7 @@ import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import Data.Array.IO
+import Data.Array.Unboxed ((!), UArray)
 import qualified Data.Foldable as F
 import Data.List ((\\), partition, sort, null)
 import Prelude hiding (null)
@@ -30,6 +32,8 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Path, Test)
 import TestInstance() -- Pull arbitraries
+
+import Torrent
 
 newtype PieceSet = PieceSet { unPieceSet :: IOUArray Int Bool }
 
@@ -99,6 +103,11 @@ toList :: MonadIO m => PieceSet -> m [Int]
 toList (PieceSet arr) = {-# SCC "Data.PieceSet/toList" #-} liftIO $ do
     elems <- getAssocs arr
     return [i | (i, e) <- elems, e == True]
+
+freeze :: MonadIO m => PieceSet -> m (PieceNum -> Bool)
+freeze (PieceSet ps) = do
+    frozen <- liftIO $ (Data.Array.IO.freeze ps :: IO (UArray Int Bool))
+    return $ (frozen !)
 
 -- Tests
 
