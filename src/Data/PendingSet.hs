@@ -1,9 +1,10 @@
 module Data.PendingSet
-    ( Data.PendingSet.empty
+    ( PendingSet
+    , Data.PendingSet.empty
     , have
     , unhave
-    , bitfield
-    , unbitfield
+    , haves
+    , unhaves
     , pick
     )
 where
@@ -33,13 +34,13 @@ unhave pn = PendingSet . alter f pn . unPS
         f (Just x) = Just (x-1)
 
 -- | Add all pieces in a bitfield
-bitfield :: [PieceNum] -> PendingSet -> PendingSet
-bitfield pns = flip (foldl f) pns
+haves :: [PieceNum] -> PendingSet -> PendingSet
+haves pns = flip (foldl f) pns
   where f e = flip have e
 
 -- | Remove all pieces in a bitfield
-unbitfield :: [PieceNum] -> PendingSet -> PendingSet
-unbitfield pns = flip (foldl f) pns
+unhaves :: [PieceNum] -> PendingSet -> PendingSet
+unhaves pns = flip (foldl f) pns
   where f e = flip unhave e
 
 -- | Crawl through the set of pending pieces in decreasing order of rarity.

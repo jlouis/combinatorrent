@@ -16,7 +16,7 @@ import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List
-import Data.PendingSet()
+import qualified Data.PendingSet as PendS
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -52,6 +52,7 @@ data PieceDB = PieceDB
     , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
     , infoMap       :: PieceMap   -- ^ Information about pieces
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
+    , histogram     :: PendS.PendingSet -- ^ Track the rarity of pieces
     , assertCount   :: Int        -- ^ When to next check the database for consistency
     }
 
@@ -92,6 +93,10 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (Channel Blocks)
                    -- ^ Ask if any of these pieces are interesting
                  | GetDone (Channel [PieceNum])
                    -- ^ Get the pieces which are already done
+                 | PeerHave [PieceNum]
+                   -- ^ A peer has the given piece(s)
+                 | PeerUnhave [PieceNum]
+                   -- ^ A peer relinquished the given piece Indexes
 
 instance NFData PieceMgrMsg where
     rnf a = case a of
@@ -170,6 +175,10 @@ start mgrC fspC chokeC statC db ih supC =
                     mapM_ putbackBlock blks
                 GetDone c -> do done <- PS.toList =<< gets donePiece
                                 syncP =<< sendP c done
+                PeerHave idxs ->
+                    modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+                PeerUnhave idxs ->
+                    modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
                 AskInterested pieces retC -> do
                     nPieces <- M.size <$> gets infoMap
                     inProg <- M.keys <$> gets inProgress
@@ -198,7 +207,7 @@ createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m PieceDB
 createPieceDb mmap pmap = do
     pending <- filt (==False)
     done    <- filt (==True)
-    return $ PieceDB pending done [] M.empty [] pmap False 0
+    return $ PieceDB pending done [] M.empty [] pmap False PendS.empty 0
   where
     filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
 

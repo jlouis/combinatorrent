@@ -243,7 +243,10 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
             foreverP (eventLoop)
         cleanup = do
             t <- liftIO myThreadId
+            pieces <- gets peerPieces >>= PS.toList
+            syncP =<< sendPC pieceMgrCh (PeerUnhave pieces)
             syncP =<< sendPC peerMgrCh (Disconnect t)
+
         getPiecesDone = do
             c <- liftIO $ channel
             syncP =<< (sendPC pieceMgrCh $ GetDone c)
@@ -328,6 +331,7 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
             pm <- asks pieceMap
             if M.member pn pm
                 then do PS.insert pn =<< gets peerPieces
+                        syncP =<< sendPC pieceMgrCh (PeerHave [pn])
                         considerInterest
                 else do warningP "Unknown Piece"
                         stopP
@@ -338,6 +342,8 @@ peerP pMgrC pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = 
                 -- TODO: Don't trust the bitfield
                 then do peerP <- createPeerPieces nPieces bf
                         modify (\s -> s { peerPieces = peerP })
+                        peerLs <- PS.toList peerP
+                        syncP =<< sendPC pieceMgrCh (PeerHave peerLs)
                         considerInterest
                 else do infoP "Got out of band Bitfield request, dying"
                         stopP
