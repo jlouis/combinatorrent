@@ -74,11 +74,6 @@ wish-list.
 Planned for the next release
 ----------------------------
 
-   - Improve Data.PieceSet. We need to handle picking off random pieces and
-     such effectively. Best solution is to make this part of Data.PieceSet
-     and then assume any valid implementation handles it correctly.
-   - Improve parallel execution. We are currently extremely synchronous.
-     Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
    - Play with the code coverage in GHC.
@@ -86,12 +81,18 @@ Planned for the next release
      without this knowledge.
    - Seeding has a bug. Find and eradicate.
    - The "Uploaded" status count is not reported correctly. Find and fix.
-     This probably affects seeding as well.
+     This probably affects seeding as well. I think it is due to changes in
+     the sender process.
    - We have seen various Deaths due to wrong IP decoding. Investigate.
+     Can't be IPv6, since it has its own entry in the dictionary.
+   - Make Data.PieceSet handle the special case where the array is full. It
+     will optimize space usage by a great amount.
 
 Items for later (no particular order)
 -------------------------------------
 
+   - Improve parallel execution. We are currently extremely synchronous.
+     Check the code with ThreadScope, some improvement has been done.
    - Improve the Peer Management code. Keep track of peers and process them
      over time in an intelligent manner.
    - Add restart-support to the supervisors where applicable.
