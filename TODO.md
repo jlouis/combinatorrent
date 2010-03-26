@@ -69,17 +69,11 @@ wish-list.
 Planned for the next release
 ----------------------------
 
-   - Improve parallel execution. We are currently extremely synchronous.
-     Check the code with ThreadScope, some improvement has been done.
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
    - Play with the code coverage in GHC.
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
-   - Seeding has a bug. Find and eradicate.
-   - The "Uploaded" status count is not reported correctly. Find and fix.
-     This probably affects seeding as well. I think it is due to changes in
-     the sender process.
    - We have seen various Deaths due to wrong IP decoding. Investigate.
      Can't be IPv6, since it has its own entry in the dictionary.
    - Make Data.PieceSet handle the special case where the array is full. It
@@ -91,7 +85,8 @@ Items for later (no particular order)
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
    - Improve the Peer Management code. Keep track of peers and process them
-     over time in an intelligent manner.
+     over time in an intelligent manner. Ability to kill bad peers, not
+     reconnect blindly to peers, and so on.
    - Add restart-support to the supervisors where applicable.
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
