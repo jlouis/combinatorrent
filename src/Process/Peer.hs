@@ -266,7 +266,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
                     ChokePeer -> do choking <- gets weChoke
                                     when (not choking)
                                          (do syncP =<< sendPC outCh SendOChoke
-                                             debugP "Choke Peer"
+                                             debugP "ChokePeer"
                                              modify (\s -> s {weChoke = True}))
                     UnchokePeer -> do choking <- gets weChoke
                                       when choking
