@@ -125,6 +125,6 @@ start statusC supC = do
                             mp <- get
                             let q = M.lookup ih mp
                             ns  <- maybe (fail "Unknown Torrent") return q
-                            assert (left ns /= 0) (return ())
+                            assert (left ns == 0) (return ())
                             syncP =<< sendP (trackerMsgCh ns) Complete
                             modify (\s -> M.insert ih (ns { state = Seeding}) s))
