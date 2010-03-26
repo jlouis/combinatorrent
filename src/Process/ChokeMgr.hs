@@ -193,6 +193,7 @@ rechoke = do
     chn <- gets chain
     sd <- gets seeding
     rm <- gets rateMap
+    debugP $ "Chain is:  " ++ show (map pThreadId chn)
     let (seed, down) = splitSeedLeech sd rm chn
     electedPeers <- selectPeers us down seed
     performChokingUnchoking electedPeers chn

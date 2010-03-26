@@ -243,7 +243,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
             -- Install the StatusP timer
             c <- asks timerCh
             Timer.register 5 () c
-            foreverP (eventLoop)
+            foreverP (eventLoop tid)
         cleanup = do
             t <- liftIO myThreadId
             pieces <- gets peerPieces >>= PS.toList
@@ -254,8 +254,8 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
             c <- liftIO $ channel
             syncP =<< (sendPC pieceMgrCh $ GetDone c)
             recvP c (const True) >>= syncP
-        eventLoop = {-# SCC "Peer.Control" #-} do
-            syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent, timerEvent]
+        eventLoop tid = {-# SCC "Peer.Control" #-} do
+            syncP =<< chooseP [peerMsgEvent, chokeMgrEvent, upRateEvent, timerEvent tid]
         chokeMgrEvent = do
             evt <- recvPC peerCh
             wrapP evt (\msg -> do
@@ -277,7 +277,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
                         modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
                         syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
         isASeeder = (== nPieces) <$> (gets peerPieces >>= PS.size)
-        timerEvent = do
+        timerEvent mTid = do
             evt <- recvPC timerCh
             wrapP evt (\() -> do
                 debugP "TimerEvent"
@@ -293,7 +293,6 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
                 i <- gets peerInterested
                 seed <- isASeeder
                 pchoke <- gets peerChoke
-                mTid <- liftIO $ myThreadId
                 liftIO . atomically $ do
                     q <- readTVar rtv
                     writeTVar rtv ((mTid, (up, down, i, seed, pchoke)) : q)
