@@ -58,6 +58,7 @@ data CF = CF { peerCh :: PeerMgrChannel
              , mgrCh :: Channel MgrMessage
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
+             , chokeRTV :: RateTVar
              }
 
 instance Logging CF where
@@ -73,13 +74,13 @@ data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              }
 
 start :: PeerMgrChannel -> PeerId
-      -> ChokeMgrChannel -> SupervisorChan
+      -> ChokeMgrChannel -> RateTVar -> SupervisorChan
       -> IO ThreadId
-start ch pid chokeMgrC supC =
+start ch pid chokeMgrC rtv supC =
     do mgrC <- channel
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
-       spawnP (CF ch mgrC pool chokeMgrC)
+       spawnP (CF ch mgrC pool chokeMgrC rtv)
               (ST [] M.empty pid cmap) (catchP (forever lp)
                                        (defaultStopHandler supC))
   where
@@ -128,19 +129,21 @@ start ch pid chokeMgrC supC =
         pool <- asks peerPool
         mgrC <- asks mgrCh
         cmap <- gets cmMap
-        liftIO $ connect (hn, prt, pid, ih) pool mgrC cmap
+        rtv <- asks chokeRTV
+        liftIO $ connect (hn, prt, pid, ih) pool mgrC rtv cmap
     addIncoming conn = do
         pid <- gets peerId
         pool <- asks peerPool
         mgrC <- asks mgrCh
+        rtv <- asks chokeRTV
         cmap <- gets cmMap
-        liftIO $ acceptor conn pool pid mgrC cmap
+        liftIO $ acceptor conn pool pid mgrC rtv cmap
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 
-connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> ChanManageMap
+connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> RateTVar -> ChanManageMap
         -> IO ThreadId
-connect (host, port, pid, ih) pool mgrC cmap =
+connect (host, port, pid, ih) pool mgrC rtv cmap =
     spawn (connector >> return ())
   where 
         connector =
@@ -161,15 +164,15 @@ connect (host, port, pid, ih) pool mgrC cmap =
                      let tc = case M.lookup ih cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
-                     children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
+                     children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
                                                       (tcPM tc) (M.size (tcPM tc)) ih
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
 acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
-         -> PeerId -> MgrChannel -> ChanManageMap
+         -> PeerId -> MgrChannel -> RateTVar -> ChanManageMap
          -> IO ThreadId
-acceptor (h,hn,pn) pool pid mgrC cmmap =
+acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
     spawn (connector >> return ())
   where ihTst k = M.member k cmmap
         connector = do
@@ -186,7 +189,7 @@ acceptor (h,hn,pn) pool pid mgrC cmmap =
                        let tc = case M.lookup ih cmmap of
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
-                       children <- peerChildren h mgrC (tcPcMgrCh tc) (tcFSCh tc)
+                       children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatCh tc) (tcPM tc) (M.size (tcPM tc)) ih
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()

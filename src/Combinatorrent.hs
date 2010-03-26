@@ -3,6 +3,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.Monad
 
 import Data.List
@@ -111,6 +112,7 @@ download flags names = do
     supC <- channel
     pmC <- channel
     chokeC <- channel
+    rtv <- atomically $ newTVar []
     debugM "Main" "Created channels"
     pid <- generatePeerId
     tid <- allForOne "MainSup"
@@ -118,8 +120,8 @@ download flags names = do
               [ Worker $ Console.start waitC statusC
               , Worker $ TorrentManager.start watchC statusC chokeC pid pmC
               , Worker $ Status.start statusC
-              , Worker $ PeerMgr.start pmC pid chokeC
-              , Worker $ ChokeMgr.start chokeC 100 -- 100 is upload rate in KB
+              , Worker $ PeerMgr.start pmC pid chokeC rtv
+              , Worker $ ChokeMgr.start chokeC rtv 100 -- 100 is upload rate in KB
                              False -- TODO: Fix this leeching/seeding problem
               , Worker $ Listen.start defaultPort pmC
               ]) supC
