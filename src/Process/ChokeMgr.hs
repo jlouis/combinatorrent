@@ -62,10 +62,13 @@ type ChokeMgrProcess a = Process CF PeerDB a
 -- INTERFACE
 ----------------------------------------------------------------------
 
+roundTickSecs :: Integer
+roundTickSecs = 11
+
 start :: ChokeMgrChannel -> RateTVar -> Int -> Bool -> SupervisorChan
       -> IO ThreadId
 start ch rtv ur weSeed supC = do
-    Timer.register 10 Tick ch
+    Timer.register roundTickSecs Tick ch
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
               (defaultStopHandler supC))
@@ -86,7 +89,7 @@ start ch rtv ur weSeed supC = do
                     TorrentComplete ih -> modify (\s -> s { seeding = S.insert ih $ seeding s }))
     tick = do debugP "Ticked"
               ch <- asks mgrCh
-              Timer.register 10 Tick ch
+              Timer.register roundTickSecs Tick ch
               updateDB
               runRechokeRound
     removePeer tid = do debugP $ "Removing peer " ++ show tid
@@ -146,7 +149,9 @@ updateDB = do
                                                     pIsASeeder      = seeder,
                                                     pChokingUs      = choking }) old
                         nm m = foldl f m $ reverse updates
-                    in modify (\db -> db { rateMap = nm (rateMap db) })
+                    in do
+                        debugP $ "Rate updates since last round: " ++ show updates
+                        modify (\db -> db { rateMap = nm (rateMap db) })
 
 addPeer :: PeerChannel -> InfoHash -> ThreadId -> ChokeMgrProcess ()
 addPeer ch ih t = do
@@ -289,6 +294,7 @@ selectPeers uploadSlots downPeers seedPeers = do
             (nDownSlots, nSeedSlots) = assignUploadSlots uploadSlots (length downPeers) (length seedPeers)
             downPids = S.fromList $ map (pThreadId . fst) $ take nDownSlots $ sortLeech dp
             seedPids = S.fromList $ map (pThreadId . fst) $ take nSeedSlots $ sortSeeds sp
+        debugP $ "Leechers: " ++ show (length downPeers) ++ ", Seeders: " ++ show (length seedPeers)
         debugP $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
         debugP $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
         return $ assertSlots (nDownSlots + nSeedSlots) (S.union downPids seedPids)
