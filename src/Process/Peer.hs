@@ -63,7 +63,7 @@ peerChildren handle pMgrC rtv pieceMgrC fsC statusC pm nPieces ih = do
     return [Worker $ senderP handle senderC,
             Worker $ sendQueueP queueC senderC sendBWC,
             Worker $ receiverP handle receiverC,
-            Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces handle
+            Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
                                 queueC receiverC sendBWC statusC ih]
 
 -- INTERNAL FUNCTIONS
@@ -158,12 +158,12 @@ sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
                                                     bytesTransferred s + fromIntegral (B.length bs)}))
     filterAllPiece (Piece _ _ _) = True
     filterAllPiece _             = False
-    filterPiece n off m =
-        case m of Piece n off _ -> False
-                  _             -> True
-    filterRequest n blk m =
-        case m of Request n blk -> False
-                  _             -> True
+    filterPiece n off (Piece n1 off1 _) | n == n1 && off == off1 = False
+                                        | otherwise               = True
+    filterPiece _ _   _                                           = True
+    filterRequest n blk (Request n1 blk1) | n == n1 && blk == blk1 = False
+                                          | otherwise              = True
+    filterRequest _ _   _                                          = True
 
 data RPCF = RPCF { rpMsgCh :: Channel (Message, Integer) }
 
@@ -178,7 +178,6 @@ receiverP h ch supC = spawnP (RPCF ch) h
   where
     pgm = readHeader
     readHeader = {-# SCC "Recv_readHeader" #-} do
-        ch <- asks rpMsgCh
         h <- get
         bs' <- liftIO $ B.hGet h 4
         l <- conv bs'
@@ -222,11 +221,11 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
                , runningEndgame :: Bool -- ^ True if we are in endgame
                }
 
-peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int -> Handle
+peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
          -> Channel SendQueueMessage -> Channel (Message, Integer) -> BandwidthChannel
          -> StatusChan -> InfoHash
          -> SupervisorChan -> IO ThreadId
-peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih supC = do
+peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC statC ih supC = do
     ch <- channel
     tch <- channel
     ct <- getCurrentTime
