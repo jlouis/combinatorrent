@@ -14,6 +14,7 @@ import qualified Data.Map as M
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.DeepSeq
 
 import Control.Monad.State
@@ -46,7 +47,7 @@ instance NFData PeerMgrMsg where
 data TorrentLocal = TorrentLocal
                         { tcPcMgrCh :: PieceMgrChannel
                         , tcFSCh    :: FSPChannel
-                        , tcStatCh  :: StatusChan
+                        , tcStatTV  :: TVar [PStat]
                         , tcPM      :: PieceMap
                         }
 
@@ -163,7 +164,7 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                      let tc = case M.lookup ih cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
-                     children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatCh tc)
+                     children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
                                                       (tcPM tc) (M.size (tcPM tc)) ih
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
@@ -188,7 +189,7 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
                        children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
-                                                        (tcStatCh tc) (tcPM tc) (M.size (tcPM tc)) ih
+                                                        (tcStatTV tc) (tcPM tc) (M.size (tcPM tc)) ih
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"

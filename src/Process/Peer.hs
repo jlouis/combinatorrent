@@ -53,9 +53,9 @@ import Protocol.Wire
 ----------------------------------------------------------------------
 
 peerChildren :: Handle -> MgrChannel -> RateTVar -> PieceMgrChannel
-             -> FSPChannel -> StatusChan -> PieceMap -> Int -> InfoHash
+             -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
-peerChildren handle pMgrC rtv pieceMgrC fsC statusC pm nPieces ih = do
+peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- channel
     senderC <- channel
     receiverC <- channel
@@ -64,7 +64,7 @@ peerChildren handle pMgrC rtv pieceMgrC fsC statusC pm nPieces ih = do
             Worker $ sendQueueP queueC senderC sendBWC,
             Worker $ receiverP handle receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
-                                queueC receiverC sendBWC statusC ih]
+                                queueC receiverC sendBWC stv ih]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
@@ -203,7 +203,7 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
                , peerCh :: PeerChannel
                , sendBWCh :: BandwidthChannel
                , timerCh :: Channel ()
-               , statCh :: StatusChan
+               , statTV :: TVar [PStat]
                , pieceMap :: PieceMap
                }
 
@@ -223,14 +223,14 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
 
 peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
          -> Channel SendQueueMessage -> Channel (Message, Integer) -> BandwidthChannel
-         -> StatusChan -> InfoHash
+         -> TVar [PStat] -> InfoHash
          -> SupervisorChan -> IO ThreadId
-peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC statC ih supC = do
+peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = do
     ch <- channel
     tch <- channel
     ct <- getCurrentTime
     pieceSet <- PS.new nPieces
-    spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch statC pm)
+    spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv pm)
            (PST True False S.empty True False pieceSet (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
@@ -299,9 +299,12 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC statC ih supC 
                 let (upCnt, nuRate) = RC.extractCount $ nur
                     (downCnt, ndRate) = RC.extractCount $ ndr
                 debugP $ "Sending peerStats: " ++ show upCnt ++ ", " ++ show downCnt
-                (sendPC statCh $ PeerStat $ PStat { pInfoHash = ih
-                                                  , pUploaded = upCnt
-                                                  , pDownloaded = downCnt }) >>= syncP
+                stv <- asks statTV
+                liftIO .atomically $ do
+                    q <- readTVar stv
+                    writeTVar stv (PStat { pInfoHash = ih
+                                         , pUploaded = upCnt
+                                         , pDownloaded = downCnt } : q)
                 modify (\s -> s { upRate = nuRate, downRate = ndRate }))
         upRateEvent = do
             evt <- recvPC sendBWCh

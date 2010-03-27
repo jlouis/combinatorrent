@@ -41,7 +41,6 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                | CompletedPiece InfoHash Integer
                | InsertTorrent InfoHash Integer (Channel TrackerMsg)
                | RemoveTorrent InfoHash
-               | PeerStat PStat
                | TorrentCompleted InfoHash
                | RequestStatus InfoHash (Channel StatusState)
                | RequestAllTorrents (Channel [(InfoHash, StatusState)])
@@ -119,10 +118,6 @@ start statusC tv supC = do
                             modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
                         CompletedPiece ih bytes -> do
                             modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
-                        PeerStat (PStat ih up down) -> do
-                           modify (\s -> M.adjust (\st -> st { uploaded = (uploaded st) + up
-                                                             , downloaded = (downloaded st) + down }) ih
-                                                  s)
                         InsertTorrent ih left trackerMsgC ->
                             modify (\s -> M.insert ih (newMap left trackerMsgC) s)
                         RemoveTorrent ih -> modify (\s -> M.delete ih s)

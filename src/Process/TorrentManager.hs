@@ -11,6 +11,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.DeepSeq
 
 import Control.Monad.State
@@ -41,7 +42,8 @@ instance NFData TorrentManagerMsg where
 type TorrentMgrChan = Channel [TorrentManagerMsg]
 
 data CF = CF { tCh :: TorrentMgrChan
-             , tStatusCh    :: Channel Status.StatusMsg
+             , tStatusCh    :: Status.StatusChan
+             , tStatusTV    :: TVar [Status.PStat]
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
              , tChokeCh     :: ChokeMgr.ChokeMgrChannel
@@ -52,14 +54,15 @@ instance Logging CF where
 
 data ST = ST { workQueue :: [TorrentManagerMsg] }
 start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
-      -> Channel Status.StatusMsg
+      -> Status.StatusChan
+      -> TVar [Status.PStat]
       -> ChokeMgr.ChokeMgrChannel
       -> PeerId
       -> PeerMgr.PeerMgrChannel
       -> SupervisorChan
       -> IO ThreadId
-start chan statusC chokeC pid peerC supC =
-    spawnP (CF chan statusC pid peerC chokeC) (ST [])
+start chan statusC stv chokeC pid peerC supC =
+    spawnP (CF chan statusC stv pid peerC chokeC) (ST [])
                 (catchP (forever pgm) (defaultStopHandler supC))
   where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
         dirEvt =
@@ -96,6 +99,7 @@ startTorrent fp = do
     pieceMgrC  <- liftIO channel
     chokeC  <- asks tChokeCh
     statusC <- asks tStatusCh
+    stv <- asks tStatusTV
     pid     <- asks tPeerId
     pmC     <- asks tPeerMgrCh
     (handles, haveMap, pieceMap) <- liftIO $ openAndCheckFile bc
@@ -109,6 +113,6 @@ startTorrent fp = do
                      ] supC
     syncP =<< (sendP statusC $ Status.InsertTorrent (infoHash ti) left trackerC)
     syncP =<< (sendPC tPeerMgrCh $ PeerMgr.NewTorrent (infoHash ti)
-                            (PeerMgr.TorrentLocal pieceMgrC fspC statusC pieceMap ))
+                            (PeerMgr.TorrentLocal pieceMgrC fspC stv pieceMap ))
     syncP =<< sendP trackerC Status.Start
     return tid
