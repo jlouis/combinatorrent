@@ -224,7 +224,6 @@ checkFullCompletion :: PieceMgrProcess ()
 checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
-    ih    <- asks pMgrInfoHash
     donePSz <- PS.size doneP
     when (M.size im == donePSz)
         (do liftIO $ putStrLn "Torrent Completed"
@@ -306,7 +305,7 @@ updateProgress pn blk = do
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
-  where build 0         os accum = reverse accum
+  where build 0        _os accum = reverse accum
         build leftBytes os accum | leftBytes >= blockSz =
                                      build (leftBytes - blockSz)
                                            (os + blockSz)
@@ -371,7 +370,6 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
                 return captured
             Just pieces -> do
                 h <- pickRandom pieces
-                infMap <- gets infoMap
                 inProg <- gets inProgress
                 blockList <- createBlock h
                 let sz  = length blockList
