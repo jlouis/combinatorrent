@@ -98,9 +98,9 @@ atchan i o = {-# SCC "atchan" #-} do
 atsync :: Synchronizer -> Abort -> IO () -> IO ()
 atsync r a x = {-# SCC "atsync" #-} do
   (t,s) <- L.takeMVar r
-  forkIO $ fix $ \z -> {-# SCC "atsync_1" #-} do
+  _ <- forkIO $ fix $ \z -> {-# SCC "atsync_1" #-} do
     (_,s') <- L.takeMVar r
-    forkIO z
+    _ <- forkIO z
     L.putMVar s' Nothing
   c <- L.newEmptyMVar
   L.putMVar s (Just c)
@@ -110,7 +110,7 @@ atsync r a x = {-# SCC "atsync" #-} do
       L.putMVar t ()
       fix $ \z -> do
         (tL,f) <- L.takeMVar a
-        forkIO z
+        _ <- forkIO z
         if elem t tL
           then return ()
           else f
@@ -157,7 +157,7 @@ channel :: IO (Channel a)
 channel = do
   i <- L.newEmptyMVar
   o <- L.newEmptyMVar
-  forkIO $ {-# SCC "channel" #-} forever $ atchan i o
+  _ <- forkIO $ {-# SCC "channel" #-} forever $ atchan i o
   m <- S.newEmptyMVar
   return (Channel i o m)
 
@@ -171,7 +171,7 @@ receive :: Channel a -> (a -> Bool) -> Event a
 receive (Channel i _ m) patt = Event efun where
   efun r _ n = {-# SCC "receive" #-} do
     t <- L.newEmptyMVar
-    forkIO (L.putMVar n [t])
+    _ <- forkIO (L.putMVar n [t])
     atpointI r t i patt (S.takeMVar m)
 
 -- | Transmit a message over a channel.
@@ -183,7 +183,7 @@ transmit :: NFData a => Channel a -> a -> Event ()
 transmit (Channel _ o m) y = Event efun where
   efun r _ n = {-# SCC "transmit" #-} do
     t <- L.newEmptyMVar
-    forkIO (L.putMVar n [t])
+    _ <- forkIO (L.putMVar n [t])
     atpointO r t o y (S.putMVar m y)
 
 -- $events
@@ -201,12 +201,12 @@ choose vL = Event efun where
     j <- L.newEmptyMVar
     tL <- foldM (\tL -> \(Event v) -> do
         n' <- L.newEmptyMVar
-        forkIO $ {-# SCC "choose_1" #-} v r a n' >>= L.putMVar j
+        _ <- forkIO $ {-# SCC "choose_1" #-} v r a n' >>= L.putMVar j
         tL' <- L.takeMVar n'
         L.putMVar n' tL'
         return (tL' ++ tL)
       ) [] vL
-    forkIO (L.putMVar n tL)
+    _ <- forkIO (L.putMVar n tL)
     L.takeMVar j
 
 -- | Specify a post-synchronization action.
@@ -231,7 +231,7 @@ guard vs = Event efun where
 
 atTimeEvt :: NFData a => Integer -> a -> Event a
 atTimeEvt secs msg = guard (do ch <- channel
-                               spawn $ trigger ch
+                               _ <- spawn $ trigger ch
                                return $ receive ch (const True))
   where trigger ch = do threadDelay $ 5*1000000
                         sync $ transmit ch msg
@@ -247,7 +247,7 @@ atTimeEvt secs msg = guard (do ch <- channel
 wrapabort :: IO () -> Event a -> Event a
 wrapabort f (Event v) = Event efun where
   efun r a n = do
-    forkIO $ do
+    _ <- forkIO $ do
       tL <- L.takeMVar n
       L.putMVar n tL
       L.putMVar a (tL, f)
@@ -259,11 +259,11 @@ wrapabort f (Event v) = Event efun where
 sync :: Event a -> IO a
 sync (Event v) = {-# SCC "sync" #-} do
   j <- L.newEmptyMVar
-  forkIO $ fix $ \z -> {-# SCC "sync" #-} do
+  _ <- forkIO $ fix $ \z -> {-# SCC "sync" #-} do
     r <- L.newEmptyMVar
     a <- L.newEmptyMVar
     n <- L.newEmptyMVar
-    forkIO $ atsync r a z
+    _ <- forkIO $ atsync r a z
     x <- v r a n
     L.putMVar j x
   L.takeMVar j

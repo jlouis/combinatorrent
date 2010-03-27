@@ -54,8 +54,8 @@ pick selector ps = findPri (minView . unPS $ ps)
             if selector pn
                 then pickAtPri p [pn] (minView rest)
                 else findPri $ minView rest
-        pickAtPri p acc Nothing = Just acc
-        pickAtPri p acc (Just (pn :-> p', rest))
+        pickAtPri _p acc Nothing = Just acc
+        pickAtPri  p acc (Just (pn :-> p', rest))
             | p == p' = if selector pn
                             then pickAtPri p (pn : acc) $ minView rest
                             else pickAtPri p acc $ minView rest

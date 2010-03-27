@@ -74,7 +74,7 @@ runP c st (Process p) = runStateT (runReaderT p c) st
 -- | Spawn and run a process monad
 spawnP :: a -> b -> Process a b () -> IO ThreadId
 spawnP c st p = spawn proc
-  where proc = do runP c st p
+  where proc = do _ <- runP c st p
                   return ()
 
 -- | Run the process monad for its side effect, with a stopHandler if exceptions
@@ -138,7 +138,7 @@ wrapP ev p = do
 atTimeEvtP :: NFData c => Integer -> c -> Process a b (Event (c, b))
 atTimeEvtP secs msg = do
     s <- get
-    return (wrap (atTimeEvt secs msg)
+    return (wrap (atTimeEvt (fromIntegral secs) msg)
                 (\m -> return (m, s)))
 
 -- Convenience function

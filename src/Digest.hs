@@ -30,7 +30,7 @@ digestLBS mdType xs = {-# SCC "sha1_digestLBS" #-}
 updateBS :: B.ByteString -> SSL.Digest ()
 updateBS bs = {-# SCC "sha1_updateBS" #-} do
     SSL.DST ctx <- get
-    liftIO $ unsafeUseAsCStringLen bs $
+    _ <- liftIO $ unsafeUseAsCStringLen bs $
             \(ptr, len) -> SSL.digestUpdate ctx (castPtr ptr) (fromIntegral len)
     return ()
 
