@@ -87,7 +87,7 @@ intersection (PieceSet arr1) (PieceSet arr2) = liftIO $ do
             elems <- getAssocs arr1
             F.foldlM mem [] elems
   where
-    mem ls (i, False) = return ls
+    mem ls (_, False) = return ls
     mem ls (i, True)  = do
             m <- readArray arr2 i
             return $ if m then (i : ls) else ls
@@ -132,7 +132,7 @@ testFull :: Assertion
 testFull = do
     let maxElem = 1337
     ps <- new maxElem
-    forM [0..maxElem-1] (flip insert ps)
+    _ <- forM [0..maxElem-1] (flip insert ps)
     tst <- liftM and $ mapM (flip member ps) [0..maxElem-1]
     assertBool "for a full PieceSet" tst
 

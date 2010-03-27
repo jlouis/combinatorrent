@@ -88,9 +88,9 @@ allForOne name children parentC = do
     childEvent = do
         ev <- recvPC chan
         wrapP ev (\msg -> case msg of
-            IAmDying tid -> do gets childInfo >>= mapM_ finChild
-                               t <- liftIO myThreadId
-                               sendPC parent (IAmDying t) >>= syncP
+            IAmDying _tid -> do gets childInfo >>= mapM_ finChild
+                                t <- liftIO myThreadId
+                                sendPC parent (IAmDying t) >>= syncP
             SpawnNew chld -> do n <- spawnChild chld
                                 modify (\(STOFA cs) -> STOFA (n : cs)))
     parentEvent mTid = do
@@ -149,9 +149,9 @@ oneForOne name children parentC = do
         ev <- recvP parentC (\m -> case m of
                                      PleaseDie tid | tid == mTid -> True
                                      _                           -> False)
-        wrapP ev (\msg -> do (STOFO cs) <- get
-                             mapM_ finChild cs
-                             stopP)
+        wrapP ev (\_ -> do (STOFO cs) <- get
+                           mapM_ finChild cs
+                           stopP)
     pruneChild tid = modify (\(STOFO cs) -> STOFO (filter check cs))
           where check (HSupervisor t) = t == tid
                 check (HWorker t)     = t == tid

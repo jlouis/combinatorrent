@@ -54,13 +54,11 @@ start waitC statusC supC = do
             (\_ -> syncP =<< sendP waitC ())
     helpEvent = do
         ch <- asks cmdCh
-        wrtC <- asks wrtCh
         ev <- recvP ch (==Help)
         wrapP ev
             (\_ -> syncP =<< sendPC wrtCh helpMessage)
     unknownEvent = do
         ch <- asks cmdCh
-        wrtC <- asks wrtCh
         ev <- recvP ch (\m -> case m of
                                 Unknown _ -> True
                                 _         -> False)
@@ -68,7 +66,6 @@ start waitC statusC supC = do
             (\(Unknown cmd) -> syncP =<< (sendPC wrtCh $ "Unknown command: " ++ cmd))
     showEvent = do
         ch <- asks cmdCh
-        wrtC <- asks wrtCh
         ev <- recvP ch (==Show)
         wrapP ev
             (\_ -> do
@@ -88,14 +85,14 @@ helpMessage = concat
 
 writerP :: IO (Channel String)
 writerP = do wrtCh <- channel
-             spawn $ lp wrtCh
+             _ <- spawn $ lp wrtCh
              return wrtCh
   where lp wCh = forever (do m <- sync $ receive wCh (const True)
                              putStrLn m)
 
 readerP :: IO CmdChannel
 readerP = do cmdCh <- channel
-             spawn $ lp cmdCh
+             _ <- spawn $ lp cmdCh
              return cmdCh
   where lp cmdCh = forever $
            do c <- getLine

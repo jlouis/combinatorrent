@@ -16,7 +16,7 @@ import Control.Monad.Trans
 -- | Registers a timer tick on a channel in a number of seconds with
 --   an annotated version.
 registerL :: NFData a => Integer -> a -> Channel a -> IO ()
-registerL secs v tickChan = do spawn timerProcess
+registerL secs v tickChan = do _ <- spawn timerProcess
                                return ()
   where timerProcess = do threadDelay $ fromInteger $ secs * 1000000
                           sync $ transmit tickChan v
