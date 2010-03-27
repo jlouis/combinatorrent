@@ -71,7 +71,6 @@ progHeader = putStrLn $ "This is Haskell-torrent version " ++ version ++ "\n" ++
 
 setupLogging :: [Flag] -> IO ()
 setupLogging flags = do
-    rootL <- getRootLogger
     fLog <- case logFlag flags of
                 Nothing -> streamHandler SIO.stdout DEBUG
                 Just (LogFile fp) -> fileHandler fp DEBUG

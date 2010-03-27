@@ -71,10 +71,10 @@ start chan statusC chokeC pid peerC supC =
                 [] -> return ()
                 (AddedTorrent fp : rest) -> do
                     debugP $ "Adding torrent file: " ++ fp
-                    startTorrent fp
+                    _ <- startTorrent fp
                     modify (\s -> s { workQueue = rest })
                     startStop
-                (RemovedTorrent fp : _) -> do
+                (RemovedTorrent _ : _) -> do
                     errorP "Removal of torrents not yet supported :P"
                     stopP
 

@@ -97,13 +97,13 @@ start ch pid chokeMgrC rtv supC =
                     sz <- liftM M.size $ gets peers
                     if sz < numPeers
                         then do debugP "New incoming peer, handling"
-                                addIncoming conn
+                                _ <- addIncoming conn
                                 return ()
                         else do debugP "Already too many peers, closing!"
                                 liftIO $ hClose h
                 NewTorrent ih tl -> do
                     modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
-                StopTorrent ih -> do
+                StopTorrent _ih -> do
                     errorP "Not implemented stopping yet")
     peerEvent =
         recvWrapPC mgrCh (\msg -> case msg of
@@ -160,7 +160,6 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                              return ()
               Right (_caps, _rpid, ih) ->
                   do debugM "Process.PeerMgr.connect" "entering peerP loop code"
-                     supC <- channel -- TODO: Should be linked later on
                      let tc = case M.lookup ih cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
@@ -185,7 +184,6 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                                return ()
                 Right (_caps, _rpid, ih) ->
                     do debugLog "entering peerP loop code"
-                       supC <- channel -- TODO: Should be linked later on
                        let tc = case M.lookup ih cmmap of
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x

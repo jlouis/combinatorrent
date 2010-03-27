@@ -169,7 +169,7 @@ pokeTracker = do
                        return (timeoutInterval bc, timeoutMinInterval bc)
 
 timerUpdate :: (Integer, Maybe Integer) -> Process CF ST ()
-timerUpdate (timeout, minTimeout) = do
+timerUpdate (timeout, _minTimeout) = do
     st <- gets state
     when (st == Running)
         (do t <- tick
