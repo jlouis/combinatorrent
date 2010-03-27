@@ -32,7 +32,6 @@ wish-list.
      When doing this, only prune pieces which are done and checked.
    - Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
      of the PeerMgr code.
-   - Do not send HAVE messages if the Peer already has the Piece Number.
    - Improve on the command line parser. We will certainly need full-fledged
      CL parsing at some point.
    - The status reporting code needs some help. It only transfers up/down
@@ -40,7 +39,6 @@ wish-list.
      seconds, then no upload/download will be reported for that peer. The
      fix is to contact the StatusP when a peer closes if it has something to
      transfer.
-   - Use an mmap() based interface for file I/O.
    - Eliminate use of nPieces in PeerP. It can be extracted from the 'pm'
      value.
    - Improve synchronization when the supervisor tree is closing down.
@@ -50,8 +48,6 @@ wish-list.
      Stray indefinite blocks on mvars when closing down.
      The fix is to build more structure into the closing of the supervisor
      tree and make it properly synchronous.
-   - Play around with a more strict variant of CML. Don Stewart suggested to
-     look at some retainer profiling around the primitives.
    - Cut down communication from the Receiver to the Peer Control process:
      When the Receiver Process runs, it should try to drain its socket as
      much as possible before trying to communicate with the peer. It should
