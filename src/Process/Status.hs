@@ -25,6 +25,7 @@ import Control.Concurrent.STM
 import Control.Exception (assert)
 import Control.DeepSeq
 
+import Control.Monad.Reader
 import Control.Monad.State
 
 import qualified Data.Map as M
@@ -44,6 +45,7 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                | TorrentCompleted InfoHash
                | RequestStatus InfoHash (Channel StatusState)
                | RequestAllTorrents (Channel [(InfoHash, StatusState)])
+               | Tick
 
 data PStat = PStat { pInfoHash :: InfoHash
                    , pUploaded :: Integer
@@ -102,7 +104,13 @@ start statusC tv supC = do
   where
     newMap left trackerMsgC =
         SState 0 0 left Nothing Nothing (if left == 0 then Seeding else Leeching) trackerMsgC
-    pgm = {-# SCC "StatusP" #-} syncP =<< recvEvent
+    pgm = {-# SCC "StatusP" #-} do
+        fetchUpdates
+        syncP =<< chooseP [recvEvent, tickEvent]
+    tickEvent :: Process CF ST (Event ((), ST))
+    tickEvent = do
+        evt <- atTimeEvtP 5 Tick
+        wrapP evt (\_ -> return ())
     recvEvent :: Process CF ST (Event ((), ST))
     recvEvent = do evt <- recvPC statusCh
                    wrapP evt (\m ->
@@ -133,3 +141,15 @@ start statusC tv supC = do
                             assert (left ns == 0) (return ())
                             syncP =<< sendP (trackerMsgCh ns) Complete
                             modify (\s -> M.insert ih (ns { state = Seeding}) s))
+
+fetchUpdates :: Process CF ST ()
+fetchUpdates = do
+    tv <- asks statusTV
+    updates <- liftIO . atomically $ do
+                    updates <- readTVar tv
+                    writeTVar tv []
+                    return updates
+    mapM_ (\(PStat ih up down) ->
+        modify (\s -> M.adjust (\st ->
+            st { uploaded = (uploaded st) + up
+               , downloaded = (downloaded st) + down }) ih s)) updates
