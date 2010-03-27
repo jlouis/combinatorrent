@@ -8,6 +8,7 @@
 module Process.Status (
     -- * Types
       StatusMsg(..)
+    , PStat(..)
     , TrackerMsg(..)
     -- * Channels
     , StatusChan
@@ -20,6 +21,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.Exception (assert)
 import Control.DeepSeq
 
@@ -38,12 +40,14 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                | CompletedPiece InfoHash Integer
                | InsertTorrent InfoHash Integer (Channel TrackerMsg)
                | RemoveTorrent InfoHash
-               | PeerStat { peerInfoHash :: InfoHash
-                          , peerUploaded :: Integer
-                          , peerDownloaded :: Integer }
+               | PeerStat PStat
                | TorrentCompleted InfoHash
                | RequestStatus InfoHash (Channel StatusState)
                | RequestAllTorrents (Channel [(InfoHash, StatusState)])
+
+data PStat = PStat { pInfoHash :: InfoHash
+                   , pUploaded :: Integer
+                   , pDownloaded :: Integer }
 
 instance NFData StatusMsg where
   rnf a = a `seq` ()
@@ -56,7 +60,8 @@ data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
 instance NFData TrackerMsg where
    rnf a = a `seq` ()
 
-data CF  = CF { statusCh :: Channel StatusMsg }
+data CF  = CF { statusCh :: Channel StatusMsg,
+                statusTV :: TVar [PStat] }
 
 instance Logging CF where
     logName _ = "Process.Status"
@@ -90,9 +95,9 @@ instance NFData (Channel StatusState) where
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Channel StatusMsg -> SupervisorChan -> IO ThreadId
-start statusC supC = do
-    spawnP (CF statusC) M.empty
+start :: Channel StatusMsg -> TVar [PStat] -> SupervisorChan -> IO ThreadId
+start statusC tv supC = do
+    spawnP (CF statusC tv) M.empty
         (catchP (foreverP pgm) (defaultStopHandler supC))
   where
     newMap left trackerMsgC =
@@ -106,7 +111,7 @@ start statusC supC = do
                             modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
                         CompletedPiece ih bytes -> do
                             modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
-                        PeerStat ih up down -> do
+                        PeerStat (PStat ih up down) -> do
                            modify (\s -> M.adjust (\st -> st { uploaded = (uploaded st) + up
                                                              , downloaded = (downloaded st) + down }) ih
                                                   s)

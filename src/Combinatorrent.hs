@@ -113,13 +113,14 @@ download flags names = do
     pmC <- channel
     chokeC <- channel
     rtv <- atomically $ newTVar []
+    stv <- atomically $ newTVar []
     debugM "Main" "Created channels"
     pid <- generatePeerId
     tid <- allForOne "MainSup"
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
               , Worker $ TorrentManager.start watchC statusC chokeC pid pmC
-              , Worker $ Status.start statusC
+              , Worker $ Status.start statusC stv
               , Worker $ PeerMgr.start pmC pid chokeC rtv
               , Worker $ ChokeMgr.start chokeC rtv 100 -- 100 is upload rate in KB
                              False -- TODO: Fix this leeching/seeding problem

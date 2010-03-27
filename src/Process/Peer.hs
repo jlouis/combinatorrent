@@ -300,9 +300,9 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces h outBound inBound sendBWC statC ih sup
                 let (upCnt, nuRate) = RC.extractCount $ nur
                     (downCnt, ndRate) = RC.extractCount $ ndr
                 debugP $ "Sending peerStats: " ++ show upCnt ++ ", " ++ show downCnt
-                (sendPC statCh $ PeerStat { peerInfoHash = ih
-                                          , peerUploaded = upCnt
-                                          , peerDownloaded = downCnt }) >>= syncP
+                (sendPC statCh $ PeerStat $ PStat { pInfoHash = ih
+                                                  , pUploaded = upCnt
+                                                  , pDownloaded = downCnt }) >>= syncP
                 modify (\s -> s { upRate = nuRate, downRate = ndRate }))
         upRateEvent = do
             evt <- recvPC sendBWCh
