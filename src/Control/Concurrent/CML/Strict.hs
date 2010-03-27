@@ -229,11 +229,11 @@ guard vs = Event efun where
     Event v <- vs
     v r a n
 
-atTimeEvt :: NFData a => Integer -> a -> Event a
+atTimeEvt :: NFData a => Int -> a -> Event a
 atTimeEvt secs msg = guard (do ch <- channel
                                _ <- spawn $ trigger ch
                                return $ receive ch (const True))
-  where trigger ch = do threadDelay $ 5*1000000
+  where trigger ch = do threadDelay $ secs*1000000
                         sync $ transmit ch msg
 
 -- | Specify a post-synchronization action that is spawned if an event is
