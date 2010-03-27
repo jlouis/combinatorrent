@@ -65,9 +65,6 @@ wish-list.
 Planned for the next release
 ----------------------------
 
-   - Reduce CPU load and memory load. Alternative representations of various
-     data structures are needed.
-   - Play with the code coverage in GHC.
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
    - We have seen various Deaths due to wrong IP decoding. Investigate.
@@ -78,6 +75,9 @@ Planned for the next release
 Items for later (no particular order)
 -------------------------------------
 
+   - Reduce CPU load and memory load. Alternative representations of various
+     data structures are needed.
+   - Play with the code coverage in GHC.
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
    - Improve the Peer Management code. Keep track of peers and process them

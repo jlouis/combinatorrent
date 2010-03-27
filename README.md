@@ -137,20 +137,4 @@ Source code Hierarchy
       - **Test.hs**: Code for test-framework
       - **TestInstance.hs**: Various helper instances not present in the test framework by default
 
-Known bugs
-----------
-
-    "PieceMgrP"(Fatal):	Process exiting due to ex: user error (P/Blk (655,Block {blockOffset = 81920, blockSize = 16384}) is in the HaveBlocks set)
-    "ConsoleP"(Info):	Process Terminated by Supervisor
-
-We have also hit this one (unfortunately with lost context):
-
-    HaskellTorrent: internal error: throwTo: unrecognised why_blocked value
-         (GHC version 6.12.1 for x86_64_unknown_linux)
-    Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
-    Aborted
-
-It is bug [#3923](http://hackage.haskell.org/trac/ghc/ticket/3923) at the
-GHC trac.
-
 # vim: filetype=none tw=76 expandtab
