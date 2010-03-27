@@ -122,7 +122,6 @@ download flags names = do
               , Worker $ Status.start statusC stv
               , Worker $ PeerMgr.start pmC pid chokeC rtv
               , Worker $ ChokeMgr.start chokeC rtv 100 -- 100 is upload rate in KB
-                             False -- TODO: Fix this leeching/seeding problem
               , Worker $ Listen.start defaultPort pmC
               ]) supC
     sync $ transmit watchC (map TorrentManager.AddedTorrent names)

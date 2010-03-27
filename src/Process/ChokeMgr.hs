@@ -65,9 +65,9 @@ type ChokeMgrProcess a = Process CF PeerDB a
 roundTickSecs :: Integer
 roundTickSecs = 11
 
-start :: ChokeMgrChannel -> RateTVar -> Int -> Bool -> SupervisorChan
+start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChan
       -> IO ThreadId
-start ch rtv ur weSeed supC = do
+start ch rtv ur supC = do
     Timer.register roundTickSecs Tick ch
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
@@ -165,7 +165,7 @@ runRechokeRound :: ChokeMgrProcess ()
 runRechokeRound = do
     cRound <- gets chokeRound
     if (cRound == 0)
-        then do nChain <- advancePeerChain
+        then do advancePeerChain
                 modify (\db -> db { chokeRound = 2 })
         else modify (\db -> db { chokeRound = (chokeRound db) - 1 })
     rechoke
@@ -310,7 +310,7 @@ msgPeer ch = liftIO . spawn . sync . (transmit ch)
 -- | This function performs the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set ThreadId -> [Peer] -> ChokeMgrProcess ()
 performChokingUnchoking elected peers =
-    do T.mapM unchoke electedPeers
+    do _ <- T.mapM unchoke electedPeers
        rm <- gets rateMap
        optChoke rm defaultOptimisticSlots nonElectedPeers
   where
@@ -323,8 +323,8 @@ performChokingUnchoking elected peers =
     -- @k@ peers interested in us. The rest will either be unchoked if they are
     -- not interested (ensuring fast start should they become interested); or
     -- they will be choked to avoid TCP/IP congestion.
-    optChoke rm _ [] = return ()
-    optChoke rm 0 (p : ps) =
+    optChoke _rm _ [] = return ()
+    optChoke  rm 0 (p : ps) =
         case M.lookup (pThreadId p) rm of
             Nothing -> choke p >> optChoke rm 0 ps
             Just (_, st) ->
