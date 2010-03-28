@@ -34,7 +34,6 @@ import Data.Time.Clock
 import Data.Word
 
 import System.IO
-import System.Timeout
 
 import PeerTypes
 import Process
@@ -49,6 +48,8 @@ import Process.Timer as Timer
 import Torrent
 import Protocol.Wire
 
+import qualified Process.Peer.Sender as Sender
+
 -- INTERFACE
 ----------------------------------------------------------------------
 
@@ -60,7 +61,7 @@ peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     senderC <- channel
     receiverC <- channel
     sendBWC <- channel
-    return [Worker $ senderP handle senderC,
+    return [Worker $ Sender.start handle senderC,
             Worker $ sendQueueP queueC senderC sendBWC,
             Worker $ receiverP handle receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
@@ -68,29 +69,6 @@ peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
-data SPCF = SPCF
-
-instance Logging SPCF where
-    logName _ = "Process.Peer.Sender"
-
--- | The raw sender process, it does nothing but send out what it syncs on.
-senderP :: Handle -> Channel B.ByteString -> SupervisorChan -> IO ThreadId
-senderP h ch supC = spawnP SPCF h (catchP (foreverP pgm)
-                                              (do t <- liftIO $ myThreadId
-                                                  syncP =<< (sendP supC $ IAmDying t)
-                                                  liftIO $ hClose h))
-  where
-    pgm :: Process SPCF Handle ()
-    pgm = {-# SCC "Peer.Sender" #-} do
-        m <- liftIO $ timeout defaultTimeout s
-        h <- get
-        case m of
-            Nothing -> putMsg (encodePacket KeepAlive)
-            Just m  -> putMsg m
-        liftIO $ hFlush h
-    defaultTimeout = 120 * 1000000
-    putMsg m = liftIO $ B.hPut h m
-    s = sync $ receive ch (const True)
 
 -- | Messages we can send to the Send Queue
 data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
