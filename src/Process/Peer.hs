@@ -21,7 +21,6 @@ import Prelude hiding (catch, log)
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import qualified Data.Serialize.Get as G
 
 import qualified Data.Map as M
 import qualified Data.PieceSet as PS
@@ -47,6 +46,7 @@ import Protocol.Wire
 
 import qualified Process.Peer.Sender as Sender
 import qualified Process.Peer.SenderQ as SenderQ
+import qualified Process.Peer.Receiver as Receiver
 
 -- INTERFACE
 ----------------------------------------------------------------------
@@ -61,43 +61,12 @@ peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     sendBWC <- channel
     return [Worker $ Sender.start handle senderC,
             Worker $ SenderQ.start queueC senderC sendBWC,
-            Worker $ receiverP handle receiverC,
+            Worker $ Receiver.start handle receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
                                 queueC receiverC sendBWC stv ih]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
-
-
-data RPCF = RPCF { rpMsgCh :: Channel (Message, Integer) }
-
-instance Logging RPCF where
-    logName _ = "Process.Peer.Receiver"
-
-receiverP :: Handle -> Channel (Message, Integer)
-          -> SupervisorChan -> IO ThreadId
-receiverP h ch supC = spawnP (RPCF ch) h
-        (catchP (foreverP pgm)
-               (defaultStopHandler supC))
-  where
-    pgm = readHeader
-    readHeader = {-# SCC "Recv_readHeader" #-} do
-        h <- get
-        bs' <- liftIO $ B.hGet h 4
-        l <- conv bs'
-        if (l == 0)
-            then return ()
-            else do debugP $ "Reading off " ++ show l ++ " bytes"
-                    bs <- {-# SCC "Recv_hGet" #-} liftIO $ B.hGet h (fromIntegral l)
-                    case G.runGet decodeMsg bs of
-                        Left _ -> do warningP "Incorrect parse in receiver, dying!"
-                                     stopP
-                        Right msg -> sendPC rpMsgCh (msg, fromIntegral l) >>= syncP
-    conv bs = {-# SCC "Recv_conf" #-} do
-        case G.runGet G.getWord32be bs of
-          Left err -> do warningP $ "Incorrent parse in receiver, dying: " ++ show err
-                         stopP
-          Right i -> return i
 
 data PCF = PCF { inCh :: Channel (Message, Integer)
                , outCh :: Channel SenderQ.SenderQMsg

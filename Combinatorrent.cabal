@@ -47,7 +47,8 @@ executable Combinatorrent
     Digest, FS, PeerTypes, Process, RateCalc, Control.Concurrent.CML.Strict
     Supervisor, Torrent, Test, TestInstance, DeepSeqInstances, Process.DirWatcher,
     Process.Peer.Sender,
-    Process.Peer.SenderQ
+    Process.Peer.SenderQ,
+    Process.Peer.Receiver
 
   extensions: CPP
 
