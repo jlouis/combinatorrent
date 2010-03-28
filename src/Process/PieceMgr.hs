@@ -44,7 +44,7 @@ import Process
 --
 --   Better implementations for selecting among the pending Pieces is probably crucial
 --   to an effective client, but we keep it simple for now.
-data PieceDB = PieceDB
+data ST = ST
     { pendingPieces :: PS.PieceSet -- ^ Pieces currently pending download
     , donePiece     :: PS.PieceSet -- ^ Pieces that are done
     , donePush      :: [ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
@@ -105,7 +105,7 @@ instance NFData PieceMgrMsg where
 
 type PieceMgrChannel = Channel PieceMgrMsg
 
-data PieceMgrCfg = PieceMgrCfg
+data CF = CF
     { pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
     , chokeCh :: ChokeMgrChannel
@@ -113,101 +113,116 @@ data PieceMgrCfg = PieceMgrCfg
     , pMgrInfoHash :: InfoHash
     }
 
-instance Logging PieceMgrCfg where
+instance Logging CF where
   logName _ = "Process.PieceMgr"
 
-type PieceMgrProcess v = Process PieceMgrCfg PieceDB v
+type PieceMgrProcess v = Process CF ST v
 
-start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> PieceDB -> InfoHash
+start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> ST -> InfoHash
       -> SupervisorChan -> IO ThreadId
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
-    spawnP (PieceMgrCfg mgrC fspC chokeC statC ih) db
+    spawnP (CF mgrC fspC chokeC statC ih) db
                     (catchP (forever pgm)
                         (defaultStopHandler supC))
   where pgm = do
-          assertPieceDB
+          assertST
           dl <- gets donePush
           (if null dl
               then receiveEvt
               else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
-        sendEvt elem = do
-            ev <- sendPC chokeCh elem
-            wrapP ev remDone
-        remDone () = modify (\db -> db { donePush = tail (donePush db) })
-        receiveEvt = do
-            ev <- recvPC pieceMgrCh
-            wrapP ev (\msg -> do
-              case msg of
-                GrabBlocks n eligible c ->
-                    do blocks <- grabBlocks' n eligible
-                       syncP =<< sendP c blocks
-                StoreBlock pn blk d ->
-                    do debugP $ "Storing block: " ++ show (pn, blk)
-                       storeBlock pn blk d
-                       modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
-                       endgameBroadcast pn blk
-                       done <- updateProgress pn blk
-                       when done
-                           (do assertPieceComplete pn
-                               pend <- gets pendingPieces
-                               iprog <- gets inProgress
-                               pendSz <- PS.size pend
-                               infoP $ "Piece #" ++ show pn
-                                         ++ " completed, there are " 
-                                         ++ (show pendSz) ++ " pending "
-                                         ++ (show $ M.size iprog) ++ " in progress"
-                               l <- gets infoMap >>=
-                                    (\pm -> case M.lookup pn pm of
-                                                    Nothing -> fail "Storeblock: M.lookup"
-                                                    Just x -> return $ len x)
-                               ih <- asks pMgrInfoHash
-                               sendPC statusCh (CompletedPiece ih l) >>= syncP
-                               pieceOk <- checkPiece pn
-                               case pieceOk of
-                                 Nothing ->
-                                        do fail "PieceMgrP: Piece Nonexisting!"
-                                 Just True -> do completePiece pn
-                                                 markDone pn
-                                                 checkFullCompletion
-                                 Just False -> putbackPiece pn)
-                PutbackBlocks blks ->
-                    mapM_ putbackBlock blks
-                GetDone c -> do done <- PS.toList =<< gets donePiece
-                                syncP =<< sendP c done
-                PeerHave idxs ->
-                    modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
-                PeerUnhave idxs ->
-                    modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
-                AskInterested pieces retC -> do
-                    nPieces <- M.size <$> gets infoMap
-                    inProg <- M.keys <$> gets inProgress
-                    pend   <- gets pendingPieces >>= PS.toList
-                    tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
-                    -- @i@ is the intersection with with we need and the peer has.
-                    intsct <- PS.intersection pieces tmp
-                    syncP =<< sendP retC (not $ null intsct))
-        storeBlock n blk contents = syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
-        endgameBroadcast pn blk = do
-            ih <- asks pMgrInfoHash
-            gets endGaming >>=
-              flip when (modify (\db -> db { donePush = (BlockComplete ih pn blk) : donePush db }))
-        markDone pn = do
-            ih <- asks pMgrInfoHash
-            modify (\db -> db { donePush = (PieceDone ih pn) : donePush db })
-        checkPiece n = do
-            ch <- liftIO channel
-            syncP =<< (sendPC fspCh $ CheckPiece n ch)
-            syncP =<< recvP ch (const True)
+
+type ProcessEvent = Process CF ST (Event ((), ST))
+
+sendEvt :: ChokeMgrMsg -> ProcessEvent
+sendEvt elem = do
+   ev <- sendPC chokeCh elem
+   wrapP ev (\_ ->
+        modify (\db -> db { donePush = tail (donePush db) }))
+
+receiveEvt :: ProcessEvent
+receiveEvt = do
+    ev <- recvPC pieceMgrCh
+    wrapP ev (\msg -> do
+      case msg of
+        GrabBlocks n eligible c ->
+            do blocks <- grabBlocks' n eligible
+               syncP =<< sendP c blocks
+        StoreBlock pn blk d ->
+            do debugP $ "Storing block: " ++ show (pn, blk)
+               storeBlock pn blk d
+               modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
+               endgameBroadcast pn blk
+               done <- updateProgress pn blk
+               when done
+                   (do assertPieceComplete pn
+                       pend <- gets pendingPieces
+                       iprog <- gets inProgress
+                       pendSz <- PS.size pend
+                       infoP $ "Piece #" ++ show pn
+                                 ++ " completed, there are "
+                                 ++ (show pendSz) ++ " pending "
+                                 ++ (show $ M.size iprog) ++ " in progress"
+                       l <- gets infoMap >>=
+                            (\pm -> case M.lookup pn pm of
+                                            Nothing -> fail "Storeblock: M.lookup"
+                                            Just x -> return $ len x)
+                       ih <- asks pMgrInfoHash
+                       sendPC statusCh (CompletedPiece ih l) >>= syncP
+                       pieceOk <- checkPiece pn
+                       case pieceOk of
+                         Nothing ->
+                                do fail "PieceMgrP: Piece Nonexisting!"
+                         Just True -> do completePiece pn
+                                         markDone pn
+                                         checkFullCompletion
+                         Just False -> putbackPiece pn)
+        PutbackBlocks blks ->
+            mapM_ putbackBlock blks
+        GetDone c -> do done <- PS.toList =<< gets donePiece
+                        syncP =<< sendP c done
+        PeerHave idxs ->
+            modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+        PeerUnhave idxs ->
+            modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
+        AskInterested pieces retC -> do
+            nPieces <- M.size <$> gets infoMap
+            inProg <- M.keys <$> gets inProgress
+            pend   <- gets pendingPieces >>= PS.toList
+            tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
+            -- @i@ is the intersection with with we need and the peer has.
+            intsct <- PS.intersection pieces tmp
+            syncP =<< sendP retC (not $ null intsct))
+
+storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
+storeBlock n blk contents =
+    syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
+
+endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
+endgameBroadcast pn blk = do
+    ih <- asks pMgrInfoHash
+    gets endGaming >>=
+      flip when (modify (\db -> db { donePush = (BlockComplete ih pn blk) : donePush db }))
+
+markDone :: PieceNum -> Process CF ST ()
+markDone pn = do
+    ih <- asks pMgrInfoHash
+    modify (\db -> db { donePush = (PieceDone ih pn) : donePush db })
+
+checkPiece :: PieceNum -> Process CF ST (Maybe Bool)
+checkPiece n = do
+    ch <- liftIO channel
+    syncP =<< (sendPC fspCh $ CheckPiece n ch)
+    syncP =<< recvP ch (const True)
 
 -- HELPERS
 ----------------------------------------------------------------------
 
-createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m PieceDB
+createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m ST
 createPieceDb mmap pmap = do
     pending <- filt (==False)
     done    <- filt (==True)
-    return $ PieceDB pending done [] M.empty [] pmap False PendS.empty 0
+    return $ ST pending done [] M.empty [] pmap False PendS.empty 0
   where
     filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
 
@@ -396,8 +411,8 @@ createBlock pn = do
                                  Just ipp -> return $ cBlock ipp)
          where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
-assertPieceDB :: PieceMgrProcess ()
-assertPieceDB = {-# SCC "assertPieceDB" #-} do
+assertST :: PieceMgrProcess ()
+assertST = {-# SCC "assertST" #-} do
     c <- gets assertCount
     if c == 0
         then do modify (\db -> db { assertCount = 10 })
