@@ -79,6 +79,14 @@ data StatusState = SState
              , trackerMsgCh :: Channel TrackerMsg
              }
 
+gatherStats :: M.Map k StatusState -> [(String, Integer)]
+gatherStats mp =
+    let (uploaded, downloaded) =
+          foldl (\(up, down) (SState u d _ _ _ _ _) ->
+                (up+u, down+d))
+                (0, 0) $ M.elems mp
+    in [("uploaded", uploaded), ("downloaded", downloaded)]
+
 instance Show StatusState where
     show (SState up down left inc comp st _) = concat
         ["{ Uploaded:   " ++ show up ++ "\n"
@@ -96,11 +104,16 @@ instance NFData (Channel StatusState) where
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Channel StatusMsg -> TVar [PStat] -> SupervisorChan -> IO ThreadId
-start statusC tv supC = do
+start :: Maybe FilePath -> Channel StatusMsg -> TVar [PStat] -> SupervisorChan -> IO ThreadId
+start fp statusC tv supC = do
     spawnP (CF statusC tv) M.empty
-        (catchP (foreverP pgm) (defaultStopHandler supC))
+        (cleanupP (foreverP pgm) (defaultStopHandler supC) cleanup)
   where
+    cleanup = do
+        st <- get
+        case fp of
+            Nothing -> return ()
+            Just fp -> liftIO $ writeFile fp (show $ gatherStats st)
     newMap left trackerMsgC =
         SState 0 0 left Nothing Nothing (if left == 0 then Seeding else Leeching) trackerMsgC
     pgm = {-# SCC "StatusP" #-} do

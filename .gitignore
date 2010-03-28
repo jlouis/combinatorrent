@@ -15,4 +15,6 @@ Main
 /tags
 /TAGS
 /tools/stat_db.txt
+/tools/stat_db.csv
+/tools/*.png
 report.html

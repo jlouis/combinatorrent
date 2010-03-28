@@ -23,7 +23,7 @@ import qualified Process.PeerMgr as PeerMgr
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Listen as Listen
 import qualified Process.DirWatcher as DirWatcher (start)
-import qualified Process.Status as Status (start)
+import qualified Process.Status as Status (start, StatusChan, PStat)
 import qualified Process.TorrentManager as TorrentManager (start, TorrentMgrChan, TorrentManagerMsg(..))
 
 import Supervisor
@@ -39,7 +39,7 @@ main = do args <- getArgs
 
 -- COMMAND LINE PARSING
 
-data Flag = Version | Debug | LogFile FilePath | WatchDir FilePath
+data Flag = Version | Debug | LogFile FilePath | WatchDir FilePath | StatFile FilePath
   deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -48,6 +48,7 @@ options =
   , Option ['D']            ["debug"]   (NoArg Debug)           "Spew extra debug information"
   , Option []               ["logfile"] (ReqArg LogFile "FILE") "Choose a filepath on which to log"
   , Option ['W']            ["watchdir"] (ReqArg WatchDir "DIR") "Choose a directory to watch for torrents"
+  , Option ['S']            ["statfile"] (ReqArg StatFile "FILE") "Choose a file to gather stats into"
   ]
 
 progOpts :: [String] -> IO ([Flag], [String])
@@ -95,6 +96,15 @@ setupDirWatching flags watchC = do
                                     WatchDir _ -> True
                                     _          -> False)
 
+setupStatus :: [Flag] -> Status.StatusChan -> TVar [Status.PStat] -> Child
+setupStatus flags statusC stv =
+    case statFileFlag flags of
+      Nothing -> Worker $ Status.start Nothing statusC stv
+      Just (StatFile fn) -> Worker $ Status.start (Just fn) statusC stv
+  where statFileFlag = find (\e -> case e of
+                                    StatFile _ -> True
+                                    _          -> False)
+
 generatePeerId :: IO PeerId
 generatePeerId = do
     gen <- getStdGen
@@ -119,7 +129,7 @@ download flags names = do
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
               , Worker $ TorrentManager.start watchC statusC stv chokeC pid pmC
-              , Worker $ Status.start statusC stv
+              , setupStatus flags statusC stv
               , Worker $ PeerMgr.start pmC pid chokeC rtv
               , Worker $ ChokeMgr.start chokeC rtv 100 -- 100 is upload rate in KB
               , Worker $ Listen.start defaultPort pmC

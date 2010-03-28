@@ -14,11 +14,12 @@ DBFILE=${basedir}/stat_db.txt
 STATDIR='/tmp/combinatorrent'
 
 RTSOPTS="+RTS -t${STATDIR}/Combinatorrent.rts_stat --machine-readable -RTS"
+STATOPTS="-S ${STATDIR}/Combinatorrent.stat"
 
 ct () {
     date +%s >> ${STATDIR}/Combinatorrent.times
     touch ${STATDIR}/Combinatorrent.stat
-    ${COMBINATORRENT} ${RTSOPTS} $*
+    ${COMBINATORRENT} ${RTSOPTS} ${STATOPTS} "$@"
     date +%s >> ${STATDIR}/Combinatorrent.times
 }
 
@@ -35,5 +36,5 @@ cleanfiles () {
 
 mkdir -p ${STATDIR}
 cleanfiles
-ct $*
+ct "$@"
 postproc

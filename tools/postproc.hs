@@ -1,5 +1,6 @@
 #!/usr/bin/env runhaskell
 
+import Data.List
 import System
 
 main = do
@@ -11,11 +12,41 @@ main = do
 
 
 gatherStats rtsStat combinatorrentStat timeStat = do
---    start, end <- readTimes timeStat
---    cs         <- readCombinatorrentStat combinatorrentStat
---    rtsStat    <- readRtsStat rtsStat
-    putStrLn "Gathering stats"
+    tStat <- readTimes timeStat
+    cStat <- readCombinatorrentStat combinatorrentStat
+    rStat <- readRtsStat rtsStat
+    putStrLn $ show (tStat ++ cStat ++ rStat)
 
+
+readRtsStat :: FilePath -> IO [(String, String)]
+readRtsStat fp = do
+    cts <- readFile fp
+    return $ read . unlines . tail . lines $ cts
+
+readCombinatorrentStat :: FilePath -> IO [(String, String)]
+readCombinatorrentStat fp = do
+    cts <- readFile fp
+    let d = read cts :: [(String, Integer)]
+    return $ map (\(k, v) -> (k, show v)) d
+
+readTimes :: FilePath -> IO [(String, String)]
+readTimes timeStat = do
+    contents <- readFile timeStat
+    let [s, e] = (map read . lines $ contents) :: [Integer]
+    return [("start_time", show s)
+           ,("end_time"  , show e)]
 
 presentStats db = do
-    putStrLn "Presenting stats"
+    cts <- readFile db
+    let ls = map read . lines $ cts
+    putStrLn "#Start\tEnd\tMaxBytesUsed\tPeakMegabytesAlloc"
+    let formatted = map (format ["start_time", "end_time", "max_bytes_used",
+                                 "peak_megabytes_allocated"]) ls
+    mapM_ putStrLn formatted
+
+format :: [String] -> [(String, String)] -> String
+format cols row = concat $ intersperse "\t" entries
+    where entries = map (\c -> case find ((==c) . fst) row of
+                                    Nothing -> error "Column doesn't exist"
+                                    Just x -> snd x) cols
+
