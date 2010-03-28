@@ -13,8 +13,6 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 
-import Control.DeepSeq
-
 import Control.Monad.State
 import Control.Monad.Reader
 
@@ -39,7 +37,6 @@ import PeerTypes
 import Process
 import Process.FS
 import Process.PieceMgr
-import qualified Data.Queue as Q
 import RateCalc as RC
 import Process.Status
 import Process.ChokeMgr (RateTVar)
@@ -49,6 +46,7 @@ import Torrent
 import Protocol.Wire
 
 import qualified Process.Peer.Sender as Sender
+import qualified Process.Peer.SenderQ as SenderQ
 
 -- INTERFACE
 ----------------------------------------------------------------------
@@ -62,7 +60,7 @@ peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     receiverC <- channel
     sendBWC <- channel
     return [Worker $ Sender.start handle senderC,
-            Worker $ sendQueueP queueC senderC sendBWC,
+            Worker $ SenderQ.start queueC senderC sendBWC,
             Worker $ receiverP handle receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
                                 queueC receiverC sendBWC stv ih]
@@ -70,78 +68,6 @@ peerChildren handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
--- | Messages we can send to the Send Queue
-data SendQueueMessage = SendQCancel PieceNum Block -- ^ Peer requested that we cancel a piece
-                      | SendQMsg Message           -- ^ We want to send the Message to the peer
-                      | SendOChoke                 -- ^ We want to choke the peer
-                      | SendQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
-
-instance NFData SendQueueMessage where
-  rnf a = a `seq` ()
-
-data SQCF = SQCF { sqInCh :: Channel SendQueueMessage
-                 , sqOutCh :: Channel B.ByteString
-                 , bandwidthCh :: BandwidthChannel
-                 }
-
-data SQST = SQST { outQueue :: Q.Queue Message
-                 , bytesTransferred :: Integer
-                 }
-
-instance Logging SQCF where
-    logName _ = "Process.Peer.SendQueue"
-
--- | sendQueue Process, simple version.
---   TODO: Split into fast and slow.
-sendQueueP :: Channel SendQueueMessage -> Channel B.ByteString -> BandwidthChannel
-           -> SupervisorChan
-           -> IO ThreadId
-sendQueueP inC outC bandwC supC = spawnP (SQCF inC outC bandwC) (SQST Q.empty 0)
-        (catchP (foreverP pgm)
-                (defaultStopHandler supC))
-  where
-    pgm :: Process SQCF SQST ()
-    pgm = {-# SCC "Peer.SendQueue" #-} do
-        q <- gets outQueue
-        l <- gets bytesTransferred
-        -- Gather together events which may trigger
-        syncP =<< (chooseP $
-            concat [if Q.isEmpty q then [] else [sendEvent],
-                    if l > 0 then [rateUpdateEvent] else [],
-                    [queueEvent]])
-    rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
-        l <- gets bytesTransferred
-        ev <- sendPC bandwidthCh l
-        wrapP ev (\() ->
-            modify (\s -> s { bytesTransferred = 0 }))
-    queueEvent = {-# SCC "Peer.SendQ.queueEvt" #-} do
-        recvWrapPC sqInCh
-                (\m -> case m of
-                    SendQMsg msg -> do debugP "Queueing event for sending"
-                                       modifyQ (Q.push msg)
-                    SendQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
-                    SendOChoke -> do modifyQ (Q.filter filterAllPiece)
-                                     modifyQ (Q.push Choke)
-                    SendQRequestPrune n blk ->
-                         modifyQ (Q.filter (filterRequest n blk)))
-    modifyQ :: (Q.Queue Message -> Q.Queue Message) -> Process SQCF SQST ()
-    modifyQ f = modify (\s -> s { outQueue = f (outQueue s) })
-    sendEvent = {-# SCC "Peer.SendQ.sendEvt" #-} do
-        Just (e, r) <- gets (Q.pop . outQueue)
-        let bs = encodePacket e
-        tEvt <- sendPC sqOutCh bs
-        wrapP tEvt (\() -> do debugP "Dequeued event"
-                              modify (\s -> s { outQueue = r,
-                                                bytesTransferred =
-                                                    bytesTransferred s + fromIntegral (B.length bs)}))
-    filterAllPiece (Piece _ _ _) = True
-    filterAllPiece _             = False
-    filterPiece n off (Piece n1 off1 _) | n == n1 && off == off1 = False
-                                        | otherwise               = True
-    filterPiece _ _   _                                           = True
-    filterRequest n blk (Request n1 blk1) | n == n1 && blk == blk1 = False
-                                          | otherwise              = True
-    filterRequest _ _   _                                          = True
 
 data RPCF = RPCF { rpMsgCh :: Channel (Message, Integer) }
 
@@ -174,7 +100,7 @@ receiverP h ch supC = spawnP (RPCF ch) h
           Right i -> return i
 
 data PCF = PCF { inCh :: Channel (Message, Integer)
-               , outCh :: Channel SendQueueMessage
+               , outCh :: Channel SenderQ.SenderQMsg
                , peerMgrCh :: MgrChannel
                , pieceMgrCh :: PieceMgrChannel
                , fsCh :: FSPChannel
@@ -200,7 +126,7 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
                }
 
 peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
-         -> Channel SendQueueMessage -> Channel (Message, Integer) -> BandwidthChannel
+         -> Channel SenderQ.SenderQMsg -> Channel (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
          -> SupervisorChan -> IO ThreadId
 peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = do
@@ -216,7 +142,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             debugP "Syncing a connectBack"
             asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect ih tid ch) >>= syncP
             pieces <- getPiecesDone
-            syncP =<< (sendPC outCh $ SendQMsg $ BitField (constructBitField nPieces pieces))
+            syncP =<< (sendPC outCh $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces))
             -- Install the StatusP timer
             c <- asks timerCh
             Timer.register 5 () c
@@ -239,20 +165,20 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
                 debugP "ChokeMgrEvent"
                 case msg of
                     PieceCompleted pn -> do
-                        syncP =<< (sendPC outCh $ SendQMsg $ Have pn)
+                        syncP =<< (sendPC outCh $ SenderQ.SenderQM $ Have pn)
                     ChokePeer -> do choking <- gets weChoke
                                     when (not choking)
-                                         (do syncP =<< sendPC outCh SendOChoke
+                                         (do syncP =<< sendPC outCh SenderQ.SenderOChoke
                                              debugP "ChokePeer"
                                              modify (\s -> s {weChoke = True}))
                     UnchokePeer -> do choking <- gets weChoke
                                       when choking
-                                           (do syncP =<< (sendPC outCh $ SendQMsg Unchoke)
+                                           (do syncP =<< (sendPC outCh $ SenderQ.SenderQM Unchoke)
                                                debugP "UnchokePeer"
                                                modify (\s -> s {weChoke = False}))
                     CancelBlock pn blk -> do
                         modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
-                        syncP =<< (sendPC outCh $ SendQRequestPrune pn blk))
+                        syncP =<< (sendPC outCh $ SenderQ.SenderQRequestPrune pn blk))
         isASeeder = (== nPieces) <$> (gets peerPieces >>= PS.size)
         timerEvent mTid = do
             evt <- recvPC timerCh
@@ -338,7 +264,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             unless (choking)
                  (do
                     bs <- readBlock pn blk -- TODO: Pushdown to send process
-                    syncP =<< sendPC outCh (SendQMsg $ Piece pn (blockOffset blk) bs))
+                    syncP =<< sendPC outCh (SenderQ.SenderQM $ Piece pn (blockOffset blk) bs))
         readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
         readBlock pn blk = do
             c <- liftIO $ channel
@@ -356,7 +282,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             -- When e is not a member, the piece may be stray, so ignore it.
             -- Perhaps print something here.
         cancelMsg n blk =
-            syncP =<< sendPC outCh (SendQCancel n blk)
+            syncP =<< sendPC outCh (SenderQ.SenderQCancel n blk)
         considerInterest = do
             c <- liftIO channel
             pcs <- gets peerPieces
@@ -364,7 +290,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             interested <- syncP =<< recvP c (const True)
             if interested
                 then do modify (\s -> s { weInterested = True })
-                        syncP =<< sendPC outCh (SendQMsg Interested)
+                        syncP =<< sendPC outCh (SenderQ.SenderQM Interested)
                 else modify (\s -> s { weInterested = False})
         fillBlocks = do
             choked <- gets peerChoke
@@ -383,7 +309,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             mapM_ pushPiece toQueue
             modify (\s -> s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) })
         pushPiece (pn, blk) =
-            syncP =<< sendPC outCh (SendQMsg $ Request pn blk)
+            syncP =<< sendPC outCh (SenderQ.SenderQM $ Request pn blk)
         storeBlock n blk bs =
             syncP =<< sendPC pieceMgrCh (StoreBlock n blk bs)
         grabBlocks n = do
