@@ -2,37 +2,23 @@ module Process.Peer.Receiver
     ( start )
 where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
-import Control.Concurrent.STM
 
 import Control.Monad.State
-import Control.Monad.Reader
 
 import Prelude hiding (catch, log)
 
-import Data.Bits
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import qualified Data.Serialize.Get as G
 
-import qualified Data.Map as M
-import qualified Data.PieceSet as PS
-import Data.Maybe
 
-import Data.Set as S hiding (map)
-import Data.Time.Clock
 import Data.Word
 
 import System.IO
 
-import PeerTypes
 import Process
-import RateCalc as RC
 import Supervisor
-import Process.Timer as Timer
-import Torrent
 import Protocol.Wire
 
 

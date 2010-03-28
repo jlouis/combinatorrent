@@ -9,6 +9,7 @@ module Protocol.Wire
     ( Message(..)
     , encodePacket
     , decodeMsg
+    , BitField
     , constructBitField
     -- Handshaking
     , initiateHandshake

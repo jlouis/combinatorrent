@@ -6,7 +6,7 @@ module Process.PeerMgr (
    , PeerMgrChannel
    , TorrentLocal(..)
    -- * Interface
-   , start
+   , Process.PeerMgr.start
 )
 where
 
@@ -164,7 +164,7 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                      let tc = case M.lookup ih cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
-                     children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
+                     children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
                                                       (tcPM tc) (M.size (tcPM tc)) ih
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
@@ -188,7 +188,7 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                        let tc = case M.lookup ih cmmap of
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
-                       children <- peerChildren h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
+                       children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatTV tc) (tcPM tc) (M.size (tcPM tc)) ih
                        sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
