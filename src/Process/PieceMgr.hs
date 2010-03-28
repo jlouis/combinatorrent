@@ -146,7 +146,7 @@ receiveEvt = do
     wrapP ev (\msg -> do
       case msg of
         GrabBlocks n eligible c ->
-            do blocks <- grabBlocks' n eligible
+            do blocks <- grabBlocks n eligible
                syncP =<< sendP c blocks
         StoreBlock pn blk d -> storeBlock pn blk d
         PutbackBlocks blks -> mapM_ putbackBlock blks
@@ -331,11 +331,11 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
                                            $ Block os blockSz : accum
                                  | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
 
--- | The call @grabBlocks' n eligible@ tries to pick off up to @n@ pieces from
+-- | The call @grabBlocks n eligible@ tries to pick off up to @n@ pieces from
 --   to download. In doing so, it will only consider pieces in @eligible@. It
 --   returns a list of Blocks which where grabbed.
-grabBlocks' :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
-grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
+grabBlocks :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
+grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
     ps' <- PS.copy eligible
     blocks <- tryGrabProgress k ps' []
     pend <- gets pendingPieces
@@ -348,57 +348,66 @@ grabBlocks' k eligible = {-# SCC "grabBlocks'" #-} do
                 return $ Endgame blks
         else do modify (\s -> s { downloading = blocks ++ (downloading s) })
                 return $ Leech blocks
-  where
-    -- Grabbing blocks is a state machine implemented by tail calls
-    -- Try grabbing pieces from the pieces in progress first
-    tryGrabProgress 0 _  captured = return captured
-    tryGrabProgress n ps captured = do
-        inProg <- gets inProgress
-        nPieces <- M.size <$> gets infoMap
-        inProgPs <- PS.fromList nPieces $ M.keys inProg
-        is <- PS.intersection ps inProgPs
-        case null is of
-            True -> tryGrabPending n ps captured
-            False -> do grabFromProgress n ps (head is) captured
-    -- The Piece @p@ was found, grab it
-    grabFromProgress n ps p captured = do
-        inprog <- gets inProgress
-        ipp <- case M.lookup p inprog of
-                  Nothing -> fail "grabFromProgress: could not lookup piece"
-                  Just x -> return x
-        let (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
-            nIpp = ipp { ipPendingBlocks = rest }
-        -- This rather ugly piece of code should be substituted with something better
-        if grabbed == []
-             -- All pieces are taken, try the next one.
-             then do PS.delete p ps --TODO: Dangerous since we will NEVER reconsider that piece then!
-                     tryGrabProgress n ps captured
-             else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
-                     tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
-    -- Try grabbing pieces from the pending blocks
-    tryGrabPending n ps captured = do
-        histo <- gets histogram
-        pending <- gets pendingPieces
-        selector <- PS.freeze ps
-        pendingS <- PS.freeze pending
-        let culprits = PendS.pick (\p -> selector p && pendingS p) histo
-        case culprits of
-            Nothing -> do
-                isn <- PS.intersection ps pending
-                assert (null isn) (return ())
-                return captured
-            Just pieces -> do
-                h <- pickRandom pieces
-                inProg <- gets inProgress
-                blockList <- createBlock h
-                let sz  = length blockList
-                    ipp = InProgressPiece sz S.empty blockList
-                PS.delete h =<< gets pendingPieces
-                modify (\db -> db { inProgress    = M.insert h ipp inProg })
-                tryGrabProgress n ps captured
-    grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
-        dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
-        take n . shuffle' dls (length dls) <$> liftIO newStdGen
+
+-- Grabbing blocks is a state machine implemented by tail calls
+-- Try grabbing pieces from the pieces in progress first
+tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
+                -> Process CF ST [(PieceNum, Block)]
+tryGrabProgress 0 _  captured = return captured
+tryGrabProgress n ps captured = do
+    inProg <- gets inProgress
+    nPieces <- M.size <$> gets infoMap
+    inProgPs <- PS.fromList nPieces $ M.keys inProg
+    is <- PS.intersection ps inProgPs
+    case null is of
+        True -> tryGrabPending n ps captured
+        False -> do grabFromProgress n ps (head is) captured
+
+-- The Piece @p@ was found, grab it
+grabFromProgress :: PieceNum -> PS.PieceSet -> PieceNum -> [(PieceNum, Block)]
+                 -> Process CF ST [(PieceNum, Block)]
+grabFromProgress n ps p captured = do
+    inprog <- gets inProgress
+    ipp <- case M.lookup p inprog of
+              Nothing -> fail "grabFromProgress: could not lookup piece"
+              Just x -> return x
+    let (grabbed, rest) = splitAt n (ipPendingBlocks ipp)
+        nIpp = ipp { ipPendingBlocks = rest }
+    -- This rather ugly piece of code should be substituted with something better
+    if grabbed == []
+         -- All pieces are taken, try the next one.
+         then do PS.delete p ps --TODO: Dangerous since we will NEVER reconsider that piece then!
+                 tryGrabProgress n ps captured
+         else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
+                 tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
+
+-- Try grabbing pieces from the pending blocks
+tryGrabPending :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)] -> Process CF ST [(PieceNum, Block)]
+tryGrabPending n ps captured = do
+    histo <- gets histogram
+    pending <- gets pendingPieces
+    selector <- PS.freeze ps
+    pendingS <- PS.freeze pending
+    let culprits = PendS.pick (\p -> selector p && pendingS p) histo
+    case culprits of
+        Nothing -> do
+            isn <- PS.intersection ps pending
+            assert (null isn) (return ())
+            return captured
+        Just pieces -> do
+            h <- pickRandom pieces
+            inProg <- gets inProgress
+            blockList <- createBlock h
+            let sz  = length blockList
+                ipp = InProgressPiece sz S.empty blockList
+            PS.delete h =<< gets pendingPieces
+            modify (\db -> db { inProgress    = M.insert h ipp inProg })
+            tryGrabProgress n ps captured
+
+grabEndGame :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
+grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
+    dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
+    take n . shuffle' dls (length dls) <$> liftIO newStdGen
 
 -- | Pick a random element among a finite list af them.
 pickRandom :: MonadIO m => [a] -> m a
