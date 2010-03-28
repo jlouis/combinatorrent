@@ -15,7 +15,6 @@ wish-list.
      connected to.
    - Handle error cases when checking a torrent file.
    - Do not connect to ourselves :)
-   - Write a small introduction to git bisect we can point people towards.
    - (thomaschrstnsn) Implement a creator for torrent files
    - If we get a wrong URI, the code currently deadlocks since the tracker
      dies. Handle this problem gracefully.
@@ -47,8 +46,6 @@ wish-list.
      also try to drain the socket again while waiting on the Control
      process. Doing this will lower the contended point of communication in
      the system.
-   - Add support for selecting what port to use for the listen. Also add
-     random port support.
    - Investigate and use the Event Library of Bryan O'Sullivan and Johan
      Tibell:
 
@@ -80,7 +77,6 @@ Items for later (no particular order)
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
      which makes sense. See the README file.
    - Add rate limitation support, locally or globally
-   - Add support for DHT
    - Support the UDP tracking extension
    - Support partial downloads (select files you want in the torrent)
    - Write an ETA estimator
