@@ -9,19 +9,12 @@ the same thing. Feel free to add anything to the list as well. It
 partially acts like a bug tracker at the moment in addition to being a
 wish-list.
 
-   - Change the sender Queue into having two queues, one for short
-     messages and one for long messages.
-   - hFlush on the sender queue in the sender process, intelligently.
-     There is no reason to flush the queue before we are fairly sure
-     we got all the small messages into it. It is dependent on the
-     above part.
    - Optimize reading of blocks by moving it to the sender Process in
      The Peer Process
    - Don't connect twice to the same client id. Track the clients we
      connected to.
    - Handle error cases when checking a torrent file.
    - Do not connect to ourselves :)
-   - Write an installation and compilation guide.
    - Write a small introduction to git bisect we can point people towards.
    - (thomaschrstnsn) Implement a creator for torrent files
    - If we get a wrong URI, the code currently deadlocks since the tracker
@@ -69,8 +62,6 @@ Planned for the next release
      without this knowledge.
    - We have seen various Deaths due to wrong IP decoding. Investigate.
      Can't be IPv6, since it has its own entry in the dictionary.
-   - Make Data.PieceSet handle the special case where the array is full. It
-     will optimize space usage by a great amount.
 
 Items for later (no particular order)
 -------------------------------------
@@ -88,13 +79,11 @@ Items for later (no particular order)
    - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
      which makes sense. See the README file.
-   - Support the FAST extension
    - Add rate limitation support, locally or globally
    - Add support for DHT
    - Support the UDP tracking extension
    - Support partial downloads (select files you want in the torrent)
    - Write an ETA estimator
-   - Write the Users Guide.
    - Design, build and improve a graphic UI.
    - Design, build and improve a protocol for communicating with the client.
    - Azureus/Vuze has a keepalive flood detector built-in. Consider if this
