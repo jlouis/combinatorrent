@@ -148,55 +148,59 @@ receiveEvt = do
         GrabBlocks n eligible c ->
             do blocks <- grabBlocks' n eligible
                syncP =<< sendP c blocks
-        StoreBlock pn blk d ->
-            do debugP $ "Storing block: " ++ show (pn, blk)
-               storeBlock pn blk d
-               modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
-               endgameBroadcast pn blk
-               done <- updateProgress pn blk
-               when done
-                   (do assertPieceComplete pn
-                       pend <- gets pendingPieces
-                       iprog <- gets inProgress
-                       pendSz <- PS.size pend
-                       infoP $ "Piece #" ++ show pn
-                                 ++ " completed, there are "
-                                 ++ (show pendSz) ++ " pending "
-                                 ++ (show $ M.size iprog) ++ " in progress"
-                       l <- gets infoMap >>=
-                            (\pm -> case M.lookup pn pm of
-                                            Nothing -> fail "Storeblock: M.lookup"
-                                            Just x -> return $ len x)
-                       ih <- asks pMgrInfoHash
-                       sendPC statusCh (CompletedPiece ih l) >>= syncP
-                       pieceOk <- checkPiece pn
-                       case pieceOk of
-                         Nothing ->
-                                do fail "PieceMgrP: Piece Nonexisting!"
-                         Just True -> do completePiece pn
-                                         markDone pn
-                                         checkFullCompletion
-                         Just False -> putbackPiece pn)
-        PutbackBlocks blks ->
-            mapM_ putbackBlock blks
-        GetDone c -> do done <- PS.toList =<< gets donePiece
-                        syncP =<< sendP c done
-        PeerHave idxs ->
-            modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
-        PeerUnhave idxs ->
-            modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
-        AskInterested pieces retC -> do
-            nPieces <- M.size <$> gets infoMap
-            inProg <- M.keys <$> gets inProgress
-            pend   <- gets pendingPieces >>= PS.toList
-            tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
-            -- @i@ is the intersection with with we need and the peer has.
-            intsct <- PS.intersection pieces tmp
-            syncP =<< sendP retC (not $ null intsct))
+        StoreBlock pn blk d -> storeBlock pn blk d
+        PutbackBlocks blks -> mapM_ putbackBlock blks
+        GetDone c -> syncP =<< sendP c =<< PS.toList =<< gets donePiece
+        PeerHave idxs -> peerHave idxs
+        PeerUnhave idxs -> peerUnhave idxs
+        AskInterested pieces retC -> askInterested pieces retC)
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
-storeBlock n blk contents =
-    syncP =<< (sendPC fspCh $ WriteBlock n blk contents)
+storeBlock pn blk d = do
+   debugP $ "Storing block: " ++ show (pn, blk)
+   syncP =<< (sendPC fspCh $ WriteBlock pn blk d)
+   modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
+   endgameBroadcast pn blk
+   done <- updateProgress pn blk
+   when done
+       (do assertPieceComplete pn
+           pend <- gets pendingPieces
+           iprog <- gets inProgress
+           pendSz <- PS.size pend
+           infoP $ "Piece #" ++ show pn
+                     ++ " completed, there are "
+                     ++ (show pendSz) ++ " pending "
+                     ++ (show $ M.size iprog) ++ " in progress"
+           l <- gets infoMap >>=
+                (\pm -> case M.lookup pn pm of
+                                Nothing -> fail "Storeblock: M.lookup"
+                                Just x -> return $ len x)
+           ih <- asks pMgrInfoHash
+           sendPC statusCh (CompletedPiece ih l) >>= syncP
+           pieceOk <- checkPiece pn
+           case pieceOk of
+             Nothing ->
+                    do fail "PieceMgrP: Piece Nonexisting!"
+             Just True -> do completePiece pn
+                             markDone pn
+                             checkFullCompletion
+             Just False -> putbackPiece pn)
+
+askInterested :: PS.PieceSet -> Channel Bool -> Process CF ST ()
+askInterested pieces retC = do
+    nPieces <- M.size <$> gets infoMap
+    inProg <- M.keys <$> gets inProgress
+    pend   <- gets pendingPieces >>= PS.toList
+    tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
+    -- @i@ is the intersection with with we need and the peer has.
+    intsct <- PS.intersection pieces tmp
+    syncP =<< sendP retC (not $ null intsct)
+
+peerHave :: [PieceNum] -> Process CF ST ()
+peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+
+peerUnhave :: [PieceNum] -> Process CF ST ()
+peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
 
 endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
 endgameBroadcast pn blk = do
