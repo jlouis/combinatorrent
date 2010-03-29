@@ -9,10 +9,6 @@ the same thing. Feel free to add anything to the list as well. It
 partially acts like a bug tracker at the moment in addition to being a
 wish-list.
 
-   - Optimize reading of blocks by moving it to the sender Process in
-     The Peer Process
-   - Don't connect twice to the same client id. Track the clients we
-     connected to.
    - Handle error cases when checking a torrent file.
    - Do not connect to ourselves :)
    - (thomaschrstnsn) Implement a creator for torrent files
@@ -68,16 +64,12 @@ Items for later (no particular order)
    - Play with the code coverage in GHC.
    - Improve parallel execution. We are currently extremely synchronous.
      Check the code with ThreadScope, some improvement has been done.
-   - Improve the Peer Management code. Keep track of peers and process them
-     over time in an intelligent manner. Ability to kill bad peers, not
-     reconnect blindly to peers, and so on.
    - Add restart-support to the supervisors where applicable.
    - Add prioritization support of multiTorrents
    - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
      which makes sense. See the README file.
    - Add rate limitation support, locally or globally
-   - Support the UDP tracking extension
    - Support partial downloads (select files you want in the torrent)
    - Write an ETA estimator
    - Design, build and improve a graphic UI.
