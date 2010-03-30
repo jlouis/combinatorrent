@@ -74,8 +74,7 @@ queueEvent :: Process CF ST (Event ((), ST))
 queueEvent = {-# SCC "Peer.SendQ.queueEvt" #-} do
     recvWrapPC sqInCh
             (\m -> case m of
-                SenderQM msg -> do debugP "Queueing event for sending"
-                                   modifyQ (Q.push msg)
+                SenderQM msg -> modifyQ (Q.push msg)
                 SenderQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
                 SenderOChoke -> do modifyQ (Q.filter filterAllPiece)
                                    modifyQ (Q.push Choke)
@@ -87,10 +86,10 @@ sendEvent = {-# SCC "Peer.SendQ.sendEvt" #-} do
     Just (e, r) <- gets (Q.pop . outQueue)
     let bs = encodePacket e
     tEvt <- sendPC sqOutCh bs
-    wrapP tEvt (\() -> do debugP "Dequeued event"
-                          modify (\s -> s { outQueue = r,
-                                            bytesTransferred =
-                                                bytesTransferred s + fromIntegral (B.length bs)}))
+    wrapP tEvt (\() -> modify (\s ->
+            s { outQueue = r,
+                bytesTransferred =
+                bytesTransferred s + fromIntegral (B.length bs)}))
 
 filterAllPiece :: Message -> Bool
 filterAllPiece (Piece _ _ _) = True

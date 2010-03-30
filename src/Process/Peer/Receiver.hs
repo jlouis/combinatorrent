@@ -40,8 +40,7 @@ readSend = {-# SCC "Recv_readHeader" #-} do
     l <- conv bs'
     if (l == 0)
         then return ()
-        else do debugP $ "Reading off " ++ show l ++ " bytes"
-                bs <- {-# SCC "Recv_hGet" #-} liftIO $ B.hGet h (fromIntegral l)
+        else do bs <- {-# SCC "Recv_hGet" #-} liftIO $ B.hGet h (fromIntegral l)
                 case G.runGet decodeMsg bs of
                     Left _ -> do warningP "Incorrect parse in receiver, dying!"
                                  stopP
