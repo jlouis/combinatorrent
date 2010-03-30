@@ -354,14 +354,13 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
 tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
                 -> Process CF ST [(PieceNum, Block)]
 tryGrabProgress 0 _  captured = return captured
-tryGrabProgress n ps captured = do
-    inProg <- gets inProgress
-    nPieces <- M.size <$> gets infoMap
-    inProgPs <- PS.fromList nPieces $ M.keys inProg
-    is <- PS.intersection ps inProgPs
-    case null is of
-        True -> tryGrabPending n ps captured
-        False -> do grabFromProgress n ps (head is) captured
+tryGrabProgress n ps captured = grabber =<< (M.keys <$> gets inProgress)
+  where
+    grabber []       = tryGrabPending n ps captured
+    grabber (i : is) = do m <- PS.member i ps
+                          if m
+                            then grabFromProgress n ps i captured
+                            else grabber is
 
 -- The Piece @p@ was found, grab it
 grabFromProgress :: PieceNum -> PS.PieceSet -> PieceNum -> [(PieceNum, Block)]
