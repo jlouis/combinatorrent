@@ -17,4 +17,5 @@ Main
 /tools/stat_db.txt
 /tools/stat_db.csv
 /tools/*.png
+/tools/*.svg
 report.html
