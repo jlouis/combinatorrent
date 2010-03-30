@@ -1,36 +1,45 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 
-	<title>jlouis/combinatorrent @ GitHub</title>
-	
-	<style type="text/css">
-		body {
-  		margin-top: 1.0em;
-  		background-color: #ffffea;
-		  font-family: "Helvetica,Arial,FreeSans";
-  		color: #000000;
-    }
-    #container {
-      margin: 0 auto;
-      width: 700px;
-    }
-		h1 { font-size: 3.8em; color: #000015; margin-bottom: 3px; }
-		h1 .small { font-size: 0.4em; }
-		h1 a { text-decoration: none }
-		h2 { font-size: 1.5em; color: #000015; }
-    h3 { text-align: center; color: #000015; }
-    a { color: #000015; }
-    .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
-    .download { float: right; }
-		pre { background: #000; color: #fff; padding: 15px;}
-    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
-    .footer { text-align:center; padding-top:30px; font-style: italic; }
-	</style>
-	
+        <title>jlouis/combinatorrent @ GitHub</title>
+
+        <style type="text/css">
+                body {
+                margin-top: 1.0em;
+                background-color: #ffffea;
+                  font-family: "Helvetica,Arial,FreeSans";
+                color: #000000;
+                }
+                #container {
+                    margin: 0 auto;
+                    width: 700px;
+                }
+                h1 { font-size: 3.8em; color: #000015; margin-bottom: 3px; }
+                h1 .small { font-size: 0.4em; }
+                h1 a { text-decoration: none }
+                h2 { font-size: 1.5em; color: #000015; }
+                h3 { text-align: center; color: #000015; }
+                a { color: #000015; }
+                .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
+                .download { float: right; }
+                pre { background: #000; color: #fff; padding: 15px;}
+                hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
+                .footer { text-align:center; padding-top:30px; font-style: italic; }
+                table.plain {
+                    white-space: nowrap;
+                }
+                table.plain tr td {
+                    padding-right: 10px;
+                }
+                table.plain tr td:last-child {
+                    padding-right: 0;
+                }
+        </style>
+        
 </head>
 
 <body>
@@ -54,6 +63,19 @@
 
     <h2>Authors</h2>
 <p>Astro (astro@spaceboyz.net)<br/>Alex Mason (axman6@gmail.com)<br/>Jesper Louis Andersen (jesper.louis.andersen@gmail.com)<br/>John Gunderman (johngunderman@gmail.com)<br/>Thomas Christensen (thomas@chrstnsn.dk)<br/><br/>      </p>
+    <h2>RTS Benchmarks</h2>
+    <p>These are the current RTS benchmark runs from the last development runs by jlouis. It is meant for tracking regressions of performance with the runtime over time.</p>
+    <table class="plain" cellpadding="0" cellspacing="0">
+        <tr>
+            <td>Maximal live heap space (megabytes)</td>
+            <td><img src="img/MaxBytesUsed.png"/></td>
+        </tr>
+        <tr>
+            <td>Peak RSS usage (megabytes)</td>
+            <td><img src="img/PeakMegabytes.png"/></td>
+        </tr>
+    </table>
+
 <h2>Contact</h2>
 <p>Jesper Louis Andersen (jesper.louis.andersen@gmail.com)<br/>      </p>
 
