@@ -66,7 +66,6 @@ Items for later (no particular order)
      Check the code with ThreadScope, some improvement has been done.
    - Add restart-support to the supervisors where applicable.
    - Add prioritization support of multiTorrents
-   - Implement a scraper on trackers
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
      which makes sense. See the README file.
    - Add rate limitation support, locally or globally
