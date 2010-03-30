@@ -19,3 +19,4 @@ Main
 /tools/*.png
 /tools/*.svg
 report.html
+/tools/stat_db.backup.txt

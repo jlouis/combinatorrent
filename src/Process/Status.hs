@@ -28,6 +28,7 @@ import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 
+import Data.IORef
 import qualified Data.Map as M
 
 import Prelude hiding (log)
@@ -79,13 +80,9 @@ data StatusState = SState
              , trackerMsgCh :: Channel TrackerMsg
              }
 
-gatherStats :: M.Map k StatusState -> [(String, Integer)]
-gatherStats mp =
-    let (uploaded, downloaded) =
-          foldl (\(up, down) (SState u d _ _ _ _ _) ->
-                (up+u, down+d))
-                (0, 0) $ M.elems mp
-    in [("uploaded", uploaded), ("downloaded", downloaded)]
+gatherStats :: (Integer, Integer) -> [(String, Integer)]
+gatherStats (uploaded, downloaded) =
+    [("uploaded", uploaded), ("downloaded", downloaded)]
 
 instance Show StatusState where
     show (SState up down left inc comp st _) = concat
@@ -106,18 +103,19 @@ instance NFData (Channel StatusState) where
 --   channel on which to transmit status updates to the tracker.
 start :: Maybe FilePath -> Channel StatusMsg -> TVar [PStat] -> SupervisorChan -> IO ThreadId
 start fp statusC tv supC = do
+    r <- newIORef (0,0)
     spawnP (CF statusC tv) M.empty
-        (cleanupP (foreverP pgm) (defaultStopHandler supC) cleanup)
+        (cleanupP (foreverP (pgm r)) (defaultStopHandler supC) (cleanup r))
   where
-    cleanup = do
-        st <- get
+    cleanup r = do
+        st <- liftIO $ readIORef r
         case fp of
             Nothing -> return ()
-            Just fp -> liftIO $ writeFile fp (show $ gatherStats st)
+            Just fp -> liftIO $ writeFile fp (show . gatherStats $ st)
     newMap left trackerMsgC =
         SState 0 0 left Nothing Nothing (if left == 0 then Seeding else Leeching) trackerMsgC
-    pgm = {-# SCC "StatusP" #-} do
-        fetchUpdates
+    pgm r = {-# SCC "StatusP" #-} do
+        fetchUpdates r
         syncP =<< chooseP [recvEvent, tickEvent]
     tickEvent :: Process CF ST (Event ((), ST))
     tickEvent = do
@@ -150,14 +148,17 @@ start fp statusC tv supC = do
                             syncP =<< sendP (trackerMsgCh ns) Complete
                             modify (\s -> M.insert ih (ns { state = Seeding}) s))
 
-fetchUpdates :: Process CF ST ()
-fetchUpdates = do
+fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()
+fetchUpdates r = do
     tv <- asks statusTV
     updates <- liftIO . atomically $ do
                     updates <- readTVar tv
                     writeTVar tv []
                     return updates
-    mapM_ (\(PStat ih up down) ->
+    mapM_ (\(PStat ih up down) -> do
+        (u, d) <- liftIO $ readIORef r
+        liftIO $ writeIORef r (u+up, d+down)
         modify (\s -> M.adjust (\st ->
             st { uploaded = (uploaded st) + up
                , downloaded = (downloaded st) + down }) ih s)) updates
+

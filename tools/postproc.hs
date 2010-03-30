@@ -39,11 +39,12 @@ readTimes timeStat = do
 presentStats db = do
     cts <- readFile db
     let ls = map read . lines $ cts
-    putStrLn "#Start\tEnd\tMaxBytesUsed\tPeakMegabytesAlloc\tMutCPU\tGCCPU"
+    putStrLn "#Start\tEnd\tMaxBytesUsed\tPeakMegabytesAlloc\tMutCPU\tGCCPU\tUploaded\tDownloaded"
     let formatted = map (format ["start_time", "end_time", "max_bytes_used",
                                  "peak_megabytes_allocated",
                                  "mutator_cpu_seconds",
-                                 "GC_cpu_seconds"]) ls
+                                 "GC_cpu_seconds",
+                                 "uploaded", "downloaded"]) ls
     mapM_ putStrLn formatted
 
 format :: [String] -> [(String, String)] -> String
