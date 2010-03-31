@@ -68,9 +68,7 @@ Items for later (no particular order)
    - Add prioritization support of multiTorrents
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
      which makes sense. See the README file.
-   - Add rate limitation support, locally or globally
    - Support partial downloads (select files you want in the torrent)
-   - Write an ETA estimator
    - Design, build and improve a graphic UI.
    - Design, build and improve a protocol for communicating with the client.
    - Azureus/Vuze has a keepalive flood detector built-in. Consider if this
