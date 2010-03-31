@@ -32,6 +32,7 @@ import Process.Status as STP hiding (start)
 import Process.ChokeMgr (ChokeMgrMsg(..), ChokeMgrChannel)
 import Supervisor
 import Torrent
+import Tracer
 import Process
 
 ----------------------------------------------------------------------
@@ -54,6 +55,7 @@ data ST = ST
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
     , histogram     :: PendS.PendingSet -- ^ Track the rarity of pieces
     , assertCount   :: Int        -- ^ When to next check the database for consistency
+    , traceBuffer   :: Tracer PieceMgrMsg
     }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -98,6 +100,15 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (Channel Blocks)
                  | PeerUnhave [PieceNum]
                    -- ^ A peer relinquished the given piece Indexes
 
+instance Show PieceMgrMsg where
+    show (GrabBlocks x _ _) = "GrabBlocks " ++ show x
+    show (StoreBlock pn blk _) = "StoreBlock " ++ show pn ++ " " ++ show blk
+    show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
+    show (AskInterested _ _)   = "AskInterested"
+    show (GetDone _)           = "GetDone"
+    show (PeerHave xs)         = "PeerHave " ++ show xs
+    show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
+
 instance NFData PieceMgrMsg where
     rnf a = case a of
               (GrabBlocks _ is _) -> rnf is
@@ -140,10 +151,14 @@ sendEvt elem = do
    wrapP ev (\_ ->
         modify (\db -> db { donePush = tail (donePush db) }))
 
+traceMsg :: PieceMgrMsg -> Process CF ST ()
+traceMsg m = modify (\db -> db { traceBuffer = trace m (traceBuffer db) })
+
 receiveEvt :: ProcessEvent
 receiveEvt = do
     ev <- recvPC pieceMgrCh
     wrapP ev (\msg -> do
+      traceMsg msg
       case msg of
         GrabBlocks n eligible c ->
             do blocks <- grabBlocks n eligible
@@ -226,7 +241,7 @@ createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m ST
 createPieceDb mmap pmap = do
     pending <- filt (==False)
     done    <- filt (==True)
-    return $ ST pending done [] M.empty [] pmap False PendS.empty 0
+    return $ ST pending done [] M.empty [] pmap False PendS.empty 0 (Tracer.new 20)
   where
     filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
 
@@ -452,11 +467,26 @@ assertST = {-# SCC "assertST" #-} do
         piprogis <- PS.intersection pending iprog
         doneprogis <- PS.intersection done iprog
         donedownis <- PS.intersection done down
-        return $ assert (null pdis) ()
-        return $ assert (null pdownis) ()
-        return $ assert (null piprogis) ()
-        return $ assert (null doneprogis) ()
-        return $ assert (null donedownis) ()
+        when (null pdis)
+           (do trb <- gets traceBuffer
+               liftIO $ print trb
+               return $ assert False ())
+        when (null pdownis)
+           (do trb <- gets traceBuffer
+               liftIO $ print trb
+               return $ assert False ())
+        when (null piprogis)
+           (do trb <- gets traceBuffer
+               liftIO $ print trb
+               return $ assert False ())
+        when (null doneprogis)
+           (do trb <- gets traceBuffer
+               liftIO $ print trb
+               return $ assert False ())
+        when (null donedownis)
+           (do trb <- gets traceBuffer
+               liftIO $ print trb
+               return $ assert False ())
 
     -- If a piece is in Progress, we have:
     --
