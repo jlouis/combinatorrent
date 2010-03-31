@@ -55,7 +55,7 @@ data ST = ST
     , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
     , histogram     :: PendS.PendingSet -- ^ Track the rarity of pieces
     , assertCount   :: Int        -- ^ When to next check the database for consistency
-    , traceBuffer   :: Tracer PieceMgrMsg
+    , traceBuffer   :: Tracer String
     }
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -152,7 +152,7 @@ sendEvt elem = do
         modify (\db -> db { donePush = tail (donePush db) }))
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
-traceMsg m = modify (\db -> db { traceBuffer = trace m (traceBuffer db) })
+traceMsg m = modify (\db -> db { traceBuffer = trace (show m) (traceBuffer db) })
 
 receiveEvt :: ProcessEvent
 receiveEvt = do
@@ -505,12 +505,14 @@ assertST = {-# SCC "assertST" #-} do
         mapM_ checkDownloading down
     checkDownloading (pn, blk) = do
         prog <- gets inProgress
+        tr   <- gets traceBuffer
         case M.lookup pn prog of
             Nothing -> fail $ "Piece " ++ show pn ++ " not in progress while We think it was"
             Just ipp -> do
                 when (blk `elem` ipPendingBlocks ipp)
                     (fail $ "P/Blk " ++ show (pn, blk) ++ " is in the Pending Block list")
                 when (S.member blk $ ipHaveBlocks ipp)
-                    (fail $ "P/Blk " ++ show (pn, blk) ++ " is in the HaveBlocks set")
+                    (fail $ "P/Blk " ++ show (pn, blk) ++ " is in the HaveBlocks set" ++
+                        "Trace: " ++ show tr)
 
 
