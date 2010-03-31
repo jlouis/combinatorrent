@@ -26,7 +26,7 @@ readRtsStat fp = do
 readCombinatorrentStat :: FilePath -> IO [(String, String)]
 readCombinatorrentStat fp = do
     cts <- readFile fp
-    let d = read cts :: [(String, Integer)]
+    let d = read cts :: [(String, String)]
     return $ map (\(k, v) -> (k, show v)) d
 
 readTimes :: FilePath -> IO [(String, String)]

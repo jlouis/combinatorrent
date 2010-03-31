@@ -300,14 +300,14 @@ assertPieceComplete pn = do
         assertAllDownloaded blocks pn = all (\(pn', _) -> pn /= pn') blocks
 
 -- | Update the progress on a Piece. When we get a block from the piece, we will
---   track this in the Piece Database. This function returns a pair @(complete, nDb)@
+--   track this in the Piece Database. This function returns @complete@
 --   where @complete@ is @True@ if the piece is percieved to be complete and @False@
 --   otherwise.
 updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
 updateProgress pn blk = do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
-      Nothing -> do debugP "updateProgress can't find progress block, error?"
+      Nothing -> do warningP "updateProgress can't find progress block, error?"
                     return False
       Just pg ->
           let blkSet = ipHaveBlocks pg

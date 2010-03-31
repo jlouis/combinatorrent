@@ -35,6 +35,7 @@ import Prelude hiding (log)
 import Process
 import Supervisor
 import Torrent
+import Version
 
 data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                              , trackIncomplete :: Maybe Integer
@@ -80,9 +81,10 @@ data StatusState = SState
              , trackerMsgCh :: Channel TrackerMsg
              }
 
-gatherStats :: (Integer, Integer) -> [(String, Integer)]
+gatherStats :: (Integer, Integer) -> [(String, String)]
 gatherStats (uploaded, downloaded) =
-    [("uploaded", uploaded), ("downloaded", downloaded)]
+    [("uploaded", show uploaded), ("downloaded", show downloaded),
+     ("version", version)]
 
 instance Show StatusState where
     show (SState up down left inc comp st _) = concat
