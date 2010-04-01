@@ -306,13 +306,13 @@ assertPieceComplete pn = do
                 ++ " with block state " ++ show ipp)
   where assertComplete ip sz = checkContents 0 (fromIntegral sz) (S.toAscList (ipHaveBlocks ip))
         -- Check a single block under assumptions of a cursor at offs
-        checkBlock (offs, left, state) blk = (offs + blockSize blk,
-                                              left - blockSize blk,
-                                              state && offs == blockOffset blk)
+        checkBlock (offs, l, state) blk = (offs + blockSize blk,
+                                           l - blockSize blk,
+                                           state && offs == blockOffset blk)
         checkContents os l blks = case foldl checkBlock (os, l, True) blks of
                                     (_, 0, True) -> True
                                     _            -> False
-        assertAllDownloaded blocks pn = all (\(pn', _) -> pn /= pn') blocks
+        assertAllDownloaded blocks p = all (\(p', _) -> p /= p') blocks
 
 -- | Update the progress on a Piece. When we get a block from the piece, we will
 --   track this in the Piece Database. This function returns @complete@
@@ -356,8 +356,8 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
     pend <- gets pendingPieces
     pendN <- PS.null pend
     if blocks == [] && pendN
-        then do ps' <- PS.copy eligible
-                blks <- grabEndGame k ps'
+        then do ps'' <- PS.copy eligible
+                blks <- grabEndGame k ps''
                 modify (\db -> db { endGaming = True })
                 debugP $ "PieceMgr entered endgame."
                 return $ Endgame blks

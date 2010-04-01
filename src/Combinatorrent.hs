@@ -75,6 +75,7 @@ setupLogging flags = do
     fLog <- case logFlag flags of
                 Nothing -> streamHandler SIO.stdout DEBUG
                 Just (LogFile fp) -> fileHandler fp DEBUG
+                Just _ -> error "Impossible match"
     when (Debug `elem` flags)
           (updateGlobalLogger rootLoggerName
                  (setHandlers [fLog] . (setLevel DEBUG)))
@@ -92,6 +93,7 @@ setupDirWatching flags watchC = do
                 then do return [ Worker $ DirWatcher.start dir watchC ]
                 else do putStrLn $ "Directory does not exist, not watching"
                         return []
+        Just _ -> error "Impossible match"
   where dirWatchFlag = find (\e -> case e of
                                     WatchDir _ -> True
                                     _          -> False)
@@ -101,6 +103,7 @@ setupStatus flags statusC stv =
     case statFileFlag flags of
       Nothing -> Worker $ Status.start Nothing statusC stv
       Just (StatFile fn) -> Worker $ Status.start (Just fn) statusC stv
+      Just _ -> error "Impossible match"
   where statFileFlag = find (\e -> case e of
                                     StatFile _ -> True
                                     _          -> False)

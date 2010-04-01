@@ -82,15 +82,15 @@ data StatusState = SState
              }
 
 gatherStats :: (Integer, Integer) -> [(String, String)]
-gatherStats (uploaded, downloaded) =
-    [("uploaded", show uploaded), ("downloaded", show downloaded),
+gatherStats (upload, download) =
+    [("uploaded", show upload), ("downloaded", show download),
      ("version", version)]
 
 instance Show StatusState where
-    show (SState up down left inc comp st _) = concat
+    show (SState up down l inc comp st _) = concat
         ["{ Uploaded:   " ++ show up ++ "\n"
         ,"  Downloaded: " ++ show down ++ "\n"
-        ,"  Left:       " ++ show left ++ "\n"
+        ,"  Left:       " ++ show l ++ "\n"
         ,"  State:      " ++ show st ++ "\n"
         ,"  Complete:   " ++ show comp ++ "\n"
         ,"  Incomplete: " ++ show inc ++ " }"]
@@ -113,9 +113,9 @@ start fp statusC tv supC = do
         st <- liftIO $ readIORef r
         case fp of
             Nothing -> return ()
-            Just fp -> liftIO $ writeFile fp (show . gatherStats $ st)
-    newMap left trackerMsgC =
-        SState 0 0 left Nothing Nothing (if left == 0 then Seeding else Leeching) trackerMsgC
+            Just fpath -> liftIO $ writeFile fpath (show . gatherStats $ st)
+    newMap l trackerMsgC =
+        SState 0 0 l Nothing Nothing (if l == 0 then Seeding else Leeching) trackerMsgC
     pgm r = {-# SCC "StatusP" #-} do
         fetchUpdates r
         syncP =<< chooseP [recvEvent, tickEvent]
@@ -131,8 +131,8 @@ start fp statusC tv supC = do
                             modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
                         CompletedPiece ih bytes -> do
                             modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
-                        InsertTorrent ih left trackerMsgC ->
-                            modify (\s -> M.insert ih (newMap left trackerMsgC) s)
+                        InsertTorrent ih l trackerMsgC ->
+                            modify (\s -> M.insert ih (newMap l trackerMsgC) s)
                         RemoveTorrent ih -> modify (\s -> M.delete ih s)
                         RequestStatus ih retC -> do
                             s <- get
@@ -148,7 +148,8 @@ start fp statusC tv supC = do
                             ns  <- maybe (fail "Unknown Torrent") return q
                             assert (left ns == 0) (return ())
                             syncP =<< sendP (trackerMsgCh ns) Complete
-                            modify (\s -> M.insert ih (ns { state = Seeding}) s))
+                            modify (\s -> M.insert ih (ns { state = Seeding}) s)
+                        Tick -> error "Never happens!")
 
 fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()
 fetchUpdates r = do
