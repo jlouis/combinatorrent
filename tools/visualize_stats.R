@@ -1,5 +1,3 @@
-require(outliers)
-
 #R sparklines
 sparkline<-function(ydata=rnorm(100,500,50),width=1.5,height=0.5,sigfigs=4) {
 
