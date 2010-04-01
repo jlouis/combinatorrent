@@ -93,7 +93,7 @@ readTorrent fp = do
 startTorrent :: FilePath -> Process CF ST ThreadId
 startTorrent fp = do
     bc <- readTorrent fp
-    fspC     <- liftIO channel
+    fspC     <- liftIO newTChanIO
     trackerC <- liftIO channel
     supC     <- liftIO channel
     pieceMgrC  <- liftIO newTChanIO

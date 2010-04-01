@@ -85,15 +85,15 @@ data PCF = PCF { inCh :: Channel (Message, Integer)
 instance Logging PCF where
     logName _ = "Process.Peer"
 
-data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
-               , weInterested :: Bool -- ^ True if we are interested in the peer
-               , blockQueue :: S.Set (PieceNum, Block) -- ^ Blocks queued at the peer
-               , peerChoke :: Bool -- ^ Is the peer choking us? True if yes
-               , peerInterested :: Bool -- ^ True if the peer is interested
-               , peerPieces :: PS.PieceSet -- ^ List of pieces the peer has access to
-               , upRate :: Rate -- ^ Upload rate towards the peer (estimated)
-               , downRate :: Rate -- ^ Download rate from the peer (estimated)
-               , runningEndgame :: Bool -- ^ True if we are in endgame
+data PST = PST { weChoke :: !Bool -- ^ True if we are choking the peer
+               , weInterested :: !Bool -- ^ True if we are interested in the peer
+               , blockQueue :: !(S.Set (PieceNum, Block)) -- ^ Blocks queued at the peer
+               , peerChoke :: !Bool -- ^ Is the peer choking us? True if yes
+               , peerInterested :: !Bool -- ^ True if the peer is interested
+               , peerPieces :: !(PS.PieceSet) -- ^ List of pieces the peer has access to
+               , upRate :: !Rate -- ^ Upload rate towards the peer (estimated)
+               , downRate :: !Rate -- ^ Download rate from the peer (estimated)
+               , runningEndgame :: !Bool -- ^ True if we are in endgame
                }
 
 
@@ -210,8 +210,8 @@ timerEvent mTid = do
 upRateEvent :: Process PCF PST (Event ((), PST))
 upRateEvent = do
     evt <- recvPC sendBWCh
-    wrapP evt (\uploaded -> do
-        modify (\s -> s { upRate = RC.update uploaded $ upRate s}))
+    wrapP evt (\up -> do
+        modify (\s -> s { upRate = RC.update up $ upRate s}))
 
 -- | Process an Message from the peer in the other end of the socket.
 peerMsgEvent :: Process PCF PST (Event ((), PST))
@@ -264,9 +264,9 @@ bitfieldMsg bf = do
     if piecesNull
         -- TODO: Don't trust the bitfield
         then do nPieces <- M.size <$> asks pieceMap
-                peerP <- createPeerPieces nPieces bf
-                modify (\s -> s { peerPieces = peerP })
-                peerLs <- PS.toList peerP
+                pp <- createPeerPieces nPieces bf
+                modify (\s -> s { peerPieces = pp })
+                peerLs <- PS.toList pp
                 pmch <- asks pieceMgrCh
                 liftIO . atomically $ writeTChan pmch (PeerHave peerLs)
                 considerInterest
@@ -285,9 +285,11 @@ requestMsg pn blk = do
 -- | Read a block from the filesystem for sending
 readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
 readBlock pn blk = do
-    c <- liftIO $ channel
-    syncP =<< sendPC fsCh (ReadBlock pn blk c)
-    syncP =<< recvP c (const True)
+    v <- liftIO $ newEmptyTMVarIO
+    fch <- asks fsCh
+    liftIO $ do
+        atomically $ writeTChan fch (ReadBlock pn blk v)
+        atomically $ takeTMVar v
 
 -- | Handle a Piece Message incoming from the peer
 pieceMsg :: PieceNum -> Int -> B.ByteString -> Process PCF PST ()
@@ -383,9 +385,9 @@ grabBlocks n = do
         atomically $ writeTChan pmch (GrabBlocks n ps c)
         atomically $ takeTMVar c
     case blks of
-        Leech blks -> return blks
-        Endgame blks ->
-            modify (\s -> s { runningEndgame = True }) >> return blks
+        Leech bs -> return bs
+        Endgame bs ->
+            modify (\s -> s { runningEndgame = True }) >> return bs
 
 
 createPeerPieces :: MonadIO m => Int -> L.ByteString -> m PS.PieceSet

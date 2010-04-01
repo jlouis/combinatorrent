@@ -197,7 +197,8 @@ rpcMessage = do
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock pn blk d = do
    debugP $ "Storing block: " ++ show (pn, blk)
-   syncP =<< (sendPC fspCh $ WriteBlock pn blk d)
+   fch <- asks fspCh
+   liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
    modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
    endgameBroadcast pn blk
    done <- updateProgress pn blk
@@ -254,9 +255,11 @@ markDone pn = do
 
 checkPiece :: PieceNum -> Process CF ST (Maybe Bool)
 checkPiece n = do
-    ch <- liftIO channel
-    syncP =<< (sendPC fspCh $ CheckPiece n ch)
-    syncP =<< recvP ch (const True)
+    v <- liftIO newEmptyTMVarIO
+    fch <- asks fspCh
+    liftIO $ do
+        atomically $ writeTChan fch $ CheckPiece n v
+        atomically $ takeTMVar v
 
 -- HELPERS
 ----------------------------------------------------------------------
