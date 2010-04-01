@@ -467,23 +467,23 @@ assertST = {-# SCC "assertST" #-} do
         piprogis <- PS.intersection pending iprog
         doneprogis <- PS.intersection done iprog
         donedownis <- PS.intersection done down
-        when (null pdis)
+        when (not $ null pdis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (null pdownis)
+        when (not $ null pdownis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (null piprogis)
+        when (not $ null piprogis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (null doneprogis)
+        when (not $ null doneprogis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (null donedownis)
+        when (not $ null donedownis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
