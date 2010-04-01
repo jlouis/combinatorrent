@@ -111,10 +111,12 @@ start ch pid chokeMgrC rtv supC =
                     Connect ih tid c -> newPeer ih tid c
                     Disconnect tid -> removePeer tid)
     newPeer ih tid c = do debugP $ "Adding new peer " ++ show tid
-                          sendPC chokeMgrCh (AddPeer ih tid c) >>= syncP
+                          cch <- asks chokeMgrCh
+                          liftIO . atomically $ writeTChan cch (AddPeer ih tid c)
                           modify (\s -> s { peers = M.insert tid c (peers s)})
     removePeer tid = do debugP $ "Removing peer " ++ show tid
-                        sendPC chokeMgrCh (RemovePeer tid) >>= syncP
+                        cch <- asks chokeMgrCh
+                        liftIO . atomically $ writeTChan cch (RemovePeer tid)
                         modify (\s -> s { peers = M.delete tid (peers s)})
     numPeers = 40
     fillPeers = do

@@ -90,7 +90,7 @@ testEmptyIsEmpty = do
 testFirstRemove :: Assertion
 testFirstRemove = do
     -- Should really cover this more
-    let nq = push 2 (push 1 empty)
+    let nq = push 2 (push (1 :: Integer) empty)
     assertEqual "first" (first nq) (Just 1)
     assertEqual "first/removed" (first (remove nq)) (Just 2)
     assertEqual "emptied" (first (remove (remove nq))) Nothing

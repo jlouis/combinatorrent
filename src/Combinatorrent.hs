@@ -5,6 +5,7 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.Monad
+import Control.Monad.State
 
 import Data.List
 
@@ -123,7 +124,7 @@ download flags names = do
     waitC    <- channel
     supC <- channel
     pmC <- channel
-    chokeC <- channel
+    chokeC <- liftIO $ newTChanIO
     rtv <- atomically $ newTVar []
     stv <- atomically $ newTVar []
     debugM "Main" "Created channels"

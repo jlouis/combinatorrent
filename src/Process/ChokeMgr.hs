@@ -31,7 +31,6 @@ import PeerTypes hiding (Peer)
 import Process
 import Supervisor
 import Torrent hiding (infoHash)
-import Process.Timer as Timer
 
 -- DATA STRUCTURES
 ----------------------------------------------------------------------
@@ -47,7 +46,7 @@ data ChokeMgrMsg = Tick                                  -- ^ Request that we ru
 instance NFData ChokeMgrMsg where
   rnf a = a `seq` ()
 
-type ChokeMgrChannel = Channel ChokeMgrMsg
+type ChokeMgrChannel = TChan ChokeMgrMsg
 type RateTVar = TVar [(ThreadId, (Double, Double, Bool, Bool, Bool))]
 
 data CF = CF { mgrCh :: ChokeMgrChannel
@@ -62,34 +61,32 @@ type ChokeMgrProcess a = Process CF PeerDB a
 -- INTERFACE
 ----------------------------------------------------------------------
 
-roundTickSecs :: Integer
+roundTickSecs :: Int
 roundTickSecs = 11
 
 start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChan
       -> IO ThreadId
 start ch rtv ur supC = do
-    Timer.register roundTickSecs Tick ch
+    _ <- registerTimer ch
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
               (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 slots S.empty M.empty []
-    pgm = {-# SCC "ChokeMgr" #-} mgrEvent >>= syncP
-    mgrEvent =
-          recvWrapPC mgrCh
-            (\msg ->
-                case msg of
-                    Tick          -> tick
-                    RemovePeer t  -> removePeer t
-                    AddPeer ih t pCh -> do
-                            debugP $ "Adding peer " ++ show (ih, t)
-                            addPeer pCh ih t
-                    BlockComplete ih pn blk -> informBlockComplete ih pn blk
-                    PieceDone ih pn -> informDone ih pn
-                    TorrentComplete ih -> modify (\s -> s { seeding = S.insert ih $ seeding s }))
+    pgm = do
+        msg <- liftIO . atomically $ readTChan ch
+        case msg of
+           Tick          -> tick
+           RemovePeer t  -> removePeer t
+           AddPeer ih t pCh -> do
+                   debugP $ "Adding peer " ++ show (ih, t)
+                   addPeer pCh ih t
+           BlockComplete ih pn blk -> informBlockComplete ih pn blk
+           PieceDone ih pn -> informDone ih pn
+           TorrentComplete ih -> modify (\s -> s { seeding = S.insert ih $ seeding s })
     tick = do debugP "Ticked"
-              ch <- asks mgrCh
-              Timer.register roundTickSecs Tick ch
+              c <- asks mgrCh
+              _ <- liftIO (registerTimer c)
               updateDB
               runRechokeRound
     removePeer tid = do debugP $ "Removing peer " ++ show tid
@@ -97,6 +94,11 @@ start ch rtv ur supC = do
                                           , rateMap = M.delete tid (rateMap db) })
     isPeer tid pr | tid == pThreadId pr = True
                   | otherwise           = False
+
+registerTimer :: ChokeMgrChannel -> IO ThreadId
+registerTimer c = do
+    forkIO $ do threadDelay (roundTickSecs * 1000000)
+                atomically $ writeTChan c Tick
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
@@ -263,7 +265,7 @@ assignUploadSlots slots numDownPeers numSeedPeers =
     --   We allocate 70% of them to leeching and 30% of the to seeding
     --   though we assign at least one slot to both
     slotRound :: Double -> Double -> Int
-    slotRound slots fraction = max 1 $ round $ slots * fraction
+    slotRound ss fraction = max 1 $ round $ ss * fraction
 
     downloaderSlots = slotRound (fromIntegral slots) 0.7
     seederSlots     = slotRound (fromIntegral slots) 0.3

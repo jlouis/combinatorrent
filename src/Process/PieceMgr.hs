@@ -9,7 +9,6 @@ where
 
 import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.Exception (assert)
 import Control.DeepSeq
@@ -160,15 +159,13 @@ drainSend = do
     dl <- gets donePush
     if (null dl)
         then return ()
-        else (sendEvt (head dl) >>= syncP) >> drainSend
+        else sendChokeMgr (head dl) >> drainSend
 
-type ProcessEvent = Process CF ST (Event ((), ST))
-
-sendEvt :: ChokeMgrMsg -> ProcessEvent
-sendEvt e = do
-   ev <- sendPC chokeCh e
-   wrapP ev (\_ ->
-        modify (\db -> db { donePush = tail (donePush db) }))
+sendChokeMgr :: ChokeMgrMsg -> Process CF ST ()
+sendChokeMgr e = do
+    c <- asks chokeCh
+    liftIO . atomically $ writeTChan c e
+    modify (\db -> db { donePush = tail (donePush db) })
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
 traceMsg m = modify (\db -> db { traceBuffer = trace (show m) (traceBuffer db) })
@@ -290,7 +287,8 @@ checkFullCompletion = do
         (do liftIO $ putStrLn "Torrent Completed"
             ih <- asks pMgrInfoHash
             sendPC statusCh (STP.TorrentCompleted ih) >>= syncP
-            sendPC chokeCh  (TorrentComplete ih) >>= syncP)
+            c <- asks chokeCh
+            liftIO . atomically $ writeTChan c (TorrentComplete ih))
 
 -- | The call @putBackPiece db pn@ will mark the piece @pn@ as not being complete
 --   and put it back into the download queue again.
