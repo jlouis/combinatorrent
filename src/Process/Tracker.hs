@@ -204,10 +204,10 @@ decodeIps = decodeIps' . fromBS
 -- Decode a list of IP addresses. We expect these to be a compact response by default.
 decodeIps' :: String -> [PeerMgr.Peer]
 decodeIps' [] = []
-decodeIps' (b1 : b2 : b3 : b4 : p1 : p2 : rest) = PeerMgr.Peer ip port : decodeIps' rest
+decodeIps' (b1:b2:b3:b4:p1:p2 : rest) = PeerMgr.Peer ip port : decodeIps' rest
   where ip = concat . intersperse "." . map (show . ord) $ [b1, b2, b3, b4]
         port = PortNumber . fromIntegral $ ord p1 * 256 + ord p2
-decodeIps' xs = error $ "decodeIps': invalid IPs: " ++ xs -- Quench all other cases
+decodeIps' _xs = []
 
 trackerRequest :: URI -> Process CF ST (Either String TrackerResponse)
 trackerRequest uri =

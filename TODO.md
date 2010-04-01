@@ -53,8 +53,6 @@ Planned for the next release
 
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
-   - We have seen various Deaths due to wrong IP decoding. Investigate.
-     Can't be IPv6, since it has its own entry in the dictionary.
 
 Items for later (no particular order)
 -------------------------------------
