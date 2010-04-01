@@ -84,7 +84,7 @@ executable Combinatorrent
     time
 
   ghc-prof-options: -auto-all
-  ghc-options: -fwarn-unused-imports -fwarn-unused-binds -fwarn-unrecognised-pragmas -fwarn-warnings-deprecations -fwarn-deprecated-flags -fwarn-duplicate-exports -fwarn-hi-shadowing -fwarn-incomplete-record-updates -fwarn-missing-fields -fwarn-missing-methods -fwarn-missing-signatures -fno-ignore-asserts -fwarn-wrong-do-bind -fwarn-tabs -fwarn-type-defaults -fwarn-overlapping-patterns -fwarn-unused-matches -fwarn-unused-do-bind
+  ghc-options: -Wall
   if !flag(debug)
       cpp-options: "-DNDEBUG"
 

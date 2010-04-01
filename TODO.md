@@ -47,12 +47,12 @@ wish-list.
 
      [A Haskell event notification library - Github](http://github.com/tibbe/event)
    - Be explicit and use Word32 in the Wire Protocol.
+   - Should the PieceManager know about the InfoHash? We could run a version
+     without this knowledge.
 
 Planned for the next release
 ----------------------------
 
-   - Should the PieceManager know about the InfoHash? We could run a version
-     without this knowledge.
 
 Items for later (no particular order)
 -------------------------------------
