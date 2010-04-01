@@ -96,7 +96,7 @@ startTorrent fp = do
     fspC     <- liftIO channel
     trackerC <- liftIO channel
     supC     <- liftIO channel
-    pieceMgrC  <- liftIO channel
+    pieceMgrC  <- liftIO newTChanIO
     chokeC  <- asks tChokeCh
     statusC <- asks tStatusCh
     stv <- asks tStatusTV

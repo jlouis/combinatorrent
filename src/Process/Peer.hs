@@ -122,7 +122,8 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
         cleanup = do
             t <- liftIO myThreadId
             pieces <- gets peerPieces >>= PS.toList
-            syncP =<< sendPC pieceMgrCh (PeerUnhave pieces)
+            ch <- asks pieceMgrCh
+            liftIO . atomically $ writeTChan ch (PeerUnhave pieces)
             syncP =<< sendPC peerMgrCh (Disconnect t)
 
         eventLoop tid = {-# SCC "Peer.Control" #-} do
@@ -131,9 +132,11 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
 -- | Return a list of pieces which are currently done by us
 getPiecesDone :: Process PCF PST [PieceNum]
 getPiecesDone = do
-    c <- liftIO $ channel
-    syncP =<< (sendPC pieceMgrCh $ GetDone c)
-    recvP c (const True) >>= syncP
+    ch <- asks pieceMgrCh
+    liftIO $ do
+      c <- newEmptyTMVarIO
+      atomically $ writeTChan ch (GetDone c)
+      atomically $ readTMVar c
 
 -- | Process an event from the Choke Manager
 chokeMgrEvent :: Process PCF PST (Event ((), PST))
@@ -237,7 +240,8 @@ peerMsgEvent = do
 putbackBlocks :: Process PCF PST ()
 putbackBlocks = do
     blks <- gets blockQueue
-    syncP =<< sendPC pieceMgrCh (PutbackBlocks (S.toList blks))
+    pmch <- asks pieceMgrCh
+    liftIO . atomically $ writeTChan pmch (PutbackBlocks (S.toList blks))
     modify (\s -> s { blockQueue = S.empty })
 
 -- | Process a HAVE message from the peer. Note we also update interest as a side effect
@@ -246,7 +250,8 @@ haveMsg pn = do
     pm <- asks pieceMap
     if M.member pn pm
         then do PS.insert pn =<< gets peerPieces
-                syncP =<< sendPC pieceMgrCh (PeerHave [pn])
+                pmch <- asks pieceMgrCh
+                liftIO . atomically $ writeTChan pmch (PeerHave [pn])
                 considerInterest
         else do warningP "Unknown Piece"
                 stopP
@@ -262,7 +267,8 @@ bitfieldMsg bf = do
                 peerP <- createPeerPieces nPieces bf
                 modify (\s -> s { peerPieces = peerP })
                 peerLs <- PS.toList peerP
-                syncP =<< sendPC pieceMgrCh (PeerHave peerLs)
+                pmch <- asks pieceMgrCh
+                liftIO . atomically $ writeTChan pmch (PeerHave peerLs)
                 considerInterest
         else do infoP "Got out of band Bitfield request, dying"
                 stopP
@@ -305,10 +311,12 @@ cancelMsg n blk =
 --   Obvious optimization: Do less work, there is no need to consider all pieces most of the time
 considerInterest :: Process PCF PST ()
 considerInterest = do
-    c <- liftIO channel
+    c <- liftIO newEmptyTMVarIO
     pcs <- gets peerPieces
-    syncP =<< sendPC pieceMgrCh (AskInterested pcs c)
-    interested <- syncP =<< recvP c (const True)
+    pmch <- asks pieceMgrCh
+    interested <- liftIO $ do
+        atomically $ writeTChan pmch (AskInterested pcs c)
+        atomically $ readTMVar c
     if interested
         then do modify (\s -> s { weInterested = True })
                 syncP =<< sendPC outCh (SenderQ.SenderQM Interested)
@@ -362,17 +370,20 @@ pushRequest pn blk =
 
 -- | Tell the PieceManager to store the given block
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process PCF PST ()
-storeBlock n blk bs =
-    syncP =<< sendPC pieceMgrCh (StoreBlock n blk bs)
+storeBlock n blk bs = do
+    pmch <- asks pieceMgrCh
+    liftIO . atomically $ writeTChan pmch (StoreBlock n blk bs)
 
 -- | The call @grabBlocks n@ will attempt to grab (up to) @n@ blocks from the
 -- piece Manager for request at the peer.
 grabBlocks :: Int -> Process PCF PST [(PieceNum, Block)]
 grabBlocks n = do
-    c <- liftIO $ channel
+    c <- liftIO newEmptyTMVarIO
     ps <- gets peerPieces
-    syncP =<< sendPC pieceMgrCh (GrabBlocks n ps c)
-    blks <- syncP =<< recvP c (const True)
+    pmch <- asks pieceMgrCh
+    blks <- liftIO $ do
+        atomically $ writeTChan pmch (GrabBlocks n ps c)
+        atomically $ readTMVar c
     case blks of
         Leech blks -> return blks
         Endgame blks ->

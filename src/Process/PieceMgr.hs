@@ -10,6 +10,7 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.Exception (assert)
 import Control.DeepSeq
 
@@ -85,15 +86,15 @@ instance NFData Blocks where
   rnf a = a `seq` ()
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int PS.PieceSet (Channel Blocks)
+data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | AskInterested PS.PieceSet (Channel Bool)
+                 | AskInterested PS.PieceSet (TMVar Bool)
                    -- ^ Ask if any of these pieces are interesting
-                 | GetDone (Channel [PieceNum])
+                 | GetDone (TMVar [PieceNum])
                    -- ^ Get the pieces which are already done
                  | PeerHave [PieceNum]
                    -- ^ A peer has the given piece(s)
@@ -112,9 +113,9 @@ instance Show PieceMgrMsg where
 instance NFData PieceMgrMsg where
     rnf a = case a of
               (GrabBlocks _ is _) -> rnf is
-              a                   -> a `seq` ()
+              x                   -> x `seq` ()
 
-type PieceMgrChannel = Channel PieceMgrMsg
+type PieceMgrChannel = TChan PieceMgrMsg
 
 data CF = CF
     { pieceMgrCh :: PieceMgrChannel
@@ -138,37 +139,47 @@ start mgrC fspC chokeC statC db ih supC =
                         (defaultStopHandler supC))
   where pgm = do
           assertST
-          dl <- gets donePush
-          (if null dl
-              then receiveEvt
-              else chooseP [receiveEvt, sendEvt (head dl)]) >>= syncP
+          rpcMessage
+          drainSend
+
+drainSend :: Process CF ST ()
+drainSend = do
+    dl <- gets donePush
+    if (null dl)
+        then return ()
+        else (sendEvt (head dl) >>= syncP) >> drainSend
 
 type ProcessEvent = Process CF ST (Event ((), ST))
 
 sendEvt :: ChokeMgrMsg -> ProcessEvent
-sendEvt elem = do
-   ev <- sendPC chokeCh elem
+sendEvt e = do
+   ev <- sendPC chokeCh e
    wrapP ev (\_ ->
         modify (\db -> db { donePush = tail (donePush db) }))
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
 traceMsg m = modify (\db -> db { traceBuffer = trace (show m) (traceBuffer db) })
 
-receiveEvt :: ProcessEvent
-receiveEvt = do
-    ev <- recvPC pieceMgrCh
-    wrapP ev (\msg -> do
-      traceMsg msg
-      case msg of
-        GrabBlocks n eligible c ->
-            do blocks <- grabBlocks n eligible
-               syncP =<< sendP c blocks
-        StoreBlock pn blk d -> storeBlock pn blk d
-        PutbackBlocks blks -> mapM_ putbackBlock blks
-        GetDone c -> syncP =<< sendP c =<< PS.toList =<< gets donePiece
-        PeerHave idxs -> peerHave idxs
-        PeerUnhave idxs -> peerUnhave idxs
-        AskInterested pieces retC -> askInterested pieces retC)
+rpcMessage :: Process CF ST ()
+rpcMessage = do
+    ch <- asks pieceMgrCh
+    m <- liftIO . atomically $ readTChan ch
+    traceMsg m
+    case m of
+      GrabBlocks n eligible c ->
+          do blocks <- grabBlocks n eligible
+             liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
+      StoreBlock pn blk d -> storeBlock pn blk d
+      PutbackBlocks blks -> mapM_ putbackBlock blks
+      GetDone c -> do
+         done <- PS.toList =<< gets donePiece
+         liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
+      PeerHave idxs -> peerHave idxs
+      PeerUnhave idxs -> peerUnhave idxs
+      AskInterested pieces retC -> do
+         intr <- askInterested pieces
+         liftIO . atomically $ do putTMVar retC intr -- And this neither too!
+
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock pn blk d = do
@@ -201,15 +212,15 @@ storeBlock pn blk d = do
                              checkFullCompletion
              Just False -> putbackPiece pn)
 
-askInterested :: PS.PieceSet -> Channel Bool -> Process CF ST ()
-askInterested pieces retC = do
+askInterested :: PS.PieceSet -> Process CF ST Bool
+askInterested pieces = do
     nPieces <- M.size <$> gets infoMap
     inProg <- M.keys <$> gets inProgress
     pend   <- gets pendingPieces >>= PS.toList
     tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
     -- @i@ is the intersection with with we need and the peer has.
     intsct <- PS.intersection pieces tmp
-    syncP =<< sendP retC (not $ null intsct)
+    return (not $ null intsct)
 
 peerHave :: [PieceNum] -> Process CF ST ()
 peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
