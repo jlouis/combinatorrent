@@ -47,16 +47,16 @@ import Process
 --   Better implementations for selecting among the pending Pieces is probably crucial
 --   to an effective client, but we keep it simple for now.
 data ST = ST
-    { pendingPieces :: PS.PieceSet -- ^ Pieces currently pending download
-    , donePiece     :: PS.PieceSet -- ^ Pieces that are done
-    , donePush      :: [ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
-    , inProgress    :: M.Map PieceNum InProgressPiece -- ^ Pieces in progress
-    , downloading   :: [(PieceNum, Block)]    -- ^ Blocks we are currently downloading
-    , infoMap       :: PieceMap   -- ^ Information about pieces
-    , endGaming     :: Bool       -- ^ If we have done any endgame work this is true
-    , histogram     :: PendS.PendingSet -- ^ Track the rarity of pieces
-    , assertCount   :: Int        -- ^ When to next check the database for consistency
-    , traceBuffer   :: Tracer String
+    { pendingPieces :: !PS.PieceSet -- ^ Pieces currently pending download
+    , donePiece     :: !PS.PieceSet -- ^ Pieces that are done
+    , donePush      :: ![ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
+    , inProgress    :: !(M.Map PieceNum InProgressPiece) -- ^ Pieces in progress
+    , downloading   :: ![(PieceNum, Block)]    -- ^ Blocks we are currently downloading
+    , infoMap       :: !PieceMap   -- ^ Information about pieces
+    , endGaming     :: !Bool       -- ^ If we have done any endgame work this is true
+    , histogram     :: !PendS.PendingSet -- ^ Track the rarity of pieces
+    , assertCount   :: !Int        -- ^ When to next check the database for consistency
+    , traceBuffer   :: !(Tracer String)
     }
 
 sizeReport :: Process CF ST String
