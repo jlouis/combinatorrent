@@ -9,6 +9,7 @@ module PeerTypes
 where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
 
@@ -26,10 +27,10 @@ data PeerMessage = ChokePeer
 instance NFData PeerMessage where
     rnf a = a `seq` ()
 
-type PeerChannel = Channel PeerMessage
+type PeerChannel = TChan PeerMessage
 
 
-data MgrMessage = Connect InfoHash ThreadId (Channel PeerMessage)
+data MgrMessage = Connect InfoHash ThreadId PeerChannel
                 | Disconnect ThreadId
 
 instance NFData MgrMessage where
@@ -38,4 +39,4 @@ instance NFData MgrMessage where
 type MgrChannel = Channel MgrMessage
 
 -- | A Channel type we use for transferring the amount of data we transferred
-type BandwidthChannel = Channel Integer
+type BandwidthChannel = TChan Integer

@@ -5,7 +5,6 @@ module Process.Peer.SenderQ
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 
 import Control.DeepSeq
@@ -60,7 +59,7 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
     q <- gets outQueue
     l <- gets bytesTransferred
     -- Gather together events which may trigger
-    when (l > 0) (syncP =<< rateUpdateEvent)
+    when (l > 0) rateUpdateEvent
     ic <- asks sqIn
     ov <- asks sqOut
     r <- case Q.first q of
@@ -83,12 +82,12 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                 SenderQRequestPrune n blk ->
                      modifyQ (Q.filter (filterRequest n blk))
 
-rateUpdateEvent :: Process CF ST (Event ((), ST))
+rateUpdateEvent :: Process CF ST ()
 rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
     l <- gets bytesTransferred
-    ev <- sendPC bandwidthCh l
-    wrapP ev (\() ->
-        modify (\s -> s { bytesTransferred = 0 }))
+    bwc <- asks bandwidthCh
+    liftIO . atomically $ writeTChan bwc l
+    modify (\s -> s { bytesTransferred = 0 })
 
 filterAllPiece :: Message -> Bool
 filterAllPiece (Piece _ _ _) = True

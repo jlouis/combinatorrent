@@ -69,7 +69,7 @@ instance Logging CF where
 type ChanManageMap = M.Map InfoHash TorrentLocal
 
 data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
-             , peers :: M.Map ThreadId (Channel PeerMessage)
+             , peers :: M.Map ThreadId PeerChannel
              , peerId :: PeerId
              , cmMap :: ChanManageMap
              }
