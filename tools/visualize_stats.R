@@ -1,3 +1,5 @@
+require(outliers)
+
 #R sparklines
 sparkline<-function(ydata=rnorm(100,500,50),width=1.5,height=0.5,sigfigs=4) {
 
@@ -25,11 +27,13 @@ sparkline<-function(ydata=rnorm(100,500,50),width=1.5,height=0.5,sigfigs=4) {
 
 stat <- read.csv("stat_db.csv", header=TRUE, sep="\t")
 attach(stat)
-max_space <- rbind(MaxBytesUsed)
-peak_alloc <- rbind(PeakMegabytesAlloc)
 productivity <- (MutCPU / (MutCPU+GCCPU))
 cpunetwork <- (MutCPU / ((Uploaded + Downloaded + 1) / (1024*1024)))
 cpupnetwork <- subset(cpunetwork, Downloaded > (1024 * 1024))
+max_space <- rm.outlier(MaxBytesUsed, median=TRUE)
+peak_alloc <- rm.outlier(PeakMegabytesAlloc, median=TRUE)
+productivity <- rm.outlier(productivity, median=TRUE)
+cpupnetwork <- rm.outlier(cpupnetwork, median=TRUE)
 
 png(filename="MaxBytesUsed.png", width=320, height=39, bg="transparent")
 sparkline(max_space / (1024*1024), width=3, height=0.5)
