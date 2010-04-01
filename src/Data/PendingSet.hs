@@ -1,6 +1,7 @@
 module Data.PendingSet
     ( PendingSet
     , Data.PendingSet.empty
+    , Data.PendingSet.size
     , have
     , unhave
     , haves
@@ -19,6 +20,9 @@ newtype PendingSet = PendingSet { unPS :: PSQ PieceNum Int }
 -- | The empty pending set.
 empty :: PendingSet
 empty = PendingSet Data.PSQueue.empty
+
+size :: PendingSet -> Int
+size = Data.PSQueue.size . unPS
 
 -- | A peer has a given piece. Reflect this in the PendingSet.
 have :: PieceNum -> PendingSet -> PendingSet
