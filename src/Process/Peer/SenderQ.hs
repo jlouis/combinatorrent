@@ -6,9 +6,11 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 
 import Control.DeepSeq
 
+import Control.Monad.Reader
 import Control.Monad.State
 
 import Prelude hiding (catch, log)
@@ -32,8 +34,8 @@ data SenderQMsg = SenderQCancel PieceNum Block -- ^ Peer requested that we cance
 instance NFData SenderQMsg where
   rnf a = a `seq` ()
 
-data CF = CF { sqInCh :: Channel SenderQMsg
-             , sqOutCh :: Channel B.ByteString
+data CF = CF { sqIn :: TChan SenderQMsg
+             , sqOut :: TMVar B.ByteString
              , bandwidthCh :: BandwidthChannel
              }
 
@@ -46,7 +48,7 @@ instance Logging CF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-start :: Channel SenderQMsg -> Channel B.ByteString -> BandwidthChannel
+start :: TChan SenderQMsg -> TMVar B.ByteString -> BandwidthChannel
            -> SupervisorChan
            -> IO ThreadId
 start inC outC bandwC supC = spawnP (CF inC outC bandwC) (ST Q.empty 0)
@@ -58,10 +60,28 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
     q <- gets outQueue
     l <- gets bytesTransferred
     -- Gather together events which may trigger
-    syncP =<< (chooseP $
-        concat [if Q.isEmpty q then [] else [sendEvent],
-                if l > 0 then [rateUpdateEvent] else [],
-                [queueEvent]])
+    when (l > 0) (syncP =<< rateUpdateEvent)
+    ic <- asks sqIn
+    ov <- asks sqOut
+    r <- case Q.first q of
+        Nothing -> liftIO $ atomically (readTChan ic >>= return . Right)
+        Just p -> do let bs = encodePacket p
+                         sz = fromIntegral $ B.length bs
+                     liftIO . atomically $
+                         (putTMVar ov bs >> return (Left sz)) `orElse`
+                         (readTChan ic >>= return . Right)
+    case r of
+        Left sz ->
+            modify (\s -> s { bytesTransferred = bytesTransferred s + sz
+                            , outQueue = Q.remove (outQueue s)})
+        Right m ->
+            case m of
+                SenderQM msg -> modifyQ (Q.push msg)
+                SenderQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
+                SenderOChoke -> do modifyQ (Q.filter filterAllPiece)
+                                   modifyQ (Q.push Choke)
+                SenderQRequestPrune n blk ->
+                     modifyQ (Q.filter (filterRequest n blk))
 
 rateUpdateEvent :: Process CF ST (Event ((), ST))
 rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
@@ -69,27 +89,6 @@ rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
     ev <- sendPC bandwidthCh l
     wrapP ev (\() ->
         modify (\s -> s { bytesTransferred = 0 }))
-
-queueEvent :: Process CF ST (Event ((), ST))
-queueEvent = {-# SCC "Peer.SendQ.queueEvt" #-} do
-    recvWrapPC sqInCh
-            (\m -> case m of
-                SenderQM msg -> modifyQ (Q.push msg)
-                SenderQCancel n blk -> modifyQ (Q.filter (filterPiece n (blockOffset blk)))
-                SenderOChoke -> do modifyQ (Q.filter filterAllPiece)
-                                   modifyQ (Q.push Choke)
-                SenderQRequestPrune n blk ->
-                     modifyQ (Q.filter (filterRequest n blk)))
-
-sendEvent :: Process CF ST (Event ((), ST))
-sendEvent = {-# SCC "Peer.SendQ.sendEvt" #-} do
-    Just (e, r) <- gets (Q.pop . outQueue)
-    let bs = encodePacket e
-    tEvt <- sendPC sqOutCh bs
-    wrapP tEvt (\() -> modify (\s ->
-            s { outQueue = r,
-                bytesTransferred =
-                bytesTransferred s + fromIntegral (B.length bs)}))
 
 filterAllPiece :: Message -> Bool
 filterAllPiece (Piece _ _ _) = True

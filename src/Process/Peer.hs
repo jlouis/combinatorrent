@@ -55,12 +55,12 @@ start :: Handle -> MgrChannel -> RateTVar -> PieceMgrChannel
              -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
 start handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
-    queueC <- channel
-    senderC <- channel
+    queueC <- newTChanIO
+    senderMV <- newEmptyTMVarIO
     receiverC <- channel
     sendBWC <- channel
-    return [Worker $ Sender.start handle senderC,
-            Worker $ SenderQ.start queueC senderC sendBWC,
+    return [Worker $ Sender.start handle senderMV,
+            Worker $ SenderQ.start queueC senderMV sendBWC,
             Worker $ Receiver.start handle receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
                                 queueC receiverC sendBWC stv ih]
@@ -69,7 +69,7 @@ start handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
 ----------------------------------------------------------------------
 
 data PCF = PCF { inCh :: Channel (Message, Integer)
-               , outCh :: Channel SenderQ.SenderQMsg
+               , outCh :: TChan SenderQ.SenderQMsg
                , peerMgrCh :: MgrChannel
                , pieceMgrCh :: PieceMgrChannel
                , fsCh :: FSPChannel
@@ -96,8 +96,9 @@ data PST = PST { weChoke :: Bool -- ^ True if we are choking the peer
                , runningEndgame :: Bool -- ^ True if we are in endgame
                }
 
+
 peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
-         -> Channel SenderQ.SenderQMsg -> Channel (Message, Integer) -> BandwidthChannel
+         -> TChan SenderQ.SenderQMsg -> Channel (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
          -> SupervisorChan -> IO ThreadId
 peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = do
@@ -113,7 +114,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             debugP "Syncing a connectBack"
             asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect ih tid ch) >>= syncP
             pieces <- getPiecesDone
-            syncP =<< (sendPC outCh $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces))
+            outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
             -- Install the StatusP timer
             c <- asks timerCh
             Timer.register 5 () c
@@ -136,7 +137,7 @@ getPiecesDone = do
     liftIO $ do
       c <- newEmptyTMVarIO
       atomically $ writeTChan ch (GetDone c)
-      atomically $ readTMVar c
+      atomically $ takeTMVar c
 
 -- | Process an event from the Choke Manager
 chokeMgrEvent :: Process PCF PST (Event ((), PST))
@@ -145,21 +146,20 @@ chokeMgrEvent = do
     wrapP evt (\msg -> do
         debugP "ChokeMgrEvent"
         case msg of
-            PieceCompleted pn -> do
-                syncP =<< (sendPC outCh $ SenderQ.SenderQM $ Have pn)
+            PieceCompleted pn -> outChan $ SenderQ.SenderQM $ Have pn
             ChokePeer -> do choking <- gets weChoke
                             when (not choking)
-                                 (do syncP =<< sendPC outCh SenderQ.SenderOChoke
+                                 (do outChan $ SenderQ.SenderOChoke
                                      debugP "ChokePeer"
                                      modify (\s -> s {weChoke = True}))
             UnchokePeer -> do choking <- gets weChoke
                               when choking
-                                   (do syncP =<< (sendPC outCh $ SenderQ.SenderQM Unchoke)
+                                   (do outChan $ SenderQ.SenderQM Unchoke
                                        debugP "UnchokePeer"
                                        modify (\s -> s {weChoke = False}))
             CancelBlock pn blk -> do
                 modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
-                syncP =<< (sendPC outCh $ SenderQ.SenderQRequestPrune pn blk))
+                outChan $ SenderQ.SenderQRequestPrune pn blk)
 
 -- True if the peer is a seeder
 -- Optimization: Don't calculate this all the time. It only changes once and then it keeps
@@ -280,7 +280,7 @@ requestMsg pn blk = do
     unless (choking)
          (do
             bs <- readBlock pn blk -- TODO: Pushdown to send process
-            syncP =<< sendPC outCh (SenderQ.SenderQM $ Piece pn (blockOffset blk) bs))
+            outChan $ SenderQ.SenderQM $ Piece pn (blockOffset blk) bs)
 
 -- | Read a block from the filesystem for sending
 readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
@@ -304,8 +304,7 @@ pieceMsg n os bs = do
 
 -- | Handle a cancel message from the peer
 cancelMsg :: PieceNum -> Block -> Process PCF PST ()
-cancelMsg n blk =
-    syncP =<< sendPC outCh (SenderQ.SenderQCancel n blk)
+cancelMsg n blk = outChan $ SenderQ.SenderQCancel n blk
 
 -- | Update our interest state based on the pieces the peer has.
 --   Obvious optimization: Do less work, there is no need to consider all pieces most of the time
@@ -316,10 +315,10 @@ considerInterest = do
     pmch <- asks pieceMgrCh
     interested <- liftIO $ do
         atomically $ writeTChan pmch (AskInterested pcs c)
-        atomically $ readTMVar c
+        atomically $ takeTMVar c
     if interested
         then do modify (\s -> s { weInterested = True })
-                syncP =<< sendPC outCh (SenderQ.SenderQM Interested)
+                outChan $ SenderQ.SenderQM Interested
         else modify (\s -> s { weInterested = False})
 
 -- | Try to fill up the block queue at the peer. The reason we pipeline a
@@ -365,8 +364,7 @@ queuePieces toQueue = do
 
 -- | Push a request to the peer so he can send it to us
 pushRequest :: PieceNum -> Block -> Process PCF PST ()
-pushRequest pn blk =
-    syncP =<< sendPC outCh (SenderQ.SenderQM $ Request pn blk)
+pushRequest pn blk = outChan $ SenderQ.SenderQM $ Request pn blk
 
 -- | Tell the PieceManager to store the given block
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process PCF PST ()
@@ -383,7 +381,7 @@ grabBlocks n = do
     pmch <- asks pieceMgrCh
     blks <- liftIO $ do
         atomically $ writeTChan pmch (GrabBlocks n ps c)
-        atomically $ readTMVar c
+        atomically $ takeTMVar c
     case blks of
         Leech blks -> return blks
         Endgame blks ->
@@ -401,3 +399,9 @@ createPeerPieces nPieces =
             in fmap dBit [0..7]
         decodeBytes _ [] = []
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
+
+-- | Send a message on a chan from the process queue
+outChan :: SenderQ.SenderQMsg -> Process PCF PST ()
+outChan qm = do
+    ch <- asks outCh
+    liftIO . atomically $ writeTChan ch qm

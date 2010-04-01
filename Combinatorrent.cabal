@@ -28,10 +28,6 @@ flag debug
   description: Enable debug support
   default:     False
 
-flag threaded
-  description: Use threded runtime
-  default:     False
-
 flag threadscope
   description: Enable the eventlog necessary for ThreadScope
   default: False
@@ -84,12 +80,9 @@ executable Combinatorrent
     time
 
   ghc-prof-options: -auto-all
-  ghc-options: -Wall
+  ghc-options: -Wall -threaded
   if !flag(debug)
       cpp-options: "-DNDEBUG"
-
-  if flag(threaded)
-      ghc-options: -threaded
 
   if flag(threadscope)
       ghc-options: -eventlog

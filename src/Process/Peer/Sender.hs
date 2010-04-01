@@ -2,8 +2,9 @@ module Process.Peer.Sender
   ( start )
 where
 
+import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -11,19 +12,18 @@ import Control.Monad.State
 import qualified Data.ByteString as B
 
 import System.IO
-import System.Timeout
 
 import Process
 import Protocol.Wire
 import Supervisor
 
-data CF = CF { chan :: Channel B.ByteString }
+data CF = CF { chan :: TMVar B.ByteString }
 
 instance Logging CF where
     logName _ = "Process.Peer.Sender"
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-start :: Handle -> Channel B.ByteString -> SupervisorChan -> IO ThreadId
+start :: Handle -> TMVar B.ByteString -> SupervisorChan -> IO ThreadId
 start h ch supC = spawnP (CF ch) h (catchP (foreverP pgm)
                                           (do t <- liftIO $ myThreadId
                                               syncP =<< (sendP supC $ IAmDying t)
@@ -32,9 +32,14 @@ start h ch supC = spawnP (CF ch) h (catchP (foreverP pgm)
 pgm :: Process CF Handle ()
 pgm = {-# SCC "Peer.Sender" #-} do
         ch <- asks chan
-        m <- liftIO $ timeout defaultTimeout (receiver ch)
+        tout <- liftIO $ registerDelay defaultTimeout
+        r <- liftIO . atomically $ do
+            t <- readTVar tout
+            if t
+                then return Nothing
+                else Just <$> takeTMVar ch
         h <- get
-        case m of
+        case r of
             Nothing -> putMsg (encodePacket KeepAlive)
             Just m  -> putMsg m
         liftIO $ hFlush h
@@ -45,6 +50,3 @@ pgm = {-# SCC "Peer.Sender" #-} do
 
 defaultTimeout :: Int
 defaultTimeout = 120 * 1000000
-
-receiver :: Channel a -> IO a
-receiver ch = sync $ receive ch (const True)
