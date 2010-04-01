@@ -4,7 +4,9 @@ module Data.Queue (
                 Queue
               -- * Functions
               , empty
-              , isEmpty
+              , null
+              , first
+              , remove
               , push
               , pop
               , Data.Queue.filter
@@ -13,8 +15,10 @@ module Data.Queue (
               )
 where
 
-import Data.List as Lst
+import Data.List as Lst hiding (null)
 import Data.Maybe (fromJust)
+
+import Prelude hiding (null)
 
 import Test.QuickCheck
 import Test.Framework
@@ -30,9 +34,9 @@ empty :: Queue a
 empty = Queue [] []
 
 -- | Returns True on an empty Queue, and False otherwise.
-isEmpty :: Queue a -> Bool
-isEmpty (Queue [] []) = True
-isEmpty _             = False
+null :: Queue a -> Bool
+null (Queue [] []) = True
+null _             = False
 
 -- | Pushes a new element to the tail of the list.
 --   Operates in constant time.
@@ -47,6 +51,18 @@ pop (Queue []       [])   = Nothing
 pop (Queue (e : es) back) = Just (e, Queue es back)
 pop (Queue []       back) = pop (Queue (reverse back) [])
 
+-- | Return the head of the queue, if any
+first :: Queue a -> Maybe a
+first (Queue [] []) = Nothing
+first (Queue (e : _) _) = Just e
+first (Queue []  back)  = Just $ last back -- Yeah slow
+
+-- | Kill the first element in the queue
+remove :: Queue a -> Queue a
+remove (Queue [] [])      = Queue [] []
+remove (Queue (_ : es) b) = Queue es b
+remove (Queue [] b)       = remove (Queue (reverse b) [])
+
 -- | Generates a new Queue only containing elements for which
 --   p returns true.
 filter :: (a -> Bool) -> Queue a -> Queue a
@@ -58,6 +74,7 @@ filter p (Queue front back) = Queue (Lst.filter p front) (Lst.filter p back)
 testSuite :: Test
 testSuite = testGroup "Data/Queue"
   [ testCase "Empty Queue is Empty" testEmptyIsEmpty
+  , testCase "First/Remove" testFirstRemove
   , testProperty "Simple push/pop" testPushPopSimple
   , testProperty "push/pop more"   testPushPopMore
   , testProperty "push/pop interleave" testPushPopInterleave
@@ -66,16 +83,24 @@ testSuite = testGroup "Data/Queue"
 -- Rudimentary boring simple tests
 testEmptyIsEmpty :: Assertion
 testEmptyIsEmpty = do
-    assertEqual "for Empty Q" (isEmpty empty) True
-    assertEqual "for non-Empty Q" (isEmpty (push "Foo" empty)) False
+    assertBool "for Empty Q" (null empty)
+    assertBool "for non-Empty Q" (not $ null (push "Foo" empty))
     assertEqual "for popping the Empty Q" (pop $ snd . fromJust . pop $ push "Foo" empty) Nothing
+
+testFirstRemove :: Assertion
+testFirstRemove = do
+    -- Should really cover this more
+    let nq = push 2 (push 1 empty)
+    assertEqual "first" (first nq) (Just 1)
+    assertEqual "first/removed" (first (remove nq)) (Just 2)
+    assertEqual "emptied" (first (remove (remove nq))) Nothing
 
 testPushPopSimple :: String -> Bool
 testPushPopSimple s =
     let nq = pop (push s empty)
     in case nq of
         Nothing -> False
-        Just (r, q) -> r == s && isEmpty q
+        Just (r, q) -> r == s && null q
 
 testPushPopMore :: [String] -> Bool
 testPushPopMore ls =
@@ -97,8 +122,8 @@ testPushPopInterleave ops ls = testQ empty ops ls []
         [] -> popAll q == reverse res
         Pop : r -> case pop q of
                      Nothing -> testQ empty r lst []
-                     Just (elem, nq) ->
-                        if (last res) == elem
+                     Just (e, nq) ->
+                        if (last res) == e
                             then testQ nq r lst (init res)
                             else False
         Push : r -> case lst of
