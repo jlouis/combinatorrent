@@ -92,6 +92,7 @@
         </tr>
     </table>
     <p>The "Maximal live heap space" tracks the amount of megabytes that were maximally live when the client executed. We seek to bring this number down to a minimum. The "Peak RSS usage" tells us how much memory were resident in the operating system. It is usually way higher than the live space due to the garbage collector. "Productivity" measures the time spent in the mutator as opposed to the mutator and garbage collector. It records how effective the client is at using the memory. If productivity falls it means our allocation rate is too high in the project. The "CPU/Network" measures CPU seconds used per megabyte transferred. Again, we seek to bring this number down to an effective rate where we use very little CPU time per megabyte.</p>
+    <p>Also, note that these data are somewhat manipulated. We strip outliers from the graphs to eliminate extremities. This is done to ensure the graphs actually tell some story. There is little reason to see a 2 gigabyte memory usage because of the introduction of an error. This is easily caught while testing. Rather, the goal is to capture smaller changes over time which is much harder to see when doing tests.</p>
 
 <h2>Contact</h2>
 <p>Jesper Louis Andersen (jesper.louis.andersen@gmail.com)<br/>      </p>
