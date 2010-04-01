@@ -158,8 +158,7 @@ pokeTracker = do
         Right (ResponseDecodeError err) ->
                     do infoP $ "Response Decode error: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
-        Right bc -> do ih <- asks cfInfoHash
-                       sendPC peerMgrCh (PeerMgr.PeersFromTracker ih $ newPeers bc) >>= syncP
+        Right bc -> do sendPC peerMgrCh (PeerMgr.PeersFromTracker ih $ newPeers bc) >>= syncP
                        let trackerStats = Status.TrackerStat
                             { Status.trackInfoHash = ih
                             , Status.trackComplete = completeR bc
@@ -226,7 +225,7 @@ trackerRequest uri =
                      Nothing -> return $ Left (show r)
                      Just newURL -> case parseURI newURL of
                                         Nothing -> return $ Left (show newURL)
-                                        Just uri -> trackerRequest uri
+                                        Just u -> trackerRequest u
                _ -> return $ Left (show r)
   where request = Request {rqURI = uri,
                            rqMethod = GET,
