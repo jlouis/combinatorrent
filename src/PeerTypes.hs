@@ -12,8 +12,6 @@ import Control.Concurrent
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
 
-import Data.Time.Clock
-
 import Network
 import Torrent
 
@@ -22,8 +20,6 @@ data Peer = Peer { peerHost :: HostName,
 
 data PeerMessage = ChokePeer
                  | UnchokePeer
-                 | PeerStats UTCTime (Channel (Double, Double, Bool, Bool))
-                            -- ^ Up/Down/Interested/Seeder
                  | PieceCompleted PieceNum
                  | CancelBlock PieceNum Block
 
