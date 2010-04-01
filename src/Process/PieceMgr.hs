@@ -59,6 +59,19 @@ data ST = ST
     , traceBuffer   :: Tracer String
     }
 
+sizeReport :: Process CF ST String
+sizeReport = do
+    (ST pend done dpush progress down _ _ histo _ _) <- get
+    p1sz <- PS.size pend
+    p2sz <- PS.size done
+    return $ show
+         [ ("Pending", p1sz)
+         , ("Done"   , p2sz)
+         , ("DonePush", length dpush)
+         , ("InProgress", M.size progress)
+         , ("Downloading", length down)
+         , ("Histo", PendS.size histo) ]
+
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
 --   we keep track of blocks which are pending as well as blocks which are done. We
 --   also keep track of a count of the blocks. When a block is done, we cons it unto
@@ -455,6 +468,8 @@ assertST = {-# SCC "assertST" #-} do
     if c == 0
         then do modify (\db -> db { assertCount = 10 })
                 assertSets >> assertInProgress >> assertDownloading
+                sizes <- sizeReport
+                debugP sizes
         else modify (\db -> db { assertCount = assertCount db - 1 })
   where
     -- If a piece is pending in the database, we have the following rules:
