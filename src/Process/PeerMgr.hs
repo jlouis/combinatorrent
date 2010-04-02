@@ -59,7 +59,7 @@ data CF = CF { peerCh :: PeerMgrChannel
              , mgrCh :: Channel MgrMessage
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
-             , chokeRTV :: RateTVar
+             , _chokeRTV :: RateTVar
              }
 
 instance Logging CF where
@@ -70,7 +70,7 @@ type ChanManageMap = M.Map InfoHash TorrentLocal
 
 data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              , peers :: M.Map ThreadId PeerChannel
-             , peerId :: PeerId
+             , _peerId :: PeerId
              , cmMap :: ChanManageMap
              }
 
@@ -128,18 +128,12 @@ start ch pid chokeMgrC rtv supC =
                 mapM_ addPeer toAdd
                 modify (\s -> s { peersInQueue = rest }))
     addPeer (ih, (Peer hn prt)) = do
-        pid <- gets peerId
         pool <- asks peerPool
         mgrC <- asks mgrCh
-        cmap <- gets cmMap
-        rtv <- asks chokeRTV
         liftIO $ connect (hn, prt, pid, ih) pool mgrC rtv cmap
     addIncoming conn = do
-        pid <- gets peerId
         pool <- asks peerPool
         mgrC <- asks mgrCh
-        rtv <- asks chokeRTV
-        cmap <- gets cmMap
         liftIO $ acceptor conn pool pid mgrC rtv cmap
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
@@ -161,13 +155,13 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                                 ("Peer handshake failure at host " ++ host
                                   ++ " with error " ++ err)
                              return ()
-              Right (_caps, _rpid, ih) ->
+              Right (_caps, _rpid, ihsh) ->
                   do debugM "Process.PeerMgr.connect" "entering peerP loop code"
-                     let tc = case M.lookup ih cmap of
+                     let tc = case M.lookup ihsh cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
                      children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
-                                                      (tcPM tc) (M.size (tcPM tc)) ih
+                                                      (tcPM tc) (M.size (tcPM tc)) ihsh
                      sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 

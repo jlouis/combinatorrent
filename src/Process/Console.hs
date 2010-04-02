@@ -69,9 +69,9 @@ start waitC statusC supC = do
         ev <- recvP ch (==Show)
         wrapP ev
             (\_ -> do
-                ch <- liftIO $ channel
-                syncP =<< sendP statusC (St.RequestAllTorrents ch)
-                sts <- syncP =<< recvP ch (const True)
+                c <- liftIO $ channel
+                syncP =<< sendP statusC (St.RequestAllTorrents c)
+                sts <- syncP =<< recvP c (const True)
                 syncP =<< sendPC wrtCh (show sts))
 
 helpMessage :: String
@@ -84,23 +84,23 @@ helpMessage = concat
     ]
 
 writerP :: IO (Channel String)
-writerP = do wrtCh <- channel
-             _ <- spawn $ lp wrtCh
-             return wrtCh
+writerP = do wrt <- channel
+             _ <- spawn $ lp wrt
+             return wrt
   where lp wCh = forever (do m <- sync $ receive wCh (const True)
                              putStrLn m)
 
 readerP :: IO CmdChannel
-readerP = do cmdCh <- channel
-             _ <- spawn $ lp cmdCh
-             return cmdCh
-  where lp cmdCh = forever $
-           do c <- getLine
-              case c of
-                "help" -> sync $ transmit cmdCh Help
-                "quit" -> sync $ transmit cmdCh Quit
-                "show" -> sync $ transmit cmdCh Show
-                cmd    -> do logM "Process.Console.readerP" INFO $
-                                     "Unrecognized command: " ++ show cmd
-                             sync $ transmit cmdCh (Unknown cmd)
+readerP = do cmd <- channel
+             _ <- spawn $ lp cmd
+             return cmd
+  where lp cmd = forever $
+           do l <- getLine
+              case l of
+                "help" -> sync $ transmit cmd Help
+                "quit" -> sync $ transmit cmd Quit
+                "show" -> sync $ transmit cmd Show
+                c      -> do logM "Process.Console.readerP" INFO $
+                                     "Unrecognized command: " ++ show c
+                             sync $ transmit cmd (Unknown c)
 

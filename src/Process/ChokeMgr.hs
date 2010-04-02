@@ -287,20 +287,20 @@ assignUploadSlots slots numDownPeers numSeedPeers =
 -- | @selectPeers upSlots d s@ selects peers from a list of downloader peers @d@ and a list of seeder
 --   peers @s@. The value of @upSlots@ defines the number of upload slots available
 selectPeers :: Int -> [Peer] -> [Peer] -> ChokeMgrProcess (S.Set ThreadId)
-selectPeers uploadSlots downPeers seedPeers = do
+selectPeers ups downPeers seedPeers = do
         rm <- gets rateMap
         let selector p = maybe (p, (PRate 0.0 0.0, PState True False False)) (p,)
                             (M.lookup (pThreadId p) rm)
             dp = map selector downPeers
             sp = map selector seedPeers
-            (nDownSlots, nSeedSlots) = assignUploadSlots uploadSlots (length downPeers) (length seedPeers)
+            (nDownSlots, nSeedSlots) = assignUploadSlots ups (length downPeers) (length seedPeers)
             downPids = S.fromList $ map (pThreadId . fst) $ take nDownSlots $ sortLeech dp
             seedPids = S.fromList $ map (pThreadId . fst) $ take nSeedSlots $ sortSeeds sp
         debugP $ "Leechers: " ++ show (length downPeers) ++ ", Seeders: " ++ show (length seedPeers)
         debugP $ "Slots: " ++ show nDownSlots ++ " downloads, " ++ show nSeedSlots ++ " seeders"
         debugP $ "Electing peers - leechers: " ++ show downPids ++ "; seeders: " ++ show seedPids
         return $ assertSlots (nDownSlots + nSeedSlots) (S.union downPids seedPids)
-  where assertSlots slots = assert (uploadSlots >= slots)
+  where assertSlots slots = assert (ups >= slots)
 
 -- | Send a message to the peer process at PeerChannel. Message is sent asynchronously
 --   to the peer in question. If the system is really loaded, this might
@@ -354,5 +354,5 @@ informBlockComplete ih pn blk = do
     T.mapM inform chn >> return ()
   where inform p | (pInfoHash p) == ih = sendComp p >> return ()
                  | otherwise           = return ()
-        sendComp pi = msgPeer (pChannel pi) (CancelBlock pn blk)
+        sendComp p = msgPeer (pChannel p) (CancelBlock pn blk)
 
