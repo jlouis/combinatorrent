@@ -59,7 +59,7 @@ data CF = CF { peerCh :: PeerMgrChannel
              , mgrCh :: Channel MgrMessage
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
-             , _chokeRTV :: RateTVar
+             , chokeRTV :: RateTVar
              }
 
 instance Logging CF where
@@ -70,7 +70,7 @@ type ChanManageMap = M.Map InfoHash TorrentLocal
 
 data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
              , peers :: M.Map ThreadId PeerChannel
-             , _peerId :: PeerId
+             , peerId :: PeerId
              , cmMap :: ChanManageMap
              }
 
@@ -128,13 +128,19 @@ start ch pid chokeMgrC rtv supC =
                 mapM_ addPeer toAdd
                 modify (\s -> s { peersInQueue = rest }))
     addPeer (ih, (Peer hn prt)) = do
+        ppid <- gets peerId
         pool <- asks peerPool
         mgrC <- asks mgrCh
-        liftIO $ connect (hn, prt, pid, ih) pool mgrC rtv cmap
+        cm   <- gets cmMap
+        v    <- asks chokeRTV
+        liftIO $ connect (hn, prt, ppid, ih) pool mgrC v cm
     addIncoming conn = do
+        ppid   <- gets peerId
         pool <- asks peerPool
         mgrC <- asks mgrCh
-        liftIO $ acceptor conn pool pid mgrC rtv cmap
+        v    <- asks chokeRTV
+        cm   <- gets cmMap
+        liftIO $ acceptor conn pool ppid mgrC v cm
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 
