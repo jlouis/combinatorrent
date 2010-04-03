@@ -68,7 +68,7 @@ run (flags, files) = do
                 names -> progHeader >> download flags names
 
 progHeader :: IO ()
-progHeader = putStrLn $ "This is Haskell-torrent version " ++ version ++ "\n" ++
+progHeader = putStrLn $ "This is Combinatorrent \x2620 version " ++ version ++ "\n" ++
                         "  For help type 'help'\n"
 
 setupLogging :: [Flag] -> IO ()
