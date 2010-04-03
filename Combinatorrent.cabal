@@ -40,7 +40,7 @@ executable Combinatorrent
     Process.ChokeMgr, Process.Console, Process.FS, Process.Listen,
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
     Process.Timer, Process.Tracker,
-    Digest, FS, PeerTypes, Process, RateCalc, Control.Concurrent.CML.Strict
+    Digest, FS, Channels, Process, RateCalc, Control.Concurrent.CML.Strict
     Supervisor, Torrent, Test, TestInstance, DeepSeqInstances, Process.DirWatcher,
     Tracer,
     Process.Peer.Sender,

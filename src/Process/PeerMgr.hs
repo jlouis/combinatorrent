@@ -24,7 +24,7 @@ import Network
 import System.IO
 import System.Log.Logger
 
-import PeerTypes
+import Channels
 import Process
 import Process.Peer as Peer
 import Process.ChokeMgr hiding (start)

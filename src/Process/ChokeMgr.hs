@@ -26,7 +26,7 @@ import Prelude hiding (catch, log)
 
 import System.Random
 
-import PeerTypes hiding (Peer)
+import Channels hiding (Peer)
 import Process
 import Supervisor
 import Torrent hiding (infoHash)

@@ -1,4 +1,4 @@
-module PeerTypes
+module Channels
     ( Peer(..)
     , PeerMessage(..)
     , PeerChannel

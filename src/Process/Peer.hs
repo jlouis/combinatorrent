@@ -31,7 +31,7 @@ import Data.Word
 
 import System.IO
 
-import PeerTypes
+import Channels
 import Process
 import Process.FS
 import Process.PieceMgr

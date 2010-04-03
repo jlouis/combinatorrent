@@ -33,7 +33,7 @@ import qualified Data.Map as M
 
 import Prelude hiding (log)
 
-import PeerTypes
+import Channels
 import Process
 import Supervisor
 import Torrent

@@ -16,7 +16,7 @@ import Prelude hiding (catch, log)
 
 import qualified Data.ByteString as B
 
-import PeerTypes
+import Channels
 import Process
 import DeepSeqInstances()
 import qualified Data.Queue as Q
