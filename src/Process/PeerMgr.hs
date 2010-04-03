@@ -79,7 +79,7 @@ start :: PeerMgrChannel -> PeerId
       -> IO ThreadId
 start ch pid chokeMgrC rtv supC =
     do mgrC <- newTChanIO
-       fakeChan <- channel
+       fakeChan <- newTChanIO
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC rtv)
               (ST [] M.empty pid cmap) (catchP (forever lp)
@@ -187,7 +187,8 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                                     Just x  -> x
                      children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
                                                       (tcPM tc) (M.size (tcPM tc)) ihsh
-                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
+                     atomically $ writeTChan pool $
+                        SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
 acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
@@ -211,7 +212,8 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                                   Just x  -> x
                        children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatTV tc) (tcPM tc) (M.size (tcPM tc)) ih
-                       sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
+                       atomically $ writeTChan pool $
+                            SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"
 

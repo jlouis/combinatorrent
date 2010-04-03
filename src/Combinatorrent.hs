@@ -122,7 +122,7 @@ download flags names = do
     -- setup channels
     statusC  <- liftIO $ newTChanIO
     waitC    <- liftIO $ newEmptyTMVarIO
-    supC <- channel
+    supC <- liftIO newTChanIO
     pmC <- liftIO $ newTChanIO
     chokeC <- liftIO $ newTChanIO
     rtv <- atomically $ newTVar []
@@ -141,7 +141,7 @@ download flags names = do
     sync $ transmit watchC (map TorrentManager.AddedTorrent names)
     _ <- atomically $ takeTMVar waitC
     infoM "Main" "Closing down, giving processes 10 seconds to cool off"
-    sync $ transmit supC (PleaseDie tid)
+    atomically $ writeTChan supC (PleaseDie tid)
     threadDelay $ 10*1000000
     infoM "Main" "Done..."
     return ()
