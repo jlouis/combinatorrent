@@ -28,6 +28,7 @@ import System.Random
 
 import Channels hiding (Peer)
 import Process
+import Process.Timer
 import Supervisor
 import Torrent hiding (infoHash)
 
@@ -66,7 +67,7 @@ roundTickSecs = 11
 start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChan
       -> IO ThreadId
 start ch rtv ur supC = do
-    _ <- registerTimer ch
+    _ <- registerSTM roundTickSecs ch Tick
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
             (catchP (forever pgm)
               (defaultStopHandler supC))
@@ -85,7 +86,7 @@ start ch rtv ur supC = do
            TorrentComplete ih -> modify (\s -> s { seeding = S.insert ih $ seeding s })
     tick = do debugP "Ticked"
               c <- asks mgrCh
-              _ <- liftIO (registerTimer c)
+              _ <- registerSTM roundTickSecs c Tick
               updateDB
               runRechokeRound
     removePeer tid = do debugP $ "Removing peer " ++ show tid
@@ -93,11 +94,6 @@ start ch rtv ur supC = do
                                           , rateMap = M.delete tid (rateMap db) })
     isPeer tid pr | tid == pThreadId pr = True
                   | otherwise           = False
-
-registerTimer :: ChokeMgrChannel -> IO ThreadId
-registerTimer c = do
-    forkIO $ do threadDelay (roundTickSecs * 1000000)
-                atomically $ writeTChan c Tick
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------

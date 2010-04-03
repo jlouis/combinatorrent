@@ -38,6 +38,7 @@ import Process.PieceMgr
 import RateCalc as RC
 import Process.Status
 import Process.ChokeMgr (RateTVar)
+import Process.Timer
 import Supervisor
 import Torrent
 import Protocol.Wire
@@ -117,7 +118,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
             -- Install the StatusP timer
             c <- asks timerCh
-            _ <- liftIO $ registerTimer 5 c
+            _ <- registerSTM 5 c ()
             foreverP eventLoop
 
         cleanup = do
@@ -147,11 +148,6 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
                 ChokeMgrEvt m      -> chokeMsg m
                 UpRateEvent up     -> modify (\s -> s { upRate = RC.update up $ upRate s})
                 TimerEvent         -> timerTick
-
-registerTimer :: Int -> TChan () -> IO ThreadId
-registerTimer secs c = forkIO $ do
-    threadDelay (secs * 1000000)
-    atomically $ writeTChan c ()
 
 data Operation = PeerMsgEvt (Message, Integer)
                | ChokeMgrEvt PeerMessage
@@ -203,7 +199,7 @@ timerTick = do
    mTid <- liftIO myThreadId
    debugP "TimerEvent"
    tch <- asks timerCh
-   _ <- liftIO $ registerTimer 5 tch
+   _ <- registerSTM 5 tch ()
    -- Tell the ChokeMgr about our progress
    ur <- gets upRate
    dr <- gets downRate
