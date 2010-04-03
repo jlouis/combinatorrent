@@ -15,12 +15,12 @@ import Data.Time.Clock
 
 -- | A Rate is a record of information used for calculating the rate
 data Rate = Rate
-    { rate :: Double -- ^ The current rate
-    , bytes :: Integer -- ^ The amount of bytes transferred since last rate extraction
-    , count :: Integer -- ^ The amount of bytes transferred since last count extraction
-    , nextExpected :: UTCTime -- ^ When is the next rate update expected
-    , lastExt :: UTCTime          -- ^ When was the last rate update
-    , rateSince :: UTCTime     -- ^ From where is the rate measured
+    { rate  :: !Double -- ^ The current rate
+    , bytes :: !Integer -- ^ The amount of bytes transferred since last rate extraction
+    , count :: !Integer -- ^ The amount of bytes transferred since last count extraction
+    , nextExpected :: !UTCTime -- ^ When is the next rate update expected
+    , lastExt :: !UTCTime          -- ^ When was the last rate update
+    , rateSince :: !UTCTime     -- ^ From where is the rate measured
     }
 
 fudge :: NominalDiffTime
