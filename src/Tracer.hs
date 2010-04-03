@@ -14,7 +14,7 @@ new :: Int -> Tracer a
 new x = Tracer [] [] 0 x
 
 trace :: a -> Tracer a -> Tracer a
-trace msg (Tracer cur old sz length)
-    | sz == length = Tracer [msg] cur 0 length
-    | otherwise    = Tracer (msg : cur) old (sz+1) length
+trace msg (Tracer cur old sz l)
+    | sz == l   = Tracer [msg] cur 0 l
+    | otherwise = Tracer (msg : cur) old (sz+1) l
 
