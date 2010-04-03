@@ -112,7 +112,8 @@ startTorrent fp = do
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC trackerC pmC
                      ] supC
     syncP =<< (sendP statusC $ Status.InsertTorrent (infoHash ti) left trackerC)
-    syncP =<< (sendPC tPeerMgrCh $ PeerMgr.NewTorrent (infoHash ti)
-                            (PeerMgr.TorrentLocal pieceMgrC fspC stv pieceMap ))
+    c <- asks tPeerMgrCh
+    liftIO . atomically $ writeTChan c $ PeerMgr.NewTorrent (infoHash ti)
+                            (PeerMgr.TorrentLocal pieceMgrC fspC stv pieceMap)
     syncP =<< sendP trackerC Status.Start
     return tid

@@ -53,10 +53,10 @@ data TorrentLocal = TorrentLocal
 
 
 
-type PeerMgrChannel = Channel PeerMgrMsg
+type PeerMgrChannel = TChan PeerMgrMsg
 
 data CF = CF { peerCh :: PeerMgrChannel
-             , mgrCh :: Channel MgrMessage
+             , mgrCh :: MgrChannel
              , peerPool :: SupervisorChan
              , chokeMgrCh :: ChokeMgrChannel
              , chokeRTV :: RateTVar
@@ -78,7 +78,7 @@ start :: PeerMgrChannel -> PeerId
       -> ChokeMgrChannel -> RateTVar -> SupervisorChan
       -> IO ThreadId
 start ch pid chokeMgrC rtv supC =
-    do mgrC <- channel
+    do mgrC <- newTChanIO
        fakeChan <- channel
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC rtv)
@@ -86,30 +86,41 @@ start ch pid chokeMgrC rtv supC =
                                        (defaultStopHandler supC))
   where
     cmap = M.empty
-    lp = do chooseP [incomingPeers, peerEvent] >>= syncP
-            fillPeers
-    incomingPeers =
-        recvWrapPC peerCh (\msg ->
-            case msg of
-                PeersFromTracker ih ps -> do
-                       debugP "Adding peers to queue"
-                       modify (\s -> s { peersInQueue = (map (ih,) ps) ++ peersInQueue s })
-                NewIncoming conn@(h, _, _) -> do
-                    sz <- liftM M.size $ gets peers
-                    if sz < numPeers
-                        then do debugP "New incoming peer, handling"
-                                _ <- addIncoming conn
-                                return ()
-                        else do debugP "Already too many peers, closing!"
-                                liftIO $ hClose h
-                NewTorrent ih tl -> do
-                    modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
-                StopTorrent _ih -> do
-                    errorP "Not implemented stopping yet")
-    peerEvent =
-        recvWrapPC mgrCh (\msg -> case msg of
-                    Connect ih tid c -> newPeer ih tid c
-                    Disconnect tid -> removePeer tid)
+    lp = do
+        pc <- asks peerCh
+        mc <- asks mgrCh
+        q <- liftIO . atomically $
+                    (readTChan pc >>= return . Left) `orElse`
+                    (readTChan mc >>= return . Right)
+        case q of
+            Left msg -> incomingPeers msg
+            Right msg -> peerEvent msg
+        fillPeers
+
+incomingPeers :: PeerMgrMsg -> Process CF ST ()
+incomingPeers msg =
+   case msg of
+       PeersFromTracker ih ps -> do
+              debugP "Adding peers to queue"
+              modify (\s -> s { peersInQueue = (map (ih,) ps) ++ peersInQueue s })
+       NewIncoming conn@(h, _, _) -> do
+           sz <- liftM M.size $ gets peers
+           if sz < numPeers
+               then do debugP "New incoming peer, handling"
+                       _ <- addIncoming conn
+                       return ()
+               else do debugP "Already too many peers, closing!"
+                       liftIO $ hClose h
+       NewTorrent ih tl -> do
+           modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
+       StopTorrent _ih -> do
+           errorP "Not implemented stopping yet"
+
+peerEvent :: MgrMessage -> Process CF ST ()
+peerEvent msg = case msg of
+                  Connect ih tid c -> newPeer ih tid c
+                  Disconnect tid -> removePeer tid
+  where
     newPeer ih tid c = do debugP $ "Adding new peer " ++ show tid
                           cch <- asks chokeMgrCh
                           liftIO . atomically $ writeTChan cch (AddPeer ih tid c)
@@ -118,29 +129,37 @@ start ch pid chokeMgrC rtv supC =
                         cch <- asks chokeMgrCh
                         liftIO . atomically $ writeTChan cch (RemovePeer tid)
                         modify (\s -> s { peers = M.delete tid (peers s)})
-    numPeers = 40
-    fillPeers = do
-        sz <- liftM M.size $ gets peers
-        when (sz < numPeers)
-            (do q <- gets peersInQueue
-                let (toAdd, rest) = splitAt (numPeers - sz) q
-                debugP $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
-                mapM_ addPeer toAdd
-                modify (\s -> s { peersInQueue = rest }))
-    addPeer (ih, (Peer hn prt)) = do
-        ppid <- gets peerId
-        pool <- asks peerPool
-        mgrC <- asks mgrCh
-        cm   <- gets cmMap
-        v    <- asks chokeRTV
-        liftIO $ connect (hn, prt, ppid, ih) pool mgrC v cm
-    addIncoming conn = do
-        ppid   <- gets peerId
-        pool <- asks peerPool
-        mgrC <- asks mgrCh
-        v    <- asks chokeRTV
-        cm   <- gets cmMap
-        liftIO $ acceptor conn pool ppid mgrC v cm
+
+numPeers :: Int
+numPeers = 40
+
+fillPeers :: Process CF ST ()
+fillPeers = do
+    sz <- liftM M.size $ gets peers
+    when (sz < numPeers)
+        (do q <- gets peersInQueue
+            let (toAdd, rest) = splitAt (numPeers - sz) q
+            debugP $ "Filling with up to " ++ show (numPeers - sz) ++ " peers"
+            mapM_ addPeer toAdd
+            modify (\s -> s { peersInQueue = rest }))
+
+addPeer :: (InfoHash, Peer) -> Process CF ST ThreadId
+addPeer (ih, (Peer hn prt)) = do
+    ppid <- gets peerId
+    pool <- asks peerPool
+    mgrC <- asks mgrCh
+    cm   <- gets cmMap
+    v    <- asks chokeRTV
+    liftIO $ connect (hn, prt, ppid, ih) pool mgrC v cm
+
+addIncoming :: (Handle, HostName, PortNumber) -> Process CF ST ThreadId
+addIncoming conn = do
+    ppid   <- gets peerId
+    pool <- asks peerPool
+    mgrC <- asks mgrCh
+    v    <- asks chokeRTV
+    cm   <- gets cmMap
+    liftIO $ acceptor conn pool ppid mgrC v cm
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 

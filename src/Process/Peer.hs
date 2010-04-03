@@ -110,7 +110,9 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
   where startup = do
             tid <- liftIO $ myThreadId
             debugP "Syncing a connectBack"
-            asks peerCh >>= (\ch -> sendPC peerMgrCh $ Connect ih tid ch) >>= syncP
+            asks peerCh >>= (\ch -> do
+                c <- asks peerMgrCh
+                liftIO . atomically $ writeTChan c $ Connect ih tid ch)
             pieces <- getPiecesDone
             outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
             -- Install the StatusP timer
@@ -122,8 +124,9 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             t <- liftIO myThreadId
             pieces <- gets peerPieces >>= PS.toList
             ch <- asks pieceMgrCh
+            ch2 <- asks peerMgrCh
             liftIO . atomically $ writeTChan ch (PeerUnhave pieces)
-            syncP =<< sendPC peerMgrCh (Disconnect t)
+            liftIO . atomically $ writeTChan ch2 (Disconnect t)
 
         readOp :: Process PCF PST Operation
         readOp = do

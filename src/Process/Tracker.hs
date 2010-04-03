@@ -15,6 +15,7 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.CML.Strict
+import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -158,14 +159,16 @@ pokeTracker = do
         Right (ResponseDecodeError err) ->
                     do infoP $ "Response Decode error: " ++ fromBS err
                        return (failTimerInterval, Just failTimerInterval)
-        Right bc -> do sendPC peerMgrCh (PeerMgr.PeersFromTracker ih $ newPeers bc) >>= syncP
-                       let trackerStats = Status.TrackerStat
-                            { Status.trackInfoHash = ih
-                            , Status.trackComplete = completeR bc
-                            , Status.trackIncomplete = incompleteR bc }
-                       sendPC statusPCh trackerStats  >>= syncP
-                       eventTransition
-                       return (timeoutInterval bc, timeoutMinInterval bc)
+        Right bc -> do
+            c <- asks peerMgrCh
+            liftIO . atomically $ writeTChan c (PeerMgr.PeersFromTracker ih $ newPeers bc)
+            let trackerStats = Status.TrackerStat
+                 { Status.trackInfoHash = ih
+                 , Status.trackComplete = completeR bc
+                 , Status.trackIncomplete = incompleteR bc }
+            sendPC statusPCh trackerStats  >>= syncP
+            eventTransition
+            return (timeoutInterval bc, timeoutMinInterval bc)
 
 timerUpdate :: (Integer, Maybe Integer) -> Process CF ST ()
 timerUpdate (timeout, _minTimeout) = do

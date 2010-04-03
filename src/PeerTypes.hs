@@ -10,7 +10,6 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Concurrent.CML.Strict
 import Control.DeepSeq
 
 import Network
@@ -36,7 +35,7 @@ data MgrMessage = Connect InfoHash ThreadId PeerChannel
 instance NFData MgrMessage where
   rnf a = a `seq` ()
 
-type MgrChannel = Channel MgrMessage
+type MgrChannel = TChan MgrMessage
 
 -- | A Channel type we use for transferring the amount of data we transferred
 type BandwidthChannel = TChan Integer

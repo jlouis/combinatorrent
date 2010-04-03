@@ -123,7 +123,7 @@ download flags names = do
     statusC  <- channel
     waitC    <- channel
     supC <- channel
-    pmC <- channel
+    pmC <- liftIO $ newTChanIO
     chokeC <- liftIO $ newTChanIO
     rtv <- atomically $ newTVar []
     stv <- atomically $ newTVar []
