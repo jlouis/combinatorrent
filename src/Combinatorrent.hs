@@ -24,7 +24,7 @@ import qualified Process.PeerMgr as PeerMgr
 import qualified Process.ChokeMgr as ChokeMgr (start)
 import qualified Process.Listen as Listen
 import qualified Process.DirWatcher as DirWatcher (start)
-import qualified Process.Status as Status (start, StatusChan, PStat)
+import qualified Process.Status as Status (start, StatusChannel, PStat)
 import qualified Process.TorrentManager as TorrentManager (start, TorrentMgrChan, TorrentManagerMsg(..))
 
 import Supervisor
@@ -99,7 +99,7 @@ setupDirWatching flags watchC = do
                                     WatchDir _ -> True
                                     _          -> False)
 
-setupStatus :: [Flag] -> Status.StatusChan -> TVar [Status.PStat] -> Child
+setupStatus :: [Flag] -> Status.StatusChannel -> TVar [Status.PStat] -> Child
 setupStatus flags statusC stv =
     case statFileFlag flags of
       Nothing -> Worker $ Status.start Nothing statusC stv

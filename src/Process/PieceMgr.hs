@@ -133,7 +133,7 @@ data CF = CF
     { pieceMgrCh :: PieceMgrChannel
     , fspCh :: FSPChannel
     , chokeCh :: ChokeMgrChannel
-    , statusCh :: StatusChan
+    , statusCh :: StatusChannel
     , pMgrInfoHash :: InfoHash
     }
 
@@ -142,7 +142,7 @@ instance Logging CF where
 
 type PieceMgrProcess v = Process CF ST v
 
-start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChan -> ST -> InfoHash
+start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChannel -> ST -> InfoHash
       -> SupervisorChan -> IO ThreadId
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}

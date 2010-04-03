@@ -42,7 +42,7 @@ instance NFData TorrentManagerMsg where
 type TorrentMgrChan = Channel [TorrentManagerMsg]
 
 data CF = CF { tCh :: TorrentMgrChan
-             , tStatusCh    :: Status.StatusChan
+             , tStatusCh    :: Status.StatusChannel
              , tStatusTV    :: TVar [Status.PStat]
              , tPeerId      :: PeerId
              , tPeerMgrCh   :: PeerMgr.PeerMgrChannel
@@ -54,7 +54,7 @@ instance Logging CF where
 
 data ST = ST { workQueue :: [TorrentManagerMsg] }
 start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
-      -> Status.StatusChan
+      -> Status.StatusChannel
       -> TVar [Status.PStat]
       -> ChokeMgr.ChokeMgrChannel
       -> PeerId

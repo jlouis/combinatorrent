@@ -11,7 +11,7 @@ module Process.Status (
     , PStat(..)
     , TrackerMsg(..)
     -- * Channels
-    , StatusChan
+    , StatusChannel
     -- * State
     , StatusState(uploaded, downloaded, left)
     -- * Interface
@@ -32,6 +32,8 @@ import Data.IORef
 import qualified Data.Map as M
 
 import Prelude hiding (log)
+
+import PeerTypes
 import Process
 import Supervisor
 import Torrent
@@ -55,15 +57,9 @@ data PStat = PStat { pInfoHash :: InfoHash
 instance NFData StatusMsg where
   rnf a = a `seq` ()
 
-type StatusChan = Channel StatusMsg
+type StatusChannel = Channel StatusMsg
 
--- | TrackerChannel is the channel of the tracker
-data TrackerMsg = Stop | TrackerTick Integer | Start | Complete
-
-instance NFData TrackerMsg where
-   rnf a = a `seq` ()
-
-data CF  = CF { statusCh :: Channel StatusMsg,
+data CF  = CF { statusCh :: StatusChannel,
                 statusTV :: TVar [PStat] }
 
 instance Logging CF where
@@ -78,7 +74,7 @@ data StatusState = SState
              , incomplete :: Maybe Integer
              , complete :: Maybe Integer
              , state :: TorrentState
-             , trackerMsgCh :: Channel TrackerMsg
+             , trackerMsgCh :: TrackerChannel
              }
 
 gatherStats :: (Integer, Integer) -> [(String, String)]

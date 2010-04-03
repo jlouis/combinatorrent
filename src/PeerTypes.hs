@@ -5,10 +5,13 @@ module PeerTypes
     , MgrMessage(..)
     , MgrChannel
     , BandwidthChannel
+    , TrackerMsg(..)
+    , TrackerChannel
     )
 where
 
 import Control.Concurrent
+import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.DeepSeq
 
@@ -28,6 +31,16 @@ instance NFData PeerMessage where
 
 type PeerChannel = TChan PeerMessage
 
+---- TRACKER
+
+-- | Messages to the tracker process
+data TrackerMsg = Stop -- ^ Ask the Tracker to stop
+                | TrackerTick Integer -- ^ Ticking in the tracker, used to contact again
+                | Start               -- ^ Ask the tracker to Start
+                | Complete            -- ^ Ask the tracker to Complete the torrent
+type TrackerChannel = Channel TrackerMsg
+instance NFData TrackerMsg where
+   rnf a = a `seq` ()
 
 data MgrMessage = Connect InfoHash ThreadId PeerChannel
                 | Disconnect ThreadId
