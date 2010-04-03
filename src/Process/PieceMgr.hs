@@ -11,7 +11,6 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (assert)
-import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -94,9 +93,6 @@ data InProgressPiece = InProgressPiece
 data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
-instance NFData Blocks where
-  rnf a = a `seq` ()
-
 -- | Messages for RPC towards the PieceMgr.
 data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask for grabbing some blocks
@@ -121,11 +117,6 @@ instance Show PieceMgrMsg where
     show (GetDone _)           = "GetDone"
     show (PeerHave xs)         = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
-
-instance NFData PieceMgrMsg where
-    rnf a = case a of
-              (GrabBlocks _ is _) -> rnf is
-              x                   -> x `seq` ()
 
 type PieceMgrChannel = TChan PieceMgrMsg
 

@@ -14,17 +14,7 @@ module Process (
     , catchP
     , cleanupP
     , foreverP
-    , syncP
-    , chooseP
-    , sendP
-    , sendPC
-    , recvP
-    , recvPC
-    , recvWrapPC
-    , wrapP
     , stopP
-    , atTimeEvtP
-    , ignoreProcessBlock -- This ought to be renamed
     -- * Log Interface
     , Logging(..)
     , logP
@@ -37,8 +27,6 @@ module Process (
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
-import Control.DeepSeq
 import Control.Exception
 
 import Control.Monad.Reader
@@ -73,7 +61,7 @@ runP c st (Process p) = runStateT (runReaderT p c) st
 
 -- | Spawn and run a process monad
 spawnP :: a -> b -> Process a b () -> IO ThreadId
-spawnP c st p = spawn proc
+spawnP c st p = forkIO proc
   where proc = do _ <- runP c st p
                   return ()
 
@@ -106,69 +94,6 @@ cleanupP proc stopH cleanupH = do
 -- | Run a process forever in a loop
 foreverP :: Process a b c -> Process a b c
 foreverP p = p >> foreverP p
-
-syncP :: Event (c, b) -> Process a b c
-syncP ev = do (a, s) <- liftIO $ sync ev
-              put s
-              return a
-
-sendP :: NFData c => Channel c -> c -> Process a b (Event ((), b))
-sendP ch v = do
-    s <- get
-    return $ (wrap (transmit ch v)
-                (\() -> return ((), s)))
-
-sendPC :: NFData c => (a -> Channel c) -> c -> Process a b (Event ((), b))
-sendPC sel v = asks sel >>= flip sendP v
-
-recvP :: Channel c -> (c -> Bool) -> Process a b (Event (c, b))
-recvP ch pr = do
-    s <- get
-    return (wrap (receive ch pr)
-              (\v -> return (v, s)))
-
-recvPC :: (a -> Channel c) -> Process a b (Event (c, b))
-recvPC sel = asks sel >>= flip recvP (const True)
-
-wrapP :: Event (c, b) -> (c -> Process a b y) -> Process a b (Event (y, b))
-wrapP ev p = do
-    c <- ask
-    return $ wrap ev (\(v, s) -> runP c s (p v))
-
-atTimeEvtP :: NFData c => Integer -> c -> Process a b (Event (c, b))
-atTimeEvtP secs msg = do
-    s <- get
-    return (wrap (atTimeEvt (fromIntegral secs) msg)
-                (\m -> return (m, s)))
-
--- Convenience function
-recvWrapPC :: (a -> Channel c) -> (c -> Process a b y) -> Process a b (Event (y, b))
-recvWrapPC sel p = do
-    ev <- recvPC sel
-    wrapP ev p
-
-chooseP :: [Process a b (Event (c, b))] -> Process a b (Event (c, b))
-chooseP events = (sequence events) >>= (return . choose)
-
--- VERSION SPECIFIC PROCESS ORIENTED FUNCTIONS
-
--- | @ignoreProcessBlock err thnk@ runs a process action, ignoring blocks on dead
---   MVars. If the MVar is blocked, return the default value @err@.
-ignoreProcessBlock :: c -> Process a b c -> Process a b c
-ignoreProcessBlock err thnk = do
-    st <- get
-    c  <- ask
-    (a, s') <-  liftIO $ runP c st thnk `catches`
-    -- Peer dead, ignore
-#if (__GLASGOW_HASKELL__ == 610)
-        [ Handler (\BlockedOnDeadMVar -> return (err, st)) ]
-#elif (__GLASGOW_HASKELL__ == 612)
-        [ Handler (\BlockedIndefinitelyOnMVar -> return (err, st)) ]
-#else
-#error Unknown GHC version
-#endif
-    put s'
-    return a
 
 ------ LOGGING
 

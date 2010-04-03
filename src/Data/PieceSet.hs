@@ -19,7 +19,6 @@ module Data.PieceSet
 where
 
 import Control.Applicative
-import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import Data.Array.IO
@@ -36,9 +35,6 @@ import TestInstance() -- Pull arbitraries
 import Torrent
 
 newtype PieceSet = PieceSet { unPieceSet :: IOUArray Int Bool }
-
-instance NFData PieceSet where
-    rnf (PieceSet arr) = arr `seq` ()
 
 new :: MonadIO m => Int -> m PieceSet
 new n = {-# SCC "Data.PieceSet/new" #-}

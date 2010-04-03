@@ -2,7 +2,6 @@ module Main (main)
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.State
@@ -117,7 +116,7 @@ generatePeerId = do
 download :: [Flag] -> [String] -> IO ()
 download flags names = do
     setupLogging flags
-    watchC <- channel
+    watchC <- liftIO newTChanIO
     workersWatch <- setupDirWatching flags watchC
     -- setup channels
     statusC  <- liftIO $ newTChanIO
@@ -138,7 +137,7 @@ download flags names = do
               , Worker $ ChokeMgr.start chokeC rtv 100 -- 100 is upload rate in KB
               , Worker $ Listen.start defaultPort pmC
               ]) supC
-    sync $ transmit watchC (map TorrentManager.AddedTorrent names)
+    atomically $ writeTChan watchC (map TorrentManager.AddedTorrent names)
     _ <- atomically $ takeTMVar waitC
     infoM "Main" "Closing down, giving processes 10 seconds to cool off"
     atomically $ writeTChan supC (PleaseDie tid)

@@ -14,7 +14,6 @@ import qualified Data.Map as M
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.DeepSeq
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -39,9 +38,6 @@ data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
                 | NewIncoming (Handle, HostName, PortNumber)
                 | NewTorrent InfoHash TorrentLocal
                 | StopTorrent InfoHash
-
-instance NFData PeerMgrMsg where
-  rnf a = a `seq` ()
 
 data TorrentLocal = TorrentLocal
                         { tcPcMgrCh :: PieceMgrChannel

@@ -21,7 +21,6 @@ where
 
 import Control.Applicative hiding (empty)
 import Control.Monad
-import Control.DeepSeq
 
 import Data.Monoid
 import qualified Data.ByteString as B
@@ -57,9 +56,6 @@ data Message = KeepAlive
              | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
-
-instance NFData Message where
-    rnf a = a `seq` ()
 
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
