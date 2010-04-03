@@ -46,9 +46,8 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                | InsertTorrent InfoHash Integer (Channel TrackerMsg)
                | RemoveTorrent InfoHash
                | TorrentCompleted InfoHash
-               | RequestStatus InfoHash (Channel StatusState)
-               | RequestAllTorrents (Channel [(InfoHash, StatusState)])
-               | Tick
+               | RequestStatus InfoHash (TMVar StatusState)
+               | RequestAllTorrents (TMVar [(InfoHash, StatusState)])
 
 data PStat = PStat { pInfoHash :: InfoHash
                    , pUploaded :: Integer
@@ -57,7 +56,7 @@ data PStat = PStat { pInfoHash :: InfoHash
 instance NFData StatusMsg where
   rnf a = a `seq` ()
 
-type StatusChannel = Channel StatusMsg
+type StatusChannel = TChan StatusMsg
 
 data CF  = CF { statusCh :: StatusChannel,
                 statusTV :: TVar [PStat] }
@@ -77,6 +76,9 @@ data StatusState = SState
              , trackerMsgCh :: TrackerChannel
              }
 
+instance NFData StatusState where
+    rnf a = a `seq` ()
+
 gatherStats :: (Integer, Integer) -> [(String, String)]
 gatherStats (upload, download) =
     [("uploaded", show upload), ("downloaded", show download),
@@ -91,15 +93,9 @@ instance Show StatusState where
         ,"  Complete:   " ++ show comp ++ "\n"
         ,"  Incomplete: " ++ show inc ++ " }"]
 
-instance NFData StatusState where
-  rnf a = a `seq` ()
-
-instance NFData (Channel StatusState) where
-  rnf a = a `seq` ()
-
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Maybe FilePath -> Channel StatusMsg -> TVar [PStat] -> SupervisorChan -> IO ThreadId
+start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChan -> IO ThreadId
 start fp statusC tv supC = do
     r <- newIORef (0,0)
     spawnP (CF statusC tv) M.empty
@@ -110,42 +106,48 @@ start fp statusC tv supC = do
         case fp of
             Nothing -> return ()
             Just fpath -> liftIO $ writeFile fpath (show . gatherStats $ st)
-    newMap l trackerMsgC =
-        SState 0 0 l Nothing Nothing (if l == 0 then Seeding else Leeching) trackerMsgC
     pgm r = {-# SCC "StatusP" #-} do
         fetchUpdates r
-        syncP =<< chooseP [recvEvent, tickEvent]
-    tickEvent :: Process CF ST (Event ((), ST))
-    tickEvent = do
-        evt <- atTimeEvtP 5 Tick
-        wrapP evt (\_ -> return ())
-    recvEvent :: Process CF ST (Event ((), ST))
-    recvEvent = do evt <- recvPC statusCh
-                   wrapP evt (\m ->
-                    case m of
-                        TrackerStat ih ic c -> do
-                            modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
-                        CompletedPiece ih bytes -> do
-                            modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
-                        InsertTorrent ih l trackerMsgC ->
-                            modify (\s -> M.insert ih (newMap l trackerMsgC) s)
-                        RemoveTorrent ih -> modify (\s -> M.delete ih s)
-                        RequestStatus ih retC -> do
-                            s <- get
-                            case M.lookup ih s of
-                                Nothing -> fail "Unknown InfoHash"
-                                Just st -> sendP retC st >>= syncP
-                        RequestAllTorrents retC -> do
-                            s <- get
-                            sendP retC (M.toList s) >>= syncP
-                        TorrentCompleted ih -> do
-                            mp <- get
-                            let q = M.lookup ih mp
-                            ns  <- maybe (fail "Unknown Torrent") return q
-                            assert (left ns == 0) (return ())
-                            syncP =<< sendP (trackerMsgCh ns) Complete
-                            modify (\s -> M.insert ih (ns { state = Seeding}) s)
-                        Tick -> error "Never happens!")
+        d <- liftIO $ registerDelay (5 * 1000000)
+        ch <- asks statusCh
+        x <- liftIO . atomically $ do
+            q <- readTVar d
+            if q
+                then return Nothing
+                else return . Just =<< readTChan ch
+        case x of
+            Nothing -> return ()
+            Just msg -> recvMsg msg
+
+newMap :: Integer -> TrackerChannel -> StatusState
+newMap l trackerMsgC =
+    SState 0 0 l Nothing Nothing (if l == 0 then Seeding else Leeching) trackerMsgC
+
+recvMsg :: StatusMsg -> Process CF ST ()
+recvMsg msg = 
+    case msg of
+        TrackerStat ih ic c -> do
+            modify (\s -> M.adjust (\st -> st { incomplete = ic, complete = c }) ih s)
+        CompletedPiece ih bytes -> do
+            modify (\s -> M.adjust (\st -> st { left = (left st) - bytes }) ih s)
+        InsertTorrent ih l trackerMsgC ->
+            modify (\s -> M.insert ih (newMap l trackerMsgC) s)
+        RemoveTorrent ih -> modify (\s -> M.delete ih s)
+        RequestStatus ih v -> do
+            s <- get
+            case M.lookup ih s of
+                Nothing -> fail "Unknown InfoHash"
+                Just st -> liftIO . atomically $ putTMVar v st
+        RequestAllTorrents v -> do
+            s <- get
+            liftIO . atomically $ putTMVar v (M.toList s)
+        TorrentCompleted ih -> do
+            mp <- get
+            let q = M.lookup ih mp
+            ns  <- maybe (fail "Unknown Torrent") return q
+            assert (left ns == 0) (return ())
+            syncP =<< sendP (trackerMsgCh ns) Complete
+            modify (\s -> M.insert ih (ns { state = Seeding}) s)
 
 fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()
 fetchUpdates r = do

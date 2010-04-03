@@ -213,7 +213,8 @@ storeBlock pn blk d = do
                                 Nothing -> fail "Storeblock: M.lookup"
                                 Just x -> return $ len x)
            ih <- asks pMgrInfoHash
-           sendPC statusCh (CompletedPiece ih l) >>= syncP
+           c <- asks statusCh
+           liftIO . atomically $ writeTChan c (CompletedPiece ih l)
            pieceOk <- checkPiece pn
            case pieceOk of
              Nothing ->
@@ -286,7 +287,7 @@ checkFullCompletion = do
     when (M.size im == donePSz)
         (do liftIO $ putStrLn "Torrent Completed"
             ih <- asks pMgrInfoHash
-            sendPC statusCh (STP.TorrentCompleted ih) >>= syncP
+            asks statusCh >>= (\ch -> liftIO . atomically $ writeTChan ch (STP.TorrentCompleted ih))
             c <- asks chokeCh
             liftIO . atomically $ writeTChan c (TorrentComplete ih))
 

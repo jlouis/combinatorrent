@@ -76,7 +76,7 @@ failTimerInterval = 15 * 60
 
 -- | Configuration of the tracker process
 data CF = CF {
-        statusPCh :: Channel Status.StatusMsg
+        statusPCh :: Status.StatusChannel
       , trackerMsgCh :: Channel Status.TrackerMsg
       , peerMgrCh :: PeerMgr.PeerMgrChannel
       , cfInfoHash :: InfoHash
@@ -95,7 +95,7 @@ data ST = ST {
       }
 
 start :: InfoHash -> TorrentInfo -> PeerId -> PortID
-      -> Channel Status.StatusMsg -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
+      -> Status.StatusChannel -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
        spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
@@ -137,10 +137,10 @@ eventTransition = do
 -- | Poke the tracker. It returns the new timer intervals to use
 pokeTracker :: Process CF ST (Integer, Maybe Integer)
 pokeTracker = do
-    ch <- liftIO $ channel
+    v <- liftIO $ newEmptyTMVarIO
     ih <- asks cfInfoHash
-    syncP =<< sendPC statusPCh (Status.RequestStatus ih ch)
-    upDownLeft <- syncP =<< recvP ch (const True)
+    asks statusPCh >>= (\ch -> liftIO . atomically $ writeTChan ch (Status.RequestStatus ih v))
+    upDownLeft <- liftIO . atomically $ takeTMVar v
     url <- buildRequestURL upDownLeft
     debugP $ "Request URL: " ++ url
     uri <- case parseURI url of
@@ -166,7 +166,7 @@ pokeTracker = do
                  { Status.trackInfoHash = ih
                  , Status.trackComplete = completeR bc
                  , Status.trackIncomplete = incompleteR bc }
-            sendPC statusPCh trackerStats  >>= syncP
+            asks statusPCh >>= \ch -> liftIO . atomically $ writeTChan ch trackerStats
             eventTransition
             return (timeoutInterval bc, timeoutMinInterval bc)
 

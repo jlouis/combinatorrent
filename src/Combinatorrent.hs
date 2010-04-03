@@ -120,7 +120,7 @@ download flags names = do
     watchC <- channel
     workersWatch <- setupDirWatching flags watchC
     -- setup channels
-    statusC  <- channel
+    statusC  <- liftIO $ newTChanIO
     waitC    <- channel
     supC <- channel
     pmC <- liftIO $ newTChanIO
