@@ -13,7 +13,6 @@ where
 import qualified Data.Map as M
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.DeepSeq
 
@@ -166,7 +165,7 @@ type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> RateTVar -> ChanManageMap
         -> IO ThreadId
 connect (host, port, pid, ih) pool mgrC rtv cmap =
-    spawn (connector >> return ())
+    forkIO (connector >> return ())
   where 
         connector =
          do debugM "Process.PeerMgr.connect" $
@@ -195,7 +194,7 @@ acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
          -> PeerId -> MgrChannel -> RateTVar -> ChanManageMap
          -> IO ThreadId
 acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
-    spawn (connector >> return ())
+    forkIO (connector >> return ())
   where ihTst k = M.member k cmmap
         connector = do
             debugLog "Handling incoming connection"

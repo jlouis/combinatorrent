@@ -122,9 +122,9 @@ sendPC :: NFData c => (a -> Channel c) -> c -> Process a b (Event ((), b))
 sendPC sel v = asks sel >>= flip sendP v
 
 recvP :: Channel c -> (c -> Bool) -> Process a b (Event (c, b))
-recvP ch pred = do
+recvP ch pr = do
     s <- get
-    return (wrap (receive ch pred)
+    return (wrap (receive ch pr)
               (\v -> return (v, s)))
 
 recvPC :: (a -> Channel c) -> Process a b (Event (c, b))
