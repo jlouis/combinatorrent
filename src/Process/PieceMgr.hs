@@ -463,6 +463,10 @@ createBlock pn = do
                                  Just ipp -> return $ cBlock ipp)
          where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
+anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
+anyM f l = do r <- mapM f l
+              return (any (==True) r)
+
 assertST :: PieceMgrProcess ()
 assertST = {-# SCC "assertST" #-} do
     c <- gets assertCount
@@ -486,31 +490,31 @@ assertST = {-# SCC "assertST" #-} do
     assertSets = do
         pending <- gets pendingPieces
         done    <- gets donePiece
-        nPieces <- M.size <$> gets infoMap
-        down    <- PS.fromList nPieces . map fst =<< gets downloading
-        iprog   <- PS.fromList nPieces . M.keys  =<< gets inProgress
+        down    <- return . map fst =<< gets downloading
+        iprog   <- return . M.keys  =<< gets inProgress
+        pdownis <- anyM (flip PS.member pending) down
+        donedownis <- anyM (flip PS.member done) down
         pdis <- PS.intersection pending done
-        pdownis <- PS.intersection pending down
-        piprogis <- PS.intersection pending iprog
-        doneprogis <- PS.intersection done iprog
-        donedownis <- PS.intersection done down
+        piprogis <- anyM (flip PS.member pending) iprog
+        doneprogis <- anyM (flip PS.member done) iprog
+
         when (not $ null pdis)
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (not $ null pdownis)
+        when pdownis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (not $ null piprogis)
+        when piprogis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (not $ null doneprogis)
+        when doneprogis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
-        when (not $ null donedownis)
+        when donedownis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
@@ -541,5 +545,4 @@ assertST = {-# SCC "assertST" #-} do
                 when (S.member blk $ ipHaveBlocks ipp)
                     (fail $ "P/Blk " ++ show (pn, blk) ++ " is in the HaveBlocks set" ++
                         "Trace: " ++ show tr)
-
 
