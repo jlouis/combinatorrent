@@ -8,13 +8,11 @@ module Process.Console
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.DeepSeq
 import Control.Monad.Reader
 
 import Prelude hiding (catch)
-import System.Log.Logger
 
 
 import Process
@@ -31,49 +29,35 @@ data Cmd = Quit -- ^ Quit the program
 instance NFData Cmd where
   rnf a = a `seq` ()
 
-type CmdChannel = Channel Cmd
+type CmdChannel = TChan Cmd
 
 data CF = CF { cmdCh :: CmdChannel
-             , wrtCh :: Channel String }
+             , wrtCh :: TChan String }
 
 instance Logging CF where
     logName _ = "Process.Console"
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: Channel () -> St.StatusChannel -> SupervisorChan -> IO ThreadId
+start :: TMVar () -> St.StatusChannel -> SupervisorChan -> IO ThreadId
 start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP
     spawnP (CF cmdC wrtC) () (catchP (forever lp) (defaultStopHandler supC))
   where
-    lp = syncP =<< chooseP [quitEvent, helpEvent, unknownEvent, showEvent]
-    quitEvent = do
-        ch <- asks cmdCh
-        ev <- recvP ch (==Quit)
-        wrapP ev 
-            (\_ -> syncP =<< sendP waitC ())
-    helpEvent = do
-        ch <- asks cmdCh
-        ev <- recvP ch (==Help)
-        wrapP ev
-            (\_ -> syncP =<< sendPC wrtCh helpMessage)
-    unknownEvent = do
-        ch <- asks cmdCh
-        ev <- recvP ch (\m -> case m of
-                                Unknown _ -> True
-                                _         -> False)
-        wrapP ev
-            (\(Unknown cmd) -> syncP =<< (sendPC wrtCh $ "Unknown command: " ++ cmd))
-    showEvent = do
-        ch <- asks cmdCh
-        ev <- recvP ch (==Show)
-        wrapP ev
-            (\_ -> do
+    lp = do
+        c <- asks cmdCh
+        o <- asks wrtCh
+        m <- liftIO . atomically $ readTChan c
+        case m of
+            Quit -> liftIO . atomically $ putTMVar waitC ()
+            Help -> liftIO . atomically $ writeTChan o helpMessage
+            (Unknown n) -> liftIO . atomically $ writeTChan o $ "Uknown command: " ++ n
+            Show -> do
                 v <- liftIO newEmptyTMVarIO
                 liftIO . atomically $ writeTChan statusC (St.RequestAllTorrents v)
                 sts <- liftIO . atomically $ takeTMVar v
-                syncP =<< sendPC wrtCh (show sts))
+                liftIO . atomically $ writeTChan o (show sts)
 
 helpMessage :: String
 helpMessage = concat
@@ -84,24 +68,23 @@ helpMessage = concat
     , "  show    - Show the current downloading status\n"
     ]
 
-writerP :: IO (Channel String)
-writerP = do wrt <- channel
-             _ <- spawn $ lp wrt
+writerP :: IO (TChan String)
+writerP = do wrt <- newTChanIO
+             _ <- forkIO $ lp wrt
              return wrt
-  where lp wCh = forever (do m <- sync $ receive wCh (const True)
+  where lp wCh = forever (do m <- atomically $ readTChan wCh
                              putStrLn m)
 
 readerP :: IO CmdChannel
-readerP = do cmd <- channel
-             _ <- spawn $ lp cmd
+readerP = do cmd <- newTChanIO
+             _ <- forkIO $ lp cmd
              return cmd
   where lp cmd = forever $
            do l <- getLine
-              case l of
-                "help" -> sync $ transmit cmd Help
-                "quit" -> sync $ transmit cmd Quit
-                "show" -> sync $ transmit cmd Show
-                c      -> do logM "Process.Console.readerP" INFO $
-                                     "Unrecognized command: " ++ show c
-                             sync $ transmit cmd (Unknown c)
+              atomically $ writeTChan cmd
+                (case l of
+                   "help" -> Help
+                   "quit" -> Quit
+                   "show" -> Show
+                   c      -> Unknown c)
 

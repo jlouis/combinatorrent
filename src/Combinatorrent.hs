@@ -121,7 +121,7 @@ download flags names = do
     workersWatch <- setupDirWatching flags watchC
     -- setup channels
     statusC  <- liftIO $ newTChanIO
-    waitC    <- channel
+    waitC    <- liftIO $ newEmptyTMVarIO
     supC <- channel
     pmC <- liftIO $ newTChanIO
     chokeC <- liftIO $ newTChanIO
@@ -139,7 +139,7 @@ download flags names = do
               , Worker $ Listen.start defaultPort pmC
               ]) supC
     sync $ transmit watchC (map TorrentManager.AddedTorrent names)
-    sync $ receive waitC (const True)
+    _ <- atomically $ takeTMVar waitC
     infoM "Main" "Closing down, giving processes 10 seconds to cool off"
     sync $ transmit supC (PleaseDie tid)
     threadDelay $ 10*1000000
