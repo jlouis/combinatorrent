@@ -42,7 +42,7 @@ readSend = do
     l <- conv bs'
     if (l == 0)
         then return ()
-        else do bs <- liftIO $ B.hGet h (fromIntegral l)
+        else do bs <- {-# SCC "hGet_From_BS" #-} liftIO $ B.hGet h (fromIntegral l)
                 case G.runGet decodeMsg bs of
                     Left _ -> do warningP "Incorrect parse in receiver, dying!"
                                  stopP
