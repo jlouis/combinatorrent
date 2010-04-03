@@ -9,7 +9,6 @@ module Process.Status (
     -- * Types
       StatusMsg(..)
     , PStat(..)
-    , TrackerMsg(..)
     -- * Channels
     , StatusChannel
     -- * State
@@ -20,7 +19,6 @@ module Process.Status (
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.Exception (assert)
 import Control.DeepSeq
@@ -43,7 +41,7 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                              , trackIncomplete :: Maybe Integer
                              , trackComplete   :: Maybe Integer }
                | CompletedPiece InfoHash Integer
-               | InsertTorrent InfoHash Integer (Channel TrackerMsg)
+               | InsertTorrent InfoHash Integer TrackerChannel
                | RemoveTorrent InfoHash
                | TorrentCompleted InfoHash
                | RequestStatus InfoHash (TMVar StatusState)
@@ -146,7 +144,7 @@ recvMsg msg =
             let q = M.lookup ih mp
             ns  <- maybe (fail "Unknown Torrent") return q
             assert (left ns == 0) (return ())
-            syncP =<< sendP (trackerMsgCh ns) Complete
+            liftIO . atomically $ writeTChan (trackerMsgCh ns) Complete
             modify (\s -> M.insert ih (ns { state = Seeding}) s)
 
 fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()

@@ -11,7 +11,6 @@ module Channels
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.DeepSeq
 
@@ -38,7 +37,7 @@ data TrackerMsg = Stop -- ^ Ask the Tracker to stop
                 | TrackerTick Integer -- ^ Ticking in the tracker, used to contact again
                 | Start               -- ^ Ask the tracker to Start
                 | Complete            -- ^ Ask the tracker to Complete the torrent
-type TrackerChannel = Channel TrackerMsg
+type TrackerChannel = TChan TrackerMsg
 instance NFData TrackerMsg where
    rnf a = a `seq` ()
 

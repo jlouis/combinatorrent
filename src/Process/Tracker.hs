@@ -14,7 +14,6 @@ where
 
 import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
@@ -32,6 +31,7 @@ import Numeric (showHex)
 
 import Protocol.BCode as BCode hiding (encode)
 import Process
+import Channels
 import Supervisor
 import Torrent
 import qualified Process.Status as Status
@@ -56,8 +56,6 @@ import qualified Process.Timer as Timer
 data TrackerEvent = Started | Stopped | Completed | Running
     deriving Eq
 
-
-
 -- | The tracker will in general respond with a BCoded dictionary. In our world, this is
 --   not the data structure we would like to work with. Hence, we parse the structure into
 --   the ADT below.
@@ -77,7 +75,7 @@ failTimerInterval = 15 * 60
 -- | Configuration of the tracker process
 data CF = CF {
         statusPCh :: Status.StatusChannel
-      , trackerMsgCh :: Channel Status.TrackerMsg
+      , trackerMsgCh :: TrackerChannel
       , peerMgrCh :: PeerMgr.PeerMgrChannel
       , cfInfoHash :: InfoHash
       }
@@ -95,7 +93,7 @@ data ST = ST {
       }
 
 start :: InfoHash -> TorrentInfo -> PeerId -> PortID
-      -> Status.StatusChannel -> Channel Status.TrackerMsg -> PeerMgr.PeerMgrChannel
+      -> Status.StatusChannel -> TrackerChannel -> PeerMgr.PeerMgrChannel
       -> SupervisorChan -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
        spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
@@ -109,17 +107,18 @@ start ih ti pid port statusC msgC pc supC =
         modify (\s -> s { state = Stopped }) >> talkTracker
     loop :: Process CF ST ()
     loop = do
-          msg <- recvPC trackerMsgCh >>= syncP
+          ch <- asks trackerMsgCh
+          msg <- liftIO . atomically $ readTChan ch
           debugP $ "Got tracker event"
           case msg of
-            Status.TrackerTick x ->
+            TrackerTick x ->
                 do t <- gets nextTick
                    when (x+1 == t) talkTracker
-            Status.Stop     ->
+            Stop     ->
                 modify (\s -> s { state = Stopped }) >> talkTracker
-            Status.Start    ->
+            Start    ->
                 modify (\s -> s { state = Started }) >> talkTracker
-            Status.Complete ->
+            Complete ->
                   modify (\s -> s { state = Completed }) >> talkTracker
     talkTracker = pokeTracker >>= timerUpdate
 
@@ -176,7 +175,7 @@ timerUpdate (timeout, _minTimeout) = do
     when (st == Running)
         (do t <- tick
             ch <- asks trackerMsgCh
-            Timer.register timeout (Status.TrackerTick t) ch
+            _ <- Timer.registerSTM (fromIntegral timeout) ch (TrackerTick t)
             debugP $ "Set timer to: " ++ show timeout)
   where tick = do t <- gets nextTick
                   modify (\s -> s { nextTick = t + 1 })

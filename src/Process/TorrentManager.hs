@@ -28,6 +28,7 @@ import qualified Process.FS as FSP
 import qualified Process.PieceMgr as PieceMgr (start, createPieceDb)
 import qualified Process.ChokeMgr as ChokeMgr (ChokeMgrChannel)
 import qualified Process.Tracker as Tracker
+import Channels
 import FS
 import Supervisor
 import Torrent
@@ -94,7 +95,7 @@ startTorrent :: FilePath -> Process CF ST ThreadId
 startTorrent fp = do
     bc <- readTorrent fp
     fspC     <- liftIO newTChanIO
-    trackerC <- liftIO channel
+    trackerC <- liftIO newTChanIO
     supC     <- liftIO channel
     pieceMgrC  <- liftIO newTChanIO
     chokeC  <- asks tChokeCh
@@ -115,5 +116,5 @@ startTorrent fp = do
     c <- asks tPeerMgrCh
     liftIO . atomically $ writeTChan c $ PeerMgr.NewTorrent (infoHash ti)
                             (PeerMgr.TorrentLocal pieceMgrC fspC stv pieceMap)
-    syncP =<< sendP trackerC Status.Start
+    liftIO . atomically $ writeTChan trackerC Start
     return tid

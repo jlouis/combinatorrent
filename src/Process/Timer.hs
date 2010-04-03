@@ -4,11 +4,15 @@
 --   act. This allows us to postpone events into the future at a
 --   designated time.
 --
-module Process.Timer (register)
+module Process.Timer
+    ( register
+    , registerSTM
+    )
 
 where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Concurrent.CML.Strict
 import Control.DeepSeq
 import Control.Monad.Trans
@@ -24,3 +28,8 @@ registerL secs v tickChan = do _ <- spawn timerProcess
 
 register :: (MonadIO m, NFData a) => Integer -> a -> Channel a -> m ()
 register secs v c = liftIO $ registerL secs v c
+
+registerSTM :: MonadIO m => Int -> TChan a -> a -> m ThreadId
+registerSTM secs c m = liftIO $ forkIO $ do
+    threadDelay (secs * 1000000)
+    atomically $ writeTChan c m
