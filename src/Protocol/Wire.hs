@@ -244,6 +244,7 @@ constructBitField sz pieces = L.pack . build $ m
                                                   if b5 then 32  else 0,
                                                   if b6 then 64  else 0,
                                                   if b7 then 128 else 0]
+          bytify _ = error "Bitfield construction failed"
 
 --
 -- -- TESTS

@@ -217,13 +217,14 @@ storeBlock pn blk d = do
 
 askInterested :: PS.PieceSet -> Process CF ST Bool
 askInterested pieces = do
-    nPieces <- M.size <$> gets infoMap
     inProg <- M.keys <$> gets inProgress
-    pend   <- gets pendingPieces >>= PS.toList
-    tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
-    -- @i@ is the intersection with with we need and the peer has.
-    intsct <- PS.intersection pieces tmp
-    return (not $ null intsct)
+    amongProg <- filterM (flip PS.member pieces) inProg
+    if (not $ null amongProg)
+        then return True
+        else do
+            pend   <- gets pendingPieces
+            intsct <- PS.intersection pieces pend
+            return (not $ null intsct)
 
 peerHave :: [PieceNum] -> Process CF ST ()
 peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
