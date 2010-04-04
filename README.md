@@ -76,20 +76,6 @@ Reading material for hacking Combinatorrent:
      that there are some commentary on these pages which can be disputed
      quite a lot.
 
-   - ["Concurrent Programming in ML" - John. H. Reppy](http://www.amazon.com/Concurrent-Programming-ML-John-Reppy/dp/0521480892)
-     This book describes the CML system which Combinatorrent use. The basic
-     idea of CML is that of higher order events. That is, events which can
-     be abstractly manipulated before being synchronized on. For instance,
-     CML events are a Functor instance, though the code currently does not
-     reflect that. This also provisions for fair selective receives
-     with dynamic choice of which events may fire.
-
-   - ["A Concurrent ML library in Concurrent Haskell" - Avik Chaudhuri, ICFP 2009](http://www.cs.umd.edu/~avik/projects/cmllch/)
-     The paper behind the CML library which Combinatorrent use. It
-     describes a way to transform the first-order MVar and ForkIO structures
-     of concurrent haskell into a higher order CML language by use of a
-     clever matchmaking algorithm.
-
    - ["Supervisor Behaviour"](http://erlang.org/doc/design_principles/sup_princ.html)
      From the Erlang documentation. How the Erlang Supervisor behaviour
      works. The Supervisor and process structure of Combinatorrent is

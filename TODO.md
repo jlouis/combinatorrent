@@ -60,8 +60,6 @@ Items for later (no particular order)
    - Reduce CPU load and memory load. Alternative representations of various
      data structures are needed.
    - Play with the code coverage in GHC.
-   - Improve parallel execution. We are currently extremely synchronous.
-     Check the code with ThreadScope, some improvement has been done.
    - Add restart-support to the supervisors where applicable.
    - Add prioritization support of multiTorrents
    - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
@@ -73,7 +71,5 @@ Items for later (no particular order)
      is relevant for this client.
    - Process monitoring in general. Think.
    - Write a fuzzing framework for bittorrent.
-   - Consider using STM, MVars/Chans in the long run and Push back on the
-     CML use.
 
 # vim: filetype=none tw=76 expandtab
