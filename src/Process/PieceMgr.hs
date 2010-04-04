@@ -300,9 +300,16 @@ putbackBlock (pn, blk) = do
       $ modify (\db -> db { inProgress = ndb (inProgress db)
                           , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
-        -- The first of these might happen in the endgame
+        -- In endgame, the first will never happen. If it is done, the doneMember
+        -- check above should take care of the problem. If the block has been downloaded
+        -- by another peer in endgame, there is nothing to do.
+        --
+        -- Otherwise, we put the block back as pending. If in endgame, the next request
+        -- will pull it into downloading again for endgaming.
         f Nothing     = fail "The 'impossible' happened"
-        f (Just ipp) = Just ipp { ipPendingBlocks = blk : ipPendingBlocks ipp }
+        f (Just ipp)
+            | S.member blk (ipHaveBlocks ipp) = Just ipp
+            | otherwise = Just ipp {ipPendingBlocks = blk : ipPendingBlocks ipp}
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.
