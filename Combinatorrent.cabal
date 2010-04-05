@@ -36,10 +36,10 @@ executable Combinatorrent
   hs-source-dirs: src
   main-is: Combinatorrent.hs
   other-modules: Protocol.BCode, Protocol.Wire,
-    Data.Queue,
+    Data.Queue, Data.PieceSet, Data.PendingSet
     Process.ChokeMgr, Process.Console, Process.FS, Process.Listen,
     Process.PeerMgr, Process.Peer, Process.PieceMgr, Process.Status,
-    Process.Timer, Process.Tracker,
+    Process.Timer, Process.Tracker, Process.TorrentManager
     Digest, FS, Channels, Process, RateCalc,
     Supervisor, Torrent, Test, TestInstance, Process.DirWatcher,
     Tracer,
