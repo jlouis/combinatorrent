@@ -7,8 +7,6 @@ where
 import Control.Concurrent
 import Control.Concurrent.STM
 
-import Control.DeepSeq
-
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -18,7 +16,6 @@ import qualified Data.ByteString as B
 
 import Channels
 import Process
-import DeepSeqInstances()
 import qualified Data.Queue as Q
 import Supervisor
 import Torrent
@@ -29,9 +26,6 @@ data SenderQMsg = SenderQCancel PieceNum Block -- ^ Peer requested that we cance
                 | SenderQM Message           -- ^ We want to send the Message to the peer
                 | SenderOChoke                 -- ^ We want to choke the peer
                 | SenderQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
-
-instance NFData SenderQMsg where
-  rnf a = a `seq` ()
 
 data CF = CF { sqIn :: TChan SenderQMsg
              , sqOut :: TMVar B.ByteString

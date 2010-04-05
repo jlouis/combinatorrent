@@ -13,9 +13,7 @@ where
 import qualified Data.Map as M
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
-import Control.DeepSeq
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -40,9 +38,6 @@ data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
                 | NewIncoming (Handle, HostName, PortNumber)
                 | NewTorrent InfoHash TorrentLocal
                 | StopTorrent InfoHash
-
-instance NFData PeerMgrMsg where
-  rnf a = a `seq` ()
 
 data TorrentLocal = TorrentLocal
                         { tcPcMgrCh :: PieceMgrChannel
@@ -79,7 +74,7 @@ start :: PeerMgrChannel -> PeerId
       -> IO ThreadId
 start ch pid chokeMgrC rtv supC =
     do mgrC <- newTChanIO
-       fakeChan <- channel
+       fakeChan <- newTChanIO
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC rtv)
               (ST [] M.empty pid cmap) (catchP (forever lp)
@@ -166,7 +161,7 @@ type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> RateTVar -> ChanManageMap
         -> IO ThreadId
 connect (host, port, pid, ih) pool mgrC rtv cmap =
-    spawn (connector >> return ())
+    forkIO (connector >> return ())
   where 
         connector =
          do debugM "Process.PeerMgr.connect" $
@@ -187,14 +182,15 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                                     Just x  -> x
                      children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
                                                       (tcPM tc) (M.size (tcPM tc)) ihsh
-                     sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
+                     atomically $ writeTChan pool $
+                        SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
 acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
          -> PeerId -> MgrChannel -> RateTVar -> ChanManageMap
          -> IO ThreadId
 acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
-    spawn (connector >> return ())
+    forkIO (connector >> return ())
   where ihTst k = M.member k cmmap
         connector = do
             debugLog "Handling incoming connection"
@@ -211,7 +207,8 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                                   Just x  -> x
                        children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatTV tc) (tcPM tc) (M.size (tcPM tc)) ih
-                       sync $ transmit pool $ SpawnNew (Supervisor $ allForOne "PeerSup" children)
+                       atomically $ writeTChan pool $
+                            SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"
 

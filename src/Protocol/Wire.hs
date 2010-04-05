@@ -21,7 +21,6 @@ where
 
 import Control.Applicative hiding (empty)
 import Control.Monad
-import Control.DeepSeq
 
 import Data.Monoid
 import qualified Data.ByteString as B
@@ -57,9 +56,6 @@ data Message = KeepAlive
              | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
-
-instance NFData Message where
-    rnf a = a `seq` ()
 
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
@@ -248,6 +244,7 @@ constructBitField sz pieces = L.pack . build $ m
                                                   if b5 then 32  else 0,
                                                   if b6 then 64  else 0,
                                                   if b7 then 128 else 0]
+          bytify _ = error "Bitfield construction failed"
 
 --
 -- -- TESTS

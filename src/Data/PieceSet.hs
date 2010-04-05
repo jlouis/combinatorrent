@@ -19,7 +19,6 @@ module Data.PieceSet
 where
 
 import Control.Applicative
-import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import Data.Array.IO
@@ -36,9 +35,6 @@ import TestInstance() -- Pull arbitraries
 import Torrent
 
 newtype PieceSet = PieceSet { unPieceSet :: IOUArray Int Bool }
-
-instance NFData PieceSet where
-    rnf (PieceSet arr) = arr `seq` ()
 
 new :: MonadIO m => Int -> m PieceSet
 new n = {-# SCC "Data.PieceSet/new" #-}
@@ -67,8 +63,10 @@ copy (PieceSet ps) = liftIO $ do
 size :: MonadIO m => PieceSet -> m Int
 size (PieceSet arr) = {-# SCC "Data.PieceSet/size" #-}
     liftIO $ do
-        elems <- getElems arr
-        return $ length $ filter (==True) elems
+        (l, u) <- getBounds arr
+        walk [l..u] 0
+ where walk [] n       = return n
+       walk (x : xs) n = readArray arr x >>= \p -> if p then walk xs (n+1) else walk xs n
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
 member n (PieceSet arr) = {-# SCC "Data.PieceSet/member" #-}
@@ -125,8 +123,13 @@ testSuite = testGroup "Data/PieceSet"
 
 testNewSize :: Assertion
 testNewSize = do
-    sz <- size =<< new 1337
+    a <- new 1337
+    sz <- size a
     assertEqual "For a new PieceSet" sz 0
+    insert 3 a
+    insert 5 a
+    sz2 <- size a
+    assertEqual "For inserted" sz2 2
 
 testFull :: Assertion
 testFull = do

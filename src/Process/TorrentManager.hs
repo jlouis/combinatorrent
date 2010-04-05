@@ -10,9 +10,7 @@ module Process.TorrentManager (
 where
 
 import Control.Concurrent
-import Control.Concurrent.CML.Strict
 import Control.Concurrent.STM
-import Control.DeepSeq
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -37,10 +35,7 @@ data TorrentManagerMsg = AddedTorrent FilePath
                        | RemovedTorrent FilePath
   deriving (Eq, Show)
 
-instance NFData TorrentManagerMsg where
-  rnf a = a `seq` ()
-
-type TorrentMgrChan = Channel [TorrentManagerMsg]
+type TorrentMgrChan = TChan [TorrentManagerMsg]
 
 data CF = CF { tCh :: TorrentMgrChan
              , tStatusCh    :: Status.StatusChannel
@@ -65,10 +60,11 @@ start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
 start chan statusC stv chokeC pid peerC supC =
     spawnP (CF chan statusC stv pid peerC chokeC) (ST [])
                 (catchP (forever pgm) (defaultStopHandler supC))
-  where pgm = do startStop >> (syncP =<< chooseP [dirEvt])
-        dirEvt =
-            recvWrapPC tCh
-                (\ls -> modify (\s -> s { workQueue = ls ++ workQueue s}))
+  where pgm = do startStop >> dirMsg
+        dirMsg = do
+            c <- asks tCh
+            ls <- liftIO . atomically $ readTChan c
+            modify (\s -> s { workQueue = ls ++ workQueue s })
         startStop = do
             q <- gets workQueue
             case q of
@@ -96,7 +92,7 @@ startTorrent fp = do
     bc <- readTorrent fp
     fspC     <- liftIO newTChanIO
     trackerC <- liftIO newTChanIO
-    supC     <- liftIO channel
+    supC     <- liftIO newTChanIO
     pieceMgrC  <- liftIO newTChanIO
     chokeC  <- asks tChokeCh
     statusC <- asks tStatusCh

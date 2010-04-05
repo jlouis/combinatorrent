@@ -76,20 +76,6 @@ Reading material for hacking Combinatorrent:
      that there are some commentary on these pages which can be disputed
      quite a lot.
 
-   - ["Concurrent Programming in ML" - John. H. Reppy](http://www.amazon.com/Concurrent-Programming-ML-John-Reppy/dp/0521480892)
-     This book describes the CML system which Combinatorrent use. The basic
-     idea of CML is that of higher order events. That is, events which can
-     be abstractly manipulated before being synchronized on. For instance,
-     CML events are a Functor instance, though the code currently does not
-     reflect that. This also provisions for fair selective receives
-     with dynamic choice of which events may fire.
-
-   - ["A Concurrent ML library in Concurrent Haskell" - Avik Chaudhuri, ICFP 2009](http://www.cs.umd.edu/~avik/projects/cmllch/)
-     The paper behind the CML library which Combinatorrent use. It
-     describes a way to transform the first-order MVar and ForkIO structures
-     of concurrent haskell into a higher order CML language by use of a
-     clever matchmaking algorithm.
-
    - ["Supervisor Behaviour"](http://erlang.org/doc/design_principles/sup_princ.html)
      From the Erlang documentation. How the Erlang Supervisor behaviour
      works. The Supervisor and process structure of Combinatorrent is
@@ -100,12 +86,17 @@ Source code Hierarchy
 
    - **Data**: Data structures.
       - **Queue**: Functional queues. Standard variant with two lists.
+      - **PendingSet**: A wrapper around Data.PSQueue for tracking how
+        common a piece is.
+      - **PieceSet**: BitArrays of pieces and their operations.
 
    - **Process**: Process definitions for the different processes comprising
                   Combinatorrent
       - **ChokeMgr**: Manages choking and unchoking of peers, based upon the current speed of the peer
         and its current state. Global for multiple torrents.
       - **Console**: Simple console process. Only responds to 'quit' at the moment.
+      - **DirWatcher**: Watches a directory and adds any torrent present in
+        it.
       - **FS**: Process managing the file system.
       - **Listen**: Not used at the moment. Step towards listening sockets.
       - **Peer**: Several process definitions for handling peers. Two for sending, one for receiving
@@ -115,6 +106,7 @@ Source code Hierarchy
         out blocks for downloading to the peers.
       - **Status**: Keeps track of uploaded/downloaded/left bytes for a single torrent. Could be globalized.
       - **Timer**: Timer events.
+      - **TorrentManager**: Manages torrents at the top-level.
       - **Tracker**: Communication with the tracker.
 
    - **Protocol**: Modules for interacting with the various bittorrent protocols.
@@ -122,19 +114,18 @@ Source code Hierarchy
       - **Wire**: The protocol used for communication between peers.
 
    - **Top Level**:
+      - **Channels**: Various Channel definitions.
+      - **Combinatorrent**: Main entry point to the code. Sets up processes.
       - **Digest**: SHA1 digests as used in the bittorrent protocol.
       - **FS**: Low level Filesystem code. Interacts with files.
-      - **Combinatorrent**: Main entry point to the code. Sets up processes.
-      - **Logging**: Logging interface.
-      - **LoggingTypes**: Types and instances used by the Logging framework.
-      - **PeerTypes**: Types used by peers.
       - **Process**: Code for Erlang-inspired processes.
       - **RateCalc**: Rate calculations for a network socket. We use this to keep track of the
         current speed of a peer in one direction.
       - **Supervisor**: Erlang-inspired Supervisor processes.
-      - **Torrent**: Various helpers and types for Torrents.
-      - **Version.hs.in**: Generates **Version.hs** via the configure script.
       - **Test.hs**: Code for test-framework
       - **TestInstance.hs**: Various helper instances not present in the test framework by default
+      - **Torrent**: Various helpers and types for Torrents.
+      - **Tracer**: Code for simple "ring"-like tracing.
+      - **Version.hs.in**: Generates **Version.hs** via the configure script.
 
 # vim: filetype=none tw=76 expandtab

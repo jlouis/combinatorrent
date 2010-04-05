@@ -7,6 +7,7 @@ module Process.DirWatcher (
 where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -37,10 +38,12 @@ start :: FilePath -- ^ Path to watch
 start fp chan supC = do
     spawnP (CF chan fp) S.empty
             (catchP (foreverP pgm) (defaultStopHandler supC))
-  where pgm = syncP =<< watchEvt
-        watchEvt = do
-            ev <- atTimeEvtP 5 ()
-            wrapP ev (\_ -> processDirectory)
+  where pgm = do
+        q <- liftIO $ registerDelay (5 * 1000000)
+        liftIO . atomically $ do
+            b <- readTVar q
+            if b then return () else retry
+        processDirectory
 
 processDirectory :: Process CF ST ()
 processDirectory = do
@@ -52,7 +55,8 @@ processDirectory = do
                             S.toList $ S.difference running torrents)
         msg = (map AddedTorrent added ++ map RemovedTorrent removed)
     when (msg /= [])
-        (do syncP =<< sendPC reportCh msg
+        (do rc <- asks reportCh
+            liftIO . atomically $ writeTChan rc msg
             -- Make ready for next iteration
             put torrents)
 

@@ -26,7 +26,7 @@ instance Logging CF where
 start :: Handle -> TMVar B.ByteString -> SupervisorChan -> IO ThreadId
 start h ch supC = spawnP (CF ch) h (catchP (foreverP pgm)
                                           (do t <- liftIO $ myThreadId
-                                              syncP =<< (sendP supC $ IAmDying t)
+                                              liftIO . atomically $ writeTChan supC $ IAmDying t
                                               liftIO $ hClose h))
 
 pgm :: Process CF Handle ()

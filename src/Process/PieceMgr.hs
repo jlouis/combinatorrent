@@ -11,7 +11,6 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (assert)
-import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -94,9 +93,6 @@ data InProgressPiece = InProgressPiece
 data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
-instance NFData Blocks where
-  rnf a = a `seq` ()
-
 -- | Messages for RPC towards the PieceMgr.
 data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask for grabbing some blocks
@@ -121,11 +117,6 @@ instance Show PieceMgrMsg where
     show (GetDone _)           = "GetDone"
     show (PeerHave xs)         = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
-
-instance NFData PieceMgrMsg where
-    rnf a = case a of
-              (GrabBlocks _ is _) -> rnf is
-              x                   -> x `seq` ()
 
 type PieceMgrChannel = TChan PieceMgrMsg
 
@@ -226,13 +217,14 @@ storeBlock pn blk d = do
 
 askInterested :: PS.PieceSet -> Process CF ST Bool
 askInterested pieces = do
-    nPieces <- M.size <$> gets infoMap
     inProg <- M.keys <$> gets inProgress
-    pend   <- gets pendingPieces >>= PS.toList
-    tmp    <- PS.fromList nPieces . nub $ pend ++ inProg
-    -- @i@ is the intersection with with we need and the peer has.
-    intsct <- PS.intersection pieces tmp
-    return (not $ null intsct)
+    amongProg <- filterM (flip PS.member pieces) inProg
+    if (not $ null amongProg)
+        then return True
+        else do
+            pend   <- gets pendingPieces
+            intsct <- PS.intersection pieces pend
+            return (not $ null intsct)
 
 peerHave :: [PieceNum] -> Process CF ST ()
 peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
@@ -308,9 +300,16 @@ putbackBlock (pn, blk) = do
       $ modify (\db -> db { inProgress = ndb (inProgress db)
                           , downloading = downloading db \\ [(pn, blk)]})
   where ndb db = M.alter f pn db
-        -- The first of these might happen in the endgame
+        -- In endgame, the first will never happen. If it is done, the doneMember
+        -- check above should take care of the problem. If the block has been downloaded
+        -- by another peer in endgame, there is nothing to do.
+        --
+        -- Otherwise, we put the block back as pending. If in endgame, the next request
+        -- will pull it into downloading again for endgaming.
         f Nothing     = fail "The 'impossible' happened"
-        f (Just ipp) = Just ipp { ipPendingBlocks = blk : ipPendingBlocks ipp }
+        f (Just ipp)
+            | S.member blk (ipHaveBlocks ipp) = Just ipp
+            | otherwise = Just ipp {ipPendingBlocks = blk : ipPendingBlocks ipp}
 
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.

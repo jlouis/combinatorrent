@@ -12,14 +12,12 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 
-import DeepSeqInstances()
 import Process
 import Torrent
 import qualified FS
@@ -28,9 +26,6 @@ import Supervisor
 data FSPMsg = CheckPiece PieceNum (TMVar (Maybe Bool))
             | WriteBlock PieceNum Block B.ByteString
             | ReadBlock PieceNum Block (TMVar B.ByteString)
-
-instance NFData FSPMsg where
-  rnf a = a `seq` ()
 
 type FSPChannel = TChan FSPMsg
 

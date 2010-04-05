@@ -21,7 +21,6 @@ where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (assert)
-import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -51,9 +50,6 @@ data PStat = PStat { pInfoHash :: InfoHash
                    , pUploaded :: Integer
                    , pDownloaded :: Integer }
 
-instance NFData StatusMsg where
-  rnf a = a `seq` ()
-
 type StatusChannel = TChan StatusMsg
 
 data CF  = CF { statusCh :: StatusChannel,
@@ -73,9 +69,6 @@ data StatusState = SState
              , state :: TorrentState
              , trackerMsgCh :: TrackerChannel
              }
-
-instance NFData StatusState where
-    rnf a = a `seq` ()
 
 gatherStats :: (Integer, Integer) -> [(String, String)]
 gatherStats (upload, download) =

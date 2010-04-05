@@ -12,7 +12,6 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.DeepSeq
 
 import Network
 import Torrent
@@ -25,9 +24,6 @@ data PeerMessage = ChokePeer
                  | PieceCompleted PieceNum
                  | CancelBlock PieceNum Block
 
-instance NFData PeerMessage where
-    rnf a = a `seq` ()
-
 type PeerChannel = TChan PeerMessage
 
 ---- TRACKER
@@ -38,14 +34,9 @@ data TrackerMsg = Stop -- ^ Ask the Tracker to stop
                 | Start               -- ^ Ask the tracker to Start
                 | Complete            -- ^ Ask the tracker to Complete the torrent
 type TrackerChannel = TChan TrackerMsg
-instance NFData TrackerMsg where
-   rnf a = a `seq` ()
 
 data MgrMessage = Connect InfoHash ThreadId PeerChannel
                 | Disconnect ThreadId
-
-instance NFData MgrMessage where
-  rnf a = a `seq` ()
 
 type MgrChannel = TChan MgrMessage
 
