@@ -2,7 +2,7 @@ name: Combinatorrent
 category: Network
 version: 0.2.0
 category: Network
-description:   Combinatorrent provides a BitTorrent client, based on the CML library
+description:   Combinatorrent provides a BitTorrent client, based on STM
                for concurrency. This is an early preview release which is capable of
                downloading files from various torrent trackers, but have not yet
                demonstrated to be correct in all aspects.
