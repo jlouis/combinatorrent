@@ -126,7 +126,6 @@ data PeerDB = PeerDB
     }
 
 -- | Update the Peer Database with the newest information from peers
---   TODO: Can benefit from some CML love.
 updateDB :: ChokeMgrProcess ()
 updateDB = do
     rc <- asks rateTV
