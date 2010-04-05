@@ -277,7 +277,7 @@ checkFullCompletion = do
     im    <- gets infoMap
     donePSz <- PS.size doneP
     when (M.size im == donePSz)
-        (do liftIO $ putStrLn "Torrent Completed"
+        (do liftIO $ putStrLn "Torrent Completed; to honor the torrent-gods thou must now sacrifice a goat!"
             ih <- asks pMgrInfoHash
             asks statusCh >>= (\ch -> liftIO . atomically $ writeTChan ch (STP.TorrentCompleted ih))
             c <- asks chokeCh
