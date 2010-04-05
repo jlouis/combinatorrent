@@ -86,7 +86,7 @@ executable Combinatorrent
 
 source-repository head
   type: git
-  location: git://github.com/jlouis/haskell-torrent.git
+  location: git://github.com/jlouis/combinatorrent.git
   branch: master
 
 

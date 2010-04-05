@@ -3,7 +3,7 @@
 # Simple configuration script.
 
 ## Git version
-GITHEAD="0.1 Hackage"
+GITHEAD="0.2 Hackage"
 if test -d "${GIT_DIR:-.git}" ; then
     GITHEAD=`git describe 2>/dev/null`
 
