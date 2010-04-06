@@ -79,6 +79,10 @@ data PCF = PCF { inCh :: TChan (Message, Integer)
                , rateTV :: RateTVar
                , pcInfoHash :: InfoHash
                , pieceMap :: PieceMap
+               , piecesDoneTV :: TMVar [PieceNum]
+               , readBlockTV  :: TMVar B.ByteString
+               , interestTV :: TMVar Bool
+               , grabBlockTV :: TMVar Blocks
                }
 
 instance Logging PCF where
@@ -104,8 +108,13 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
     ch <- newTChanIO
     tch <- newTChanIO
     ct <- getCurrentTime
+    pdtmv <- newEmptyTMVarIO
+    rbtmv <- newEmptyTMVarIO
+    intmv <- newEmptyTMVarIO
+    gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
-    spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm)
+    spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm
+                    pdtmv rbtmv intmv gbtmv)
            (PST True False S.empty True False pieceSet (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
@@ -159,8 +168,8 @@ data Operation = PeerMsgEvt (Message, Integer)
 getPiecesDone :: Process PCF PST [PieceNum]
 getPiecesDone = do
     ch <- asks pieceMgrCh
+    c  <- asks piecesDoneTV
     liftIO $ do
-      c <- newEmptyTMVarIO
       atomically $ writeTChan ch (GetDone c)
       atomically $ takeTMVar c
 
@@ -298,7 +307,7 @@ requestMsg pn blk = do
 -- | Read a block from the filesystem for sending
 readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
 readBlock pn blk = do
-    v <- liftIO $ newEmptyTMVarIO
+    v <- asks readBlockTV
     fch <- asks fsCh
     liftIO $ do
         atomically $ writeTChan fch (ReadBlock pn blk v)
@@ -325,7 +334,7 @@ cancelMsg n blk = outChan $ SenderQ.SenderQCancel n blk
 --   Obvious optimization: Do less work, there is no need to consider all pieces most of the time
 considerInterest :: Process PCF PST ()
 considerInterest = do
-    c <- liftIO newEmptyTMVarIO
+    c <- asks interestTV
     pcs <- gets peerPieces
     pmch <- asks pieceMgrCh
     interested <- liftIO $ do
@@ -391,7 +400,7 @@ storeBlock n blk bs = do
 -- piece Manager for request at the peer.
 grabBlocks :: Int -> Process PCF PST [(PieceNum, Block)]
 grabBlocks n = do
-    c <- liftIO newEmptyTMVarIO
+    c <- asks grabBlockTV
     ps <- gets peerPieces
     pmch <- asks pieceMgrCh
     blks <- liftIO $ do
