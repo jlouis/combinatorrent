@@ -18,17 +18,10 @@ wish-list.
      pruned set of pieces we can ask with later. This way, we only need to
      consider pieces we already have once and we get a faster system.
      When doing this, only prune pieces which are done and checked.
-   - Consider letting the supervisors support monitoring of processes. Use this to reimplement parts
-     of the PeerMgr code.
+   - Consider letting the supervisors support monitoring of processes. Use
+     this to reimplement parts of the PeerMgr code.
    - Improve on the command line parser. We will certainly need full-fledged
      CL parsing at some point.
-   - The status reporting code needs some help. It only transfers up/down
-     rates once every 30 seconds. If a peer is living for less than 30
-     seconds, then no upload/download will be reported for that peer. The
-     fix is to contact the StatusP when a peer closes if it has something to
-     transfer.
-   - Eliminate use of nPieces in PeerP. It can be extracted from the 'pm'
-     value.
    - Improve synchronization when the supervisor tree is closing down.
      Currently the problem is that the supervisor tree will close down by
      asynchronous messages, so the sync on stopping tree will not wait until
@@ -61,8 +54,6 @@ Items for later (no particular order)
      data structures are needed.
    - Play with the code coverage in GHC.
    - Add prioritization support of multiTorrents
-   - Implement extensions from http://www.bittorrent.org/beps/bep_0000.html
-     which makes sense. See the README file.
    - Support partial downloads (select files you want in the torrent)
    - Design, build and improve a graphic UI.
    - Design, build and improve a protocol for communicating with the client.
