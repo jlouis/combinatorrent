@@ -15,8 +15,8 @@ import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
 
+import Data.Array
 import qualified Data.ByteString as B
-import qualified Data.Map as M
 
 import Process
 import Torrent
@@ -55,10 +55,9 @@ start handles pm fspC supC =
         case msg of
            CheckPiece n v -> do
                pmap <- gets pieceMap
-               case M.lookup n pmap of
-                   Nothing -> liftIO . atomically $ putTMVar v Nothing
-                   Just p -> do r <- gets fileHandles >>= (liftIO . FS.checkPiece p)
-                                liftIO . atomically $ putTMVar v (Just r)
+               let p = pmap ! n
+               r <- gets fileHandles >>= (liftIO . FS.checkPiece p)
+               liftIO . atomically $ putTMVar v (Just r)
            ReadBlock n blk v -> do
                debugP $ "Reading block #" ++ show n
                        ++ "(" ++ show (blockOffset blk) ++ ", " ++ show (blockSize blk) ++ ")"

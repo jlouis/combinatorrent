@@ -10,13 +10,15 @@ module Process.PeerMgr (
 )
 where
 
-import qualified Data.Map as M
 
 import Control.Concurrent
 import Control.Concurrent.STM
 
 import Control.Monad.State
 import Control.Monad.Reader
+
+import Data.Array
+import qualified Data.Map as M
 
 import Network
 import System.IO
@@ -181,7 +183,7 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
                      children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
-                                                      (tcPM tc) (M.size (tcPM tc)) ihsh
+                                                      (tcPM tc) (succ . snd . bounds $ tcPM tc) ihsh
                      atomically $ writeTChan pool $
                         SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
@@ -206,7 +208,8 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
                        children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
-                                                        (tcStatTV tc) (tcPM tc) (M.size (tcPM tc)) ih
+                                                        (tcStatTV tc) (tcPM tc)
+                                                        (succ . snd . bounds $ tcPM tc) ih
                        atomically $ writeTChan pool $
                             SpawnNew (Supervisor $ allForOne "PeerSup" children)
                        return ()

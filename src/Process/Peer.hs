@@ -17,11 +17,11 @@ import Control.Monad.Reader
 
 import Prelude hiding (catch, log)
 
+import Data.Array
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import qualified Data.Map as M
 import qualified Data.PieceSet as PS
 import Data.Maybe
 
@@ -188,7 +188,7 @@ chokeMsg msg = do
 -- Optimization: Don't calculate this all the time. It only changes once and then it keeps
 --   being there.
 isASeeder :: Process PCF PST Bool
-isASeeder = liftM2 (==) (gets peerPieces >>= PS.size) (M.size <$> asks pieceMap)
+isASeeder = liftM2 (==) (gets peerPieces >>= PS.size) (succ . snd . bounds <$> asks pieceMap)
 
 -- A Timer event handles a number of different status updates. One towards the
 -- Choke Manager so it has a information about whom to choke and unchoke - and
@@ -261,7 +261,8 @@ putbackBlocks = do
 haveMsg :: PieceNum -> Process PCF PST ()
 haveMsg pn = do
     pm <- asks pieceMap
-    if M.member pn pm
+    let (lo, hi) = bounds pm
+    if pn >= lo && pn <= hi
         then do PS.insert pn =<< gets peerPieces
                 pmch <- asks pieceMgrCh
                 liftIO . atomically $ writeTChan pmch (PeerHave [pn])
@@ -276,7 +277,7 @@ bitfieldMsg bf = do
     piecesNull <- PS.null pieces
     if piecesNull
         -- TODO: Don't trust the bitfield
-        then do nPieces <- M.size <$> asks pieceMap
+        then do nPieces <- succ . snd . bounds <$> asks pieceMap
                 pp <- createPeerPieces nPieces bf
                 modify (\s -> s { peerPieces = pp })
                 peerLs <- PS.toList pp

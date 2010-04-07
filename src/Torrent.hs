@@ -27,9 +27,11 @@ module Torrent (
 where
 
 import Control.Applicative
+
+import Data.Array
+import Data.List
 import qualified Data.Foldable as F
 import qualified Data.ByteString as B
-import Data.List
 import qualified Data.Map as M
 
 import Network
@@ -72,7 +74,7 @@ data PieceInfo = PieceInfo {
       digest :: String   -- ^ Digest of piece; taken from the .torret file
     } deriving (Eq, Show)
 
-type PieceMap = M.Map PieceNum PieceInfo
+type PieceMap = Array PieceNum PieceInfo
 
 -- | The PiecesDoneMap is a map which is true if we have the piece and false otherwise
 type PiecesDoneMap = M.Map PieceNum Bool
@@ -86,10 +88,10 @@ determineState pd | F.all (==True) pd = Seeding
 --   map of the shape of the torrent in question.
 bytesLeft :: PiecesDoneMap -> PieceMap -> Integer
 bytesLeft done pm =
-    M.foldWithKey (\k v accu ->
+    foldl' (\accu (k,v) ->
         case M.lookup k done of
-               Just False -> (len v) + accu
-               _          -> accu) 0 pm
+            Just False -> (len v) + accu
+            _          -> accu) 0 $ Data.Array.assocs pm
 
 -- BLOCKS
 ----------------------------------------------------------------------
@@ -130,9 +132,9 @@ mkTorrentInfo bc = do
     ih  <- hashInfoDict bc
     return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
   where
-    queryInfo bc =
-      do ann <- announce bc
-         np  <- numberPieces bc
+    queryInfo b =
+      do ann <- announce b
+         np  <- numberPieces b
          return (ann, np)
 
 -- | Create a new PeerId for this client

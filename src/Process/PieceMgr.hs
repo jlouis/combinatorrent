@@ -14,6 +14,7 @@ import Control.Exception (assert)
 
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Array
 import Data.List
 import qualified Data.PendingSet as PendS
 import qualified Data.ByteString as B
@@ -199,10 +200,7 @@ storeBlock pn blk d = do
                      ++ " completed, there are "
                      ++ (show pendSz) ++ " pending "
                      ++ (show $ M.size iprog) ++ " in progress"
-           l <- gets infoMap >>=
-                (\pm -> case M.lookup pn pm of
-                                Nothing -> fail "Storeblock: M.lookup"
-                                Just x -> return $ len x)
+           l <- gets infoMap >>= (\pm -> return . len . (pm !) $ pn)
            ih <- asks pMgrInfoHash
            c <- asks statusCh
            liftIO . atomically $ writeTChan c (CompletedPiece ih l)
@@ -260,7 +258,7 @@ createPieceDb mmap pmap = do
     done    <- filt (==True)
     return $ ST pending done [] M.empty [] pmap False PendS.empty 0 (Tracer.new 20)
   where
-    filt f  = PS.fromList (M.size pmap) . M.keys $ M.filter f mmap
+    filt f  = PS.fromList (succ . snd . bounds $ pmap) . M.keys $ M.filter f mmap
 
 ----------------------------------------------------------------------
 
@@ -276,7 +274,7 @@ checkFullCompletion = do
     doneP <- gets donePiece
     im    <- gets infoMap
     donePSz <- PS.size doneP
-    when (M.size im == donePSz)
+    when (succ (snd (bounds im)) == donePSz)
         (do liftIO $ putStrLn "Torrent Completed; to honor the torrent-gods thou must now sacrifice a goat!"
             ih <- asks pMgrInfoHash
             asks statusCh >>= (\ch -> liftIO . atomically $ writeTChan ch (STP.TorrentCompleted ih))
@@ -321,9 +319,7 @@ assertPieceComplete pn = do
                 Just x -> return x
     dl <- gets downloading
     pm <- gets infoMap
-    sz <- case M.lookup pn pm of
-            Nothing -> fail "assertPieceComplete: Could not lookup piece in piecemap"
-            Just x -> return $ len x
+    let sz = len (pm ! pn)
     unless (assertAllDownloaded dl pn)
       (fail "Could not assert that all pieces were downloaded when completing a piece")
     unless (assertComplete ipp sz)
@@ -364,12 +360,12 @@ updateProgress pn blk = do
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
-  where build 0        _os accum = reverse accum
-        build leftBytes os accum | leftBytes >= blockSz =
+  where build 0        _os acc = reverse acc
+        build leftBytes os acc | leftBytes >= blockSz =
                                      build (leftBytes - blockSz)
                                            (os + blockSz)
-                                           $ Block os blockSz : accum
-                                 | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : accum
+                                           $ Block os blockSz : acc
+                                 | otherwise = build 0 (os + leftBytes) $ Block os leftBytes : acc
 
 -- | The call @grabBlocks n eligible@ tries to pick off up to @n@ pieces from
 --   to download. In doing so, it will only consider pieces in @eligible@. It
@@ -458,9 +454,7 @@ pickRandom ls = do
 -- download at peers.
 createBlock :: PieceNum -> PieceMgrProcess [Block]
 createBlock pn = do
-     gets infoMap >>= (\im -> case M.lookup pn im of
-                                 Nothing -> fail "createBlock: could not lookup piece"
-                                 Just ipp -> return $ cBlock ipp)
+     gets infoMap >>= (\im -> return . cBlock $ im ! pn)
          where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
