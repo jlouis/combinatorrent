@@ -167,17 +167,19 @@ rpcMessage = do
     m <- liftIO . atomically $ readTChan ch
     traceMsg m
     case m of
-      GrabBlocks n eligible c ->
+      GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
           do blocks <- grabBlocks n eligible
              liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
-      StoreBlock pn blk d -> storeBlock pn blk d
-      PutbackBlocks blks -> mapM_ putbackBlock blks
-      GetDone c -> do
+      StoreBlock pn blk d -> {-# SCC "StoreBlock" #-}
+          storeBlock pn blk d
+      PutbackBlocks blks -> {-# SCC "PutbackBlocks" #-}
+          mapM_ putbackBlock blks
+      GetDone c -> {-# SCC "GetDone" #-} do
          done <- PS.toList =<< gets donePiece
          liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
       PeerHave idxs -> peerHave idxs
       PeerUnhave idxs -> peerUnhave idxs
-      AskInterested pieces retC -> do
+      AskInterested pieces retC -> {-# SCC "AskInterested" #-} do
          intr <- askInterested pieces
          liftIO . atomically $ do putTMVar retC intr -- And this neither too!
 
