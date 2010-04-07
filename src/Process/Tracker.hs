@@ -18,7 +18,7 @@ import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Data.Char (ord)
+import Data.Char (ord, chr)
 import Data.List (intersperse)
 import qualified Data.ByteString as B
 
@@ -244,7 +244,8 @@ buildRequestURL ss = do ti <- gets torrentInfo
           headers = do
             s <- get
             p <- prt
-            return $ [("info_hash", rfc1738Encode $ infoHash $ torrentInfo s),
+            return $ [("info_hash", rfc1738Encode $
+                                map (chr . fromIntegral) . B.unpack . infoHash . torrentInfo $ s),
                       ("peer_id",   rfc1738Encode $ peerId s),
                       ("uploaded", show $ Status.uploaded ss),
                       ("downloaded", show $ Status.downloaded ss),

@@ -163,13 +163,14 @@ mkPieceMap bc = fetchData
                        return pm
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _    0     _    []       = []
-        extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,
+        extract plen tlen offst (p : ps) | tlen < plen = PieceInfo {
+                                                          offset = offst,
                                                           len = tlen,
-                                                          digest = B.unpack p } : extract plen 0 (offst + plen) ps
+                                                          digest = p } : extract plen 0 (offst + plen) ps
                                   | otherwise = inf : extract plen (tlen - plen) (offst + plen) ps
                                        where inf = PieceInfo { offset = offst,
                                                                len = plen,
-                                                               digest = B.unpack p }
+                                                               digest = p }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
 
 -- | Predicate function. True if nothing is missing from the map.
