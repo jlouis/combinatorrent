@@ -119,7 +119,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             -- Install the StatusP timer
             c <- asks timerCh
             _ <- registerSTM 5 c ()
-            foreverP eventLoop
+            forever eventLoop
 
         cleanup = do
             t <- liftIO myThreadId

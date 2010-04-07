@@ -37,7 +37,7 @@ start :: FilePath -- ^ Path to watch
       -> IO ThreadId
 start fp chan supC = do
     spawnP (CF chan fp) S.empty
-            (catchP (foreverP pgm) (defaultStopHandler supC))
+            (catchP (forever pgm) (defaultStopHandler supC))
   where pgm = do
         q <- liftIO $ registerDelay (5 * 1000000)
         liftIO . atomically $ do

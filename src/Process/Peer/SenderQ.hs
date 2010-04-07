@@ -45,7 +45,7 @@ start :: TChan SenderQMsg -> TMVar B.ByteString -> BandwidthChannel
            -> SupervisorChan
            -> IO ThreadId
 start inC outC bandwC supC = spawnP (CF inC outC bandwC) (ST Q.empty 0)
-        (catchP (foreverP pgm)
+        (catchP (forever pgm)
                 (defaultStopHandler supC))
 
 pgm :: Process CF ST ()

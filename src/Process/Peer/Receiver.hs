@@ -31,7 +31,7 @@ instance Logging CF where
 start :: Handle -> TChan (Message, Integer)
           -> SupervisorChan -> IO ThreadId
 start h ch supC = spawnP (CF ch) h
-        (catchP (foreverP readSend)
+        (catchP (forever readSend)
                (defaultStopHandler supC))
 
 readSend :: Process CF Handle ()
