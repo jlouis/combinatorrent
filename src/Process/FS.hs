@@ -37,8 +37,8 @@ instance Logging CF where
   logName _ = "Process.FS"
 
 data ST = ST
-      { fileHandles :: !FS.Handles -- ^ The file we are working on
-      , pieceMap :: FS.PieceMap -- ^ Map of where the pieces reside
+      { fileHandles :: !FS.Handles  -- ^ The file we are working on
+      , pieceMap ::    !FS.PieceMap -- ^ Map of where the pieces reside
       }
 
 

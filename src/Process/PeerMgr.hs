@@ -42,10 +42,10 @@ data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
                 | StopTorrent InfoHash
 
 data TorrentLocal = TorrentLocal
-                        { tcPcMgrCh :: PieceMgrChannel
-                        , tcFSCh    :: FSPChannel
-                        , tcStatTV  :: TVar [PStat]
-                        , tcPM      :: PieceMap
+                        { tcPcMgrCh :: !PieceMgrChannel
+                        , tcFSCh    :: !FSPChannel
+                        , tcStatTV  :: !(TVar [PStat])
+                        , tcPM      :: !PieceMap
                         }
 
 
@@ -65,10 +65,10 @@ instance Logging CF where
 
 type ChanManageMap = M.Map InfoHash TorrentLocal
 
-data ST = ST { peersInQueue  :: [(InfoHash, Peer)]
-             , peers :: M.Map ThreadId PeerChannel
-             , peerId :: PeerId
-             , cmMap :: ChanManageMap
+data ST = ST { peersInQueue  :: ![(InfoHash, Peer)]
+             , peers ::         !(M.Map ThreadId PeerChannel)
+             , peerId ::        !PeerId
+             , cmMap ::         !ChanManageMap
              }
 
 start :: PeerMgrChannel -> PeerId
