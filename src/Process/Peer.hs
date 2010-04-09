@@ -69,38 +69,38 @@ start h pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
-data PCF = PCF { inCh :: TChan (Message, Integer)
-               , outCh :: TChan SenderQ.SenderQMsg
-               , peerMgrCh :: MgrChannel
-               , pieceMgrCh :: PieceMgrChannel
-               , fsCh :: FSPChannel
-               , peerCh :: PeerChannel
-               , sendBWCh :: BandwidthChannel
-               , timerCh :: TChan ()
-               , statTV :: TVar [PStat]
-               , rateTV :: RateTVar
-               , pcInfoHash :: InfoHash
-               , pieceMap :: PieceMap
-               , piecesDoneTV :: TMVar [PieceNum]
-               , readBlockTV  :: TMVar B.ByteString
-               , interestTV :: TMVar Bool
-               , grabBlockTV :: TMVar Blocks
-               }
+data CF = CF { inCh :: TChan (Message, Integer)
+             , outCh :: TChan SenderQ.SenderQMsg
+             , peerMgrCh :: MgrChannel
+             , pieceMgrCh :: PieceMgrChannel
+             , fsCh :: FSPChannel
+             , peerCh :: PeerChannel
+             , sendBWCh :: BandwidthChannel
+             , timerCh :: TChan ()
+             , statTV :: TVar [PStat]
+             , rateTV :: RateTVar
+             , pcInfoHash :: InfoHash
+             , pieceMap :: !PieceMap
+             , piecesDoneTV :: TMVar [PieceNum]
+             , readBlockTV  :: TMVar B.ByteString
+             , interestTV :: TMVar Bool
+             , grabBlockTV :: TMVar Blocks
+             }
 
-instance Logging PCF where
+instance Logging CF where
     logName _ = "Process.Peer"
 
-data PST = PST { weChoke :: !Bool -- ^ True if we are choking the peer
-               , weInterested :: !Bool -- ^ True if we are interested in the peer
-               , blockQueue :: !(S.Set (PieceNum, Block)) -- ^ Blocks queued at the peer
-               , peerChoke :: !Bool -- ^ Is the peer choking us? True if yes
-               , peerInterested :: !Bool -- ^ True if the peer is interested
-               , peerPieces :: !(PS.PieceSet) -- ^ List of pieces the peer has access to
-               , missingPieces :: Int -- ^ Tracks the number of pieces the peer misses before seeding
-               , upRate :: !Rate -- ^ Upload rate towards the peer (estimated)
-               , downRate :: !Rate -- ^ Download rate from the peer (estimated)
-               , runningEndgame :: !Bool -- ^ True if we are in endgame
-               }
+data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
+             , weInterested   :: !Bool -- ^ True if we are interested in the peer
+             , blockQueue     :: !(S.Set (PieceNum, Block)) -- ^ Blocks queued at the peer
+             , peerChoke      :: !Bool -- ^ Is the peer choking us? True if yes
+             , peerInterested :: !Bool -- ^ True if the peer is interested
+             , peerPieces     :: !(PS.PieceSet) -- ^ List of pieces the peer has access to
+             , missingPieces  :: Int -- ^ Tracks the number of pieces the peer misses before seeding
+             , upRate         :: !Rate -- ^ Upload rate towards the peer (estimated)
+             , downRate       :: !Rate -- ^ Download rate from the peer (estimated)
+             , runningEndgame :: !Bool -- ^ True if we are in endgame
+             }
 
 
 peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
@@ -116,59 +116,63 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
     intmv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
-    spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm
+    spawnP (CF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm
                     pdtmv rbtmv intmv gbtmv)
-           (PST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False)
-           (cleanupP startup (defaultStopHandler supC) cleanup)
-  where startup = do
-            tid <- liftIO $ myThreadId
-            debugP "Syncing a connectBack"
-            asks peerCh >>= (\ch -> do
-                c <- asks peerMgrCh
-                liftIO . atomically $ writeTChan c $ Connect ih tid ch)
-            pieces <- getPiecesDone
-            outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
-            -- Install the StatusP timer
-            c <- asks timerCh
-            _ <- registerSTM 5 c ()
-            forever eventLoop
+           (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False)
+                       (cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
-        cleanup = do
-            t <- liftIO myThreadId
-            pieces <- gets peerPieces >>= PS.toList
-            ch <- asks pieceMgrCh
-            ch2 <- asks peerMgrCh
-            liftIO . atomically $ writeTChan ch (PeerUnhave pieces)
-            liftIO . atomically $ writeTChan ch2 (Disconnect t)
+startup :: Int -> Process CF ST ()
+startup nPieces = do
+    tid <- liftIO $ myThreadId
+    ch <- asks peerCh
+    pmc <- asks peerMgrCh
+    ih <- asks pcInfoHash
+    liftIO . atomically $ writeTChan pmc $ Connect ih tid ch
+    pieces <- getPiecesDone
+    outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
+    -- Install the StatusP timer
+    c <- asks timerCh
+    _ <- registerSTM 5 c ()
+    forever eventLoop
 
-        readOp :: Process PCF PST Operation
-        readOp = do
-            inb <- asks inCh
-            chk <- asks peerCh
-            tch <- asks timerCh
-            bwc <- asks sendBWCh
-            liftIO . atomically $
-               (readTChan inb >>= return . PeerMsgEvt) `orElse`
-               (readTChan chk >>= return . ChokeMgrEvt) `orElse`
-               (readTChan tch >>  return TimerEvent) `orElse`
-               (readTChan bwc >>= return . UpRateEvent)
+cleanup :: Process CF ST ()
+cleanup = do
+    t <- liftIO myThreadId
+    pieces <- gets peerPieces >>= PS.toList
+    ch <- asks pieceMgrCh
+    ch2 <- asks peerMgrCh
+    liftIO . atomically $ writeTChan ch (PeerUnhave pieces)
+    liftIO . atomically $ writeTChan ch2 (Disconnect t)
 
-        eventLoop = do
-            op <- readOp
-            case op of
-                PeerMsgEvt (m, sz) -> peerMsg m sz
-                ChokeMgrEvt m      -> chokeMsg m
-                UpRateEvent up     -> modify (\s -> s { upRate = RC.update up $ upRate s})
-                TimerEvent         -> timerTick
+readOp :: Process CF ST Operation
+readOp = do
+    inb <- asks inCh
+    chk <- asks peerCh
+    tch <- asks timerCh
+    bwc <- asks sendBWCh
+    liftIO . atomically $
+       (readTChan inb >>= return . PeerMsgEvt) `orElse`
+       (readTChan chk >>= return . ChokeMgrEvt) `orElse`
+       (readTChan tch >>  return TimerEvent) `orElse`
+       (readTChan bwc >>= return . UpRateEvent)
+
+eventLoop :: Process CF ST ()
+eventLoop = do
+    op <- readOp
+    case op of
+        PeerMsgEvt (m, sz) -> peerMsg m sz
+        ChokeMgrEvt m      -> chokeMsg m
+        UpRateEvent up     -> modify (\s -> s { upRate = RC.update up $ upRate s})
+        TimerEvent         -> timerTick
 
 data Operation = PeerMsgEvt (Message, Integer)
                | ChokeMgrEvt PeerMessage
                | TimerEvent
                | UpRateEvent Integer
-            
+
 
 -- | Return a list of pieces which are currently done by us
-getPiecesDone :: Process PCF PST [PieceNum]
+getPiecesDone :: Process CF ST [PieceNum]
 getPiecesDone = do
     ch <- asks pieceMgrCh
     c  <- asks piecesDoneTV
@@ -177,7 +181,7 @@ getPiecesDone = do
       atomically $ takeTMVar c
 
 -- | Process an event from the Choke Manager
-chokeMsg :: PeerMessage -> Process PCF PST ()
+chokeMsg :: PeerMessage -> Process CF ST ()
 chokeMsg msg = do
    debugP "ChokeMgrEvent"
    case msg of
@@ -200,7 +204,7 @@ chokeMsg msg = do
 -- Choke Manager so it has a information about whom to choke and unchoke - and
 -- one towards the status process to keep track of uploaded and downloaded
 -- stuff.
-timerTick :: Process PCF PST ()
+timerTick :: Process CF ST ()
 timerTick = do
    mTid <- liftIO myThreadId
    debugP "TimerEvent"
@@ -235,7 +239,7 @@ timerTick = do
 
 
 -- | Process an Message from the peer in the other end of the socket.
-peerMsg :: Message -> Integer -> Process PCF PST ()
+peerMsg :: Message -> Integer -> Process CF ST ()
 peerMsg msg sz = do
    modify (\s -> s { downRate = RC.update sz $ downRate s})
    case msg of
@@ -256,7 +260,7 @@ peerMsg msg sz = do
 
 -- | Put back blocks for other peer processes to grab. This is done whenever
 -- the peer chokes us, or if we die by an unknown cause.
-putbackBlocks :: Process PCF PST ()
+putbackBlocks :: Process CF ST ()
 putbackBlocks = do
     blks <- gets blockQueue
     pmch <- asks pieceMgrCh
@@ -264,7 +268,7 @@ putbackBlocks = do
     modify (\s -> s { blockQueue = S.empty })
 
 -- | Process a HAVE message from the peer. Note we also update interest as a side effect
-haveMsg :: PieceNum -> Process PCF PST ()
+haveMsg :: PieceNum -> Process CF ST ()
 haveMsg pn = do
     pm <- asks pieceMap
     let (lo, hi) = bounds pm
@@ -278,24 +282,24 @@ haveMsg pn = do
                 stopP
 
 -- True if the peer is a seeder
-isASeeder :: Process PCF PST Bool
+isASeeder :: Process CF ST Bool
 isASeeder = gets missingPieces >>= return . (==0)
 
 -- Decrease the counter of missing pieces for the peer
-decMissingCounter :: Int -> Process PCF PST ()
+decMissingCounter :: Int -> Process CF ST ()
 decMissingCounter n = do
     modify (\s -> s { missingPieces = missingPieces s - n})
     m <- gets missingPieces
     when (m == 0) assertSeeder
 
 -- Assert that the peer is a seeder
-assertSeeder :: Process PCF PST ()
+assertSeeder :: Process CF ST ()
 assertSeeder = do
     ok <- liftM2 (==) (gets peerPieces >>= PS.size) (succ . snd . bounds <$> asks pieceMap)
     assert ok (return ())
 
 -- | Process a BITFIELD message from the peer. Side effect: Consider Interest.
-bitfieldMsg :: BitField -> Process PCF PST ()
+bitfieldMsg :: BitField -> Process CF ST ()
 bitfieldMsg bf = do
     pieces <- gets peerPieces
     piecesNull <- PS.null pieces
@@ -313,7 +317,7 @@ bitfieldMsg bf = do
                 stopP
 
 -- | Process a request message from the Peer
-requestMsg :: PieceNum -> Block -> Process PCF PST ()
+requestMsg :: PieceNum -> Block -> Process CF ST ()
 requestMsg pn blk = do
     choking <- gets weChoke
     unless (choking)
@@ -322,7 +326,7 @@ requestMsg pn blk = do
             outChan $ SenderQ.SenderQM $ Piece pn (blockOffset blk) bs)
 
 -- | Read a block from the filesystem for sending
-readBlock :: PieceNum -> Block -> Process PCF PST B.ByteString
+readBlock :: PieceNum -> Block -> Process CF ST B.ByteString
 readBlock pn blk = do
     v <- asks readBlockTV
     fch <- asks fsCh
@@ -331,7 +335,7 @@ readBlock pn blk = do
         atomically $ takeTMVar v
 
 -- | Handle a Piece Message incoming from the peer
-pieceMsg :: PieceNum -> Int -> B.ByteString -> Process PCF PST ()
+pieceMsg :: PieceNum -> Int -> B.ByteString -> Process CF ST ()
 pieceMsg n os bs = do
     let sz = B.length bs
         blk = Block os sz
@@ -344,12 +348,12 @@ pieceMsg n os bs = do
             modify (\s -> s { blockQueue = S.delete e (blockQueue s)}))
 
 -- | Handle a cancel message from the peer
-cancelMsg :: PieceNum -> Block -> Process PCF PST ()
+cancelMsg :: PieceNum -> Block -> Process CF ST ()
 cancelMsg n blk = outChan $ SenderQ.SenderQCancel n blk
 
 -- | Update our interest state based on the pieces the peer has.
 --   Obvious optimization: Do less work, there is no need to consider all pieces most of the time
-considerInterest :: Process PCF PST ()
+considerInterest :: Process CF ST ()
 considerInterest = do
     c <- asks interestTV
     pcs <- gets peerPieces
@@ -364,7 +368,7 @@ considerInterest = do
 
 -- | Try to fill up the block queue at the peer. The reason we pipeline a
 -- number of blocks is to get around the line delay present on the internet.
-fillBlocks :: Process PCF PST ()
+fillBlocks :: Process CF ST ()
 fillBlocks = do
     choked <- gets peerChoke
     unless choked checkWatermark
@@ -373,7 +377,7 @@ fillBlocks = do
 -- fill till the upper one. This in turn keeps the pipeline of pieces full as
 -- long as the peer is interested in talking to us.
 -- TODO: Decide on a queue size based on the current download rate.
-checkWatermark :: Process PCF PST ()
+checkWatermark :: Process CF ST ()
 checkWatermark = do
     q <- gets blockQueue
     eg <- gets runningEndgame
@@ -398,24 +402,24 @@ endgameLoMark = 1
 
 
 -- | Queue up pieces for retrieval at the Peer
-queuePieces :: [(PieceNum, Block)] -> Process PCF PST ()
+queuePieces :: [(PieceNum, Block)] -> Process CF ST ()
 queuePieces toQueue = do
     mapM_ (uncurry pushRequest) toQueue
     modify (\s -> s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) })
 
 -- | Push a request to the peer so he can send it to us
-pushRequest :: PieceNum -> Block -> Process PCF PST ()
+pushRequest :: PieceNum -> Block -> Process CF ST ()
 pushRequest pn blk = outChan $ SenderQ.SenderQM $ Request pn blk
 
 -- | Tell the PieceManager to store the given block
-storeBlock :: PieceNum -> Block -> B.ByteString -> Process PCF PST ()
+storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock n blk bs = do
     pmch <- asks pieceMgrCh
     liftIO . atomically $ writeTChan pmch (StoreBlock n blk bs)
 
 -- | The call @grabBlocks n@ will attempt to grab (up to) @n@ blocks from the
 -- piece Manager for request at the peer.
-grabBlocks :: Int -> Process PCF PST [(PieceNum, Block)]
+grabBlocks :: Int -> Process CF ST [(PieceNum, Block)]
 grabBlocks n = do
     c <- asks grabBlockTV
     ps <- gets peerPieces
@@ -442,7 +446,7 @@ createPeerPieces nPieces =
         decodeBytes soFar (w : ws) = catMaybes (decodeByte soFar w) : decodeBytes (soFar + 8) ws
 
 -- | Send a message on a chan from the process queue
-outChan :: SenderQ.SenderQMsg -> Process PCF PST ()
+outChan :: SenderQ.SenderQMsg -> Process CF ST ()
 outChan qm = do
     ch <- asks outCh
     liftIO . atomically $ writeTChan ch qm

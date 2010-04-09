@@ -43,7 +43,7 @@ import System.Log.Logger
 --   stack on top of IO.
 newtype Process a b c = Process (ReaderT a (StateT b IO) c)
 #ifndef __HADDOCK__
-  deriving (Functor, Monad, MonadIO, MonadState b, MonadReader a, Typeable)
+  deriving (Functor, Monad, MonadIO, MonadState b, MonadReader a)
 #endif
 
 data StopException = StopException
@@ -61,8 +61,7 @@ runP c st (Process p) = runStateT (runReaderT p c) st
 -- | Spawn and run a process monad
 spawnP :: a -> b -> Process a b () -> IO ThreadId
 spawnP c st p = forkIO proc
-  where proc = do _ <- runP c st p
-                  return ()
+  where proc = runP c st p >> return ()
 
 -- | Run the process monad for its side effect, with a stopHandler if exceptions
 --   are raised in the process
