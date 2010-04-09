@@ -24,7 +24,7 @@ instance Logging CF where
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
 start :: Handle -> TMVar B.ByteString -> SupervisorChan -> IO ThreadId
-start h ch supC = spawnP (CF ch) h (catchP (foreverP pgm)
+start h ch supC = spawnP (CF ch) h (catchP (forever pgm)
                                           (do t <- liftIO $ myThreadId
                                               liftIO . atomically $ writeTChan supC $ IAmDying t
                                               liftIO $ hClose h))

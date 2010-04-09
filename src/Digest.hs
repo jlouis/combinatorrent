@@ -5,9 +5,10 @@ module Digest
   )
 where
 
-import Data.Char
-import Data.Word
+import Control.Applicative
 import Control.Monad.State
+
+import Data.Word
 
 import Foreign.Ptr
 import qualified Data.ByteString as B
@@ -16,12 +17,10 @@ import qualified Data.ByteString.Lazy as L
 import qualified OpenSSL.Digest as SSL
 
 -- Consider newtyping this
-type Digest = String
+type Digest = B.ByteString
 
-digest :: L.ByteString -> IO Digest
-digest bs = {-# SCC "sha1_digest" #-} do
-    upack <- digestLBS SSL.SHA1 bs
-    return $ map (chr . fromIntegral) upack
+digest :: L.ByteString -> IO B.ByteString
+digest bs = {-# SCC "sha1_digest" #-} B.pack <$> digestLBS SSL.SHA1 bs
 
 digestLBS :: SSL.MessageDigest -> L.ByteString -> IO [Word8]
 digestLBS mdType xs = {-# SCC "sha1_digestLBS" #-}

@@ -13,7 +13,6 @@ module Process (
     , spawnP
     , catchP
     , cleanupP
-    , foreverP
     , stopP
     -- * Log Interface
     , Logging(..)
@@ -90,10 +89,6 @@ cleanupP proc stopH cleanupH = do
                 ]
   put s'
   return a
-
--- | Run a process forever in a loop
-foreverP :: Process a b c -> Process a b c
-foreverP p = p >> foreverP p
 
 ------ LOGGING
 

@@ -157,12 +157,6 @@ protocolHandshake = L.fromChunks . map runPut $
 toBS :: String -> B.ByteString
 toBS = B.pack . map toW8
 
-toLBS :: String -> L.ByteString
-toLBS = L.pack . map toW8
-
-fromLBS :: L.ByteString -> String
-fromLBS = map (chr . fromIntegral) . L.unpack
-
 toW8 :: Char -> Word8
 toW8 = fromIntegral . ord
 
@@ -180,7 +174,7 @@ headerParser ihTst = do
     protoString <- getByteString protocolHeaderSize
     when (protoString /= toBS protocolHeader) $ fail "Wrong protocol header"
     caps <- getWord64be
-    ihR  <- liftM fromLBS $ getLazyByteString 20
+    ihR  <- getByteString 20
     unless (ihTst ihR) $ fail "Unknown InfoHash"
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid, ihR)
@@ -205,7 +199,7 @@ initiateHandshake handle peerid infohash = do
 handShakeMessage :: PeerId -> InfoHash -> L.ByteString
 handShakeMessage pid ih =
     L.fromChunks . map runPut $ [putLazyByteString protocolHandshake,
-                                 putLazyByteString $ toLBS ih,
+                                 putByteString ih,
                                  putByteString . toBS $ pid]
 
 -- | Receive a handshake on a socket
@@ -222,7 +216,7 @@ receiveHandshake h pid ihTst = do
                hFlush h
                return $ Right (caps, rpid, ih)
   where msg ih = handShakeMessage pid ih
-        sz = fromIntegral (L.length $ msg "12345678901234567890") -- Dummy value
+        sz = fromIntegral (L.length $ msg (B.pack $ replicate 20 32)) -- Dummy value
 
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a

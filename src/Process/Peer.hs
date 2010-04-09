@@ -19,11 +19,11 @@ import Control.Monad.Reader
 
 import Prelude hiding (catch, log)
 
+import Data.Array
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import qualified Data.Map as M
 import qualified Data.PieceSet as PS
 import Data.Maybe
 
@@ -131,7 +131,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
             -- Install the StatusP timer
             c <- asks timerCh
             _ <- registerSTM 5 c ()
-            foreverP eventLoop
+            forever eventLoop
 
         cleanup = do
             t <- liftIO myThreadId
@@ -267,7 +267,8 @@ putbackBlocks = do
 haveMsg :: PieceNum -> Process PCF PST ()
 haveMsg pn = do
     pm <- asks pieceMap
-    if M.member pn pm
+    let (lo, hi) = bounds pm
+    if pn >= lo && pn <= hi
         then do PS.insert pn =<< gets peerPieces
                 pmch <- asks pieceMgrCh
                 liftIO . atomically $ writeTChan pmch (PeerHave [pn])
@@ -290,7 +291,7 @@ decMissingCounter n = do
 -- Assert that the peer is a seeder
 assertSeeder :: Process PCF PST ()
 assertSeeder = do
-    ok <- liftM2 (==) (gets peerPieces >>= PS.size) (M.size <$> asks pieceMap)
+    ok <- liftM2 (==) (gets peerPieces >>= PS.size) (succ . snd . bounds <$> asks pieceMap)
     assert ok (return ())
 
 -- | Process a BITFIELD message from the peer. Side effect: Consider Interest.
@@ -300,7 +301,7 @@ bitfieldMsg bf = do
     piecesNull <- PS.null pieces
     if piecesNull
         -- TODO: Don't trust the bitfield
-        then do nPieces <- M.size <$> asks pieceMap
+        then do nPieces <- succ . snd . bounds <$> asks pieceMap
                 pp <- createPeerPieces nPieces bf
                 modify (\s -> s { peerPieces = pp })
                 peerLs <- PS.toList pp

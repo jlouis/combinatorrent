@@ -90,7 +90,7 @@ start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChan -> IO
 start fp statusC tv supC = do
     r <- newIORef (0,0)
     spawnP (CF statusC tv) M.empty
-        (cleanupP (foreverP (pgm r)) (defaultStopHandler supC) (cleanup r))
+        (cleanupP (forever (pgm r)) (defaultStopHandler supC) (cleanup r))
   where
     cleanup r = do
         st <- liftIO $ readIORef r

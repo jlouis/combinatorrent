@@ -33,7 +33,7 @@ start :: Handle -> TChan (Message, Integer)
 start h ch supC = do
    hSetBuffering h NoBuffering
    spawnP (CF ch) h
-        (catchP (foreverP readSend)
+        (catchP (forever readSend)
                (defaultStopHandler supC))
 
 readSend :: Process CF Handle ()

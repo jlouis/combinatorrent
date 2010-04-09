@@ -15,6 +15,7 @@ where
 
 import Control.Monad.State
 
+import Data.Array
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
@@ -70,9 +71,7 @@ projectHandles (Handles handles@((h1, length1):handles')) offset size
                 projectHandles (Handles handles') 0 (size - size1)
 
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
-pInfoLookup pn mp = case M.lookup pn mp of
-                      Nothing -> fail "FS: Error lookup in PieceMap"
-                      Just i -> return i
+pInfoLookup pn mp = return $ mp ! pn
 
 -- | FIXME: minor code duplication with @readBlock@
 readPiece :: PieceNum -> Handles -> PieceMap -> IO L.ByteString
@@ -144,7 +143,7 @@ checkPiece inf handles = {-# SCC "checkPiece" #-} do
 checkFile :: Handles -> PieceMap -> IO PiecesDoneMap
 checkFile handles pm = do l <- mapM checkP pieces
                           return $ M.fromList l
-    where pieces = M.toAscList pm
+    where pieces = assocs pm
           checkP :: (PieceNum, PieceInfo) -> IO (PieceNum, Bool)
           checkP (pn, pInfo) = do b <- checkPiece pInfo handles
                                   return (pn, b)
@@ -156,19 +155,22 @@ mkPieceMap bc = fetchData
   where fetchData = do pLen <- infoPieceLength bc
                        pieceData <- infoPieces bc
                        tLen <- infoLength bc
-                       let pm = M.fromList . zip [0..] . extract pLen tLen 0 $ pieceData
-                       when ( tLen /= (sum $ map len $ M.elems pm) )
+                       let pis = extract pLen tLen 0 pieceData
+                           l   = length pis
+                           pm  = array (0, l-1) (zip [0..] pis)
+                       when ( tLen /= (sum $ map len $ elems pm) )
                             (error "PieceMap construction size assertion failed")
                        return pm
         extract :: Integer -> Integer -> Integer -> [B.ByteString] -> [PieceInfo]
         extract _    0     _    []       = []
-        extract plen tlen offst (p : ps) | tlen < plen = PieceInfo { offset = offst,
+        extract plen tlen offst (p : ps) | tlen < plen = PieceInfo {
+                                                          offset = offst,
                                                           len = tlen,
-                                                          digest = B.unpack p } : extract plen 0 (offst + plen) ps
+                                                          digest = p } : extract plen 0 (offst + plen) ps
                                   | otherwise = inf : extract plen (tlen - plen) (offst + plen) ps
                                        where inf = PieceInfo { offset = offst,
                                                                len = plen,
-                                                               digest = B.unpack p }
+                                                               digest = p }
         extract _ _ _ _ = error "mkPieceMap: the impossible happened!"
 
 -- | Predicate function. True if nothing is missing from the map.
