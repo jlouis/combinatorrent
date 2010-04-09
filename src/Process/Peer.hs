@@ -11,6 +11,8 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception
+
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -53,14 +55,14 @@ import qualified Process.Peer.Receiver as Receiver
 start :: Handle -> MgrChannel -> RateTVar -> PieceMgrChannel
              -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
-start handle pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
+start h pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- newTChanIO
     senderMV <- newEmptyTMVarIO
     receiverC <- newTChanIO
     sendBWC <- newTChanIO
-    return [Worker $ Sender.start handle senderMV,
+    return [Worker $ Sender.start h senderMV,
             Worker $ SenderQ.start queueC senderMV sendBWC,
-            Worker $ Receiver.start handle receiverC,
+            Worker $ Receiver.start h receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
                                 queueC receiverC sendBWC stv ih]
 
@@ -94,6 +96,7 @@ data PST = PST { weChoke :: !Bool -- ^ True if we are choking the peer
                , peerChoke :: !Bool -- ^ Is the peer choking us? True if yes
                , peerInterested :: !Bool -- ^ True if the peer is interested
                , peerPieces :: !(PS.PieceSet) -- ^ List of pieces the peer has access to
+               , missingPieces :: Int -- ^ Tracks the number of pieces the peer misses before seeding
                , upRate :: !Rate -- ^ Upload rate towards the peer (estimated)
                , downRate :: !Rate -- ^ Download rate from the peer (estimated)
                , runningEndgame :: !Bool -- ^ True if we are in endgame
@@ -115,7 +118,7 @@ peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = 
     pieceSet <- PS.new nPieces
     spawnP (PCF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm
                     pdtmv rbtmv intmv gbtmv)
-           (PST True False S.empty True False pieceSet (RC.new ct) (RC.new ct) False)
+           (PST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False)
            (cleanupP startup (defaultStopHandler supC) cleanup)
   where startup = do
             tid <- liftIO $ myThreadId
@@ -193,12 +196,6 @@ chokeMsg msg = do
            modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
            outChan $ SenderQ.SenderQRequestPrune pn blk
 
--- True if the peer is a seeder
--- Optimization: Don't calculate this all the time. It only changes once and then it keeps
---   being there.
-isASeeder :: Process PCF PST Bool
-isASeeder = liftM2 (==) (gets peerPieces >>= PS.size) (M.size <$> asks pieceMap)
-
 -- A Timer event handles a number of different status updates. One towards the
 -- Choke Manager so it has a information about whom to choke and unchoke - and
 -- one towards the status process to keep track of uploaded and downloaded
@@ -274,9 +271,27 @@ haveMsg pn = do
         then do PS.insert pn =<< gets peerPieces
                 pmch <- asks pieceMgrCh
                 liftIO . atomically $ writeTChan pmch (PeerHave [pn])
+                decMissingCounter 1
                 considerInterest
         else do warningP "Unknown Piece"
                 stopP
+
+-- True if the peer is a seeder
+isASeeder :: Process PCF PST Bool
+isASeeder = gets missingPieces >>= return . (==0)
+
+-- Decrease the counter of missing pieces for the peer
+decMissingCounter :: Int -> Process PCF PST ()
+decMissingCounter n = do
+    modify (\s -> s { missingPieces = missingPieces s - n})
+    m <- gets missingPieces
+    when (m == 0) assertSeeder
+
+-- Assert that the peer is a seeder
+assertSeeder :: Process PCF PST ()
+assertSeeder = do
+    ok <- liftM2 (==) (gets peerPieces >>= PS.size) (M.size <$> asks pieceMap)
+    assert ok (return ())
 
 -- | Process a BITFIELD message from the peer. Side effect: Consider Interest.
 bitfieldMsg :: BitField -> Process PCF PST ()
@@ -291,6 +306,7 @@ bitfieldMsg bf = do
                 peerLs <- PS.toList pp
                 pmch <- asks pieceMgrCh
                 liftIO . atomically $ writeTChan pmch (PeerHave peerLs)
+                decMissingCounter (length peerLs)
                 considerInterest
         else do infoP "Got out of band Bitfield request, dying"
                 stopP
