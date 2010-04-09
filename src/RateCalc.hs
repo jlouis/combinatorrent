@@ -19,8 +19,8 @@ data Rate = Rate
     , bytes :: !Integer -- ^ The amount of bytes transferred since last rate extraction
     , count :: !Integer -- ^ The amount of bytes transferred since last count extraction
     , nextExpected :: !UTCTime -- ^ When is the next rate update expected
-    , lastExt :: !UTCTime          -- ^ When was the last rate update
-    , rateSince :: !UTCTime     -- ^ From where is the rate measured
+    , lastExt      :: !UTCTime -- ^ When was the last rate update
+    , rateSince    :: !UTCTime -- ^ From where is the rate measured
     }
 
 fudge :: NominalDiffTime
@@ -40,8 +40,10 @@ new t = Rate { rate = 0.0
 
 -- | The call @update n rt@ updates the rate structure @rt@ with @n@ new bytes
 update :: Integer -> Rate -> Rate
-update n rt = rt { bytes = bytes rt + n
-                 , count = count rt + n}
+update n rt = nb `seq` nc `seq` rt { bytes = nb + n, count = nc + n}
+  where nb = bytes rt
+        nc = count rt
+
 
 -- | The call @extractRate t rt@ extracts the current rate from the rate structure and updates the rate
 --   structures internal book-keeping
@@ -69,5 +71,6 @@ extractRate t rt =
 
 -- | The call @extractCount rt@ extract the bytes transferred since last extraction
 extractCount :: Rate -> (Integer, Rate)
-extractCount rt = (count rt, rt { count = 0 })
+extractCount rt = crt `seq` (crt, rt { count = 0 })
+  where crt = count rt
 
