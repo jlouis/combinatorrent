@@ -13,7 +13,7 @@ cabal-version: >= 1.6
 
 license: BSD3
 license-file: LICENSE
-copyright: (c) 2009 Jesper Louis Andersen
+copyright: (c) 2009,2010 Jesper Louis Andersen
 author: Jesper Louis Andersen
 maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
