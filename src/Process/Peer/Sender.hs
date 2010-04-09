@@ -23,7 +23,7 @@ instance Logging CF where
     logName _ = "Process.Peer.Sender"
 
 -- | The raw sender process, it does nothing but send out what it syncs on.
-start :: Handle -> TMVar B.ByteString -> SupervisorChan -> IO ThreadId
+start :: Handle -> TMVar B.ByteString -> SupervisorChannel -> IO ThreadId
 start h ch supC = spawnP (CF ch) h (catchP (forever pgm)
                                           (do t <- liftIO $ myThreadId
                                               liftIO . atomically $ writeTChan supC $ IAmDying t

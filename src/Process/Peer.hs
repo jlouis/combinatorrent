@@ -106,7 +106,7 @@ data PST = PST { weChoke :: !Bool -- ^ True if we are choking the peer
 peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
          -> TChan SenderQ.SenderQMsg -> TChan (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
-         -> SupervisorChan -> IO ThreadId
+         -> SupervisorChannel -> IO ThreadId
 peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = do
     ch <- newTChanIO
     tch <- newTChanIO

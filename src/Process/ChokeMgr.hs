@@ -60,7 +60,7 @@ type ChokeMgrProcess a = Process CF PeerDB a
 roundTickSecs :: Int
 roundTickSecs = 11
 
-start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChan
+start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChannel
       -> IO ThreadId
 start ch rtv ur supC = do
     _ <- registerSTM roundTickSecs ch Tick

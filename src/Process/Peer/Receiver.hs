@@ -29,7 +29,7 @@ instance Logging CF where
     logName _ = "Process.Peer.Receiver"
 
 start :: Handle -> TChan (Message, Integer)
-          -> SupervisorChan -> IO ThreadId
+          -> SupervisorChannel -> IO ThreadId
 start h ch supC = do
    hSetBuffering h NoBuffering
    spawnP (CF ch) h

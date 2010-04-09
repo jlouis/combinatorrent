@@ -8,7 +8,7 @@ module Supervisor (
     Child(..)
   , Children
   , SupervisorMsg(..)
-  , SupervisorChan
+  , SupervisorChannel
     -- * Supervisor Initialization
   , allForOne
   , oneForOne
@@ -18,7 +18,6 @@ module Supervisor (
   )
 where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.State
@@ -28,92 +27,89 @@ import Prelude hiding (catch)
 
 import Process
 
-data Child = Supervisor (SupervisorChan -> IO ThreadId)
-           | Worker     (SupervisorChan -> IO ThreadId)
+data Child = Supervisor (SupervisorChannel -> IO (ThreadId, SupervisorChannel))
+           | Worker     (SupervisorChannel -> IO ThreadId)
 
 data SupervisorMsg = IAmDying ThreadId
                    | PleaseDie ThreadId
                    | SpawnNew Child
 
-type SupervisorChan = TChan SupervisorMsg
+type SupervisorChannel = TChan SupervisorMsg
 type Children = [Child]
 
 data ChildInfo = HSupervisor ThreadId
                | HWorker ThreadId
 
+data RestartPolicy = AllForOne | OneForOne
 
-pDie :: SupervisorChan -> IO ()
+pDie :: SupervisorChannel -> IO ()
 pDie supC = do
     tid <- myThreadId
     atomically $ writeTChan supC (IAmDying tid)
 
-class SupervisorConf a where
-    getParent :: a -> SupervisorChan
-    getChan   :: a -> SupervisorChan
+data CF = CF { name :: String              -- ^ Name of the supervisor
+             , chan :: SupervisorChannel   -- ^ Channel of the supervisor
+             , parent :: SupervisorChannel -- ^ Channel of the parent supervisor
+             , restartPolicy :: RestartPolicy }
 
-data CFOFA = CFOFA { name :: String
-                   , chan :: SupervisorChan
-                   , parent :: SupervisorChan
-                   }
-
-instance SupervisorConf CFOFA where
-    getParent = parent
-    getChan   = chan
-
-instance Logging CFOFA where
+instance Logging CF where
     logName = name
 
-data STOFA = STOFA { childInfo :: [ChildInfo] }
+data ST = ST { childInfo :: [ChildInfo] }
 
--- | Run a set of processes and do it once in the sense that if someone dies,
---   no restart is attempted. We will just kill off everybody without any kind
---   of prejudice.
-allForOne :: String -> Children -> SupervisorChan -> IO ThreadId
-allForOne n children parentC = do
+start :: RestartPolicy -> String -> Children -> SupervisorChannel -> IO (ThreadId,
+                                                                         SupervisorChannel)
+start policy n children parentC = do
     c <- newTChanIO
-    spawnP (CFOFA n c parentC) (STOFA []) (catchP startup
-                                             (defaultStopHandler parentC))
-  where
-    startup = do
-        childs <- mapM spawnChild children
-        modify (\_ -> STOFA (reverse childs))
-        forever eventLoop
-    eventLoop = do
-        mTid <- liftIO myThreadId
-        pc <- asks parent
-        ch <- asks chan
-        m <- liftIO . atomically $
-            (readTChan ch >>= return . Left) `orElse`
-            (readTChan pc >>= return . Right)
-        case m of
-            Left ev -> case ev of
-                        IAmDying _tid -> do
-                            gets childInfo >>= mapM_ finChild
-                            t <- liftIO myThreadId
-                            asks parent >>= \c -> liftIO . atomically $ writeTChan c (IAmDying t)
-                        SpawnNew chld -> do
-                            nc <- spawnChild chld
-                            modify (\(STOFA cs) -> STOFA (nc : cs))
-                        _ -> fail "Impossible"
-            Right ev -> case ev of
-                PleaseDie tid | tid == mTid -> do
-                    gets childInfo >>= mapM_ finChild
-                    stopP
-                _                           -> return ()
+    t <- spawnP (CF n c parentC policy) (ST []) (catchP (startup children)
+                                              (defaultStopHandler parentC))
+    return (t, c)
 
-data CFOFO = CFOFO { oName :: String
-                   , oChan :: SupervisorChan
-                   , oparent :: SupervisorChan
-                   }
+startup :: [Child] -> Process CF ST ()
+startup children = do
+    spawnedChildren <- mapM spawnChild children
+    put $ ST (reverse spawnedChildren)
+    forever eventLoop
 
-instance SupervisorConf CFOFO where
-    getParent = oparent
-    getChan   = oChan
+eventLoop :: Process CF ST ()
+eventLoop = do
+    mTid <- liftIO myThreadId
+    pc   <- asks parent
+    ch   <- asks chan
+    m <- liftIO . atomically $
+        (readTChan ch >>= return . Left) `orElse`
+        (readTChan pc >>= return . Right)
+    case m of
+        Left (IAmDying tid) -> handleIAmDying tid
+        Left (SpawnNew chld) -> handleSpawnNew chld
+        Right (PleaseDie tid) | tid == mTid -> handlePleaseDie
+        _ -> fail "Unknown type of message in supervisor"
 
-instance Logging CFOFO where
-    logName = oName
+handleIAmDying :: ThreadId -> Process CF ST ()
+handleIAmDying tid = do
+    p <- asks restartPolicy
+    case p of
+        AllForOne -> do
+            gets childInfo >>= mapM_ finChild
+            stopP
+        OneForOne ->
+            pruneChild tid
 
-data STOFO = STOFO { oChildInfo :: [ChildInfo] }
+handleSpawnNew :: Child -> Process CF ST ()
+handleSpawnNew chld = do
+   nc <- spawnChild chld
+   modify (\(ST cs) -> ST (nc : cs))
+
+handlePleaseDie :: Process CF ST ()
+handlePleaseDie = do
+    gets childInfo >>= mapM_ finChild
+    stopP
+
+
+pruneChild :: ThreadId -> Process CF ST ()
+pruneChild tid = modify (\(ST cs) -> ST (filter chk cs))
+    where chk (HSupervisor t) = t == tid
+          chk (HWorker t)     = t == tid
 
 -- | A One-for-one supervisor is called with @oneForOne children parentCh@. It will spawn and run
 --   @children@ and be linked into the supervisor structure on @parentCh@. It returns the ThreadId
@@ -123,61 +119,36 @@ data STOFO = STOFO { oChildInfo :: [ChildInfo] }
 --   the death and let the other processes keep running.
 --
 --   TODO: Restart policies.
-oneForOne :: String -> Children -> SupervisorChan -> IO (ThreadId, SupervisorChan)
-oneForOne n children parentC = do
-    c <- newTChanIO
-    t <- spawnP (CFOFO n c parentC) (STOFO []) (catchP startup
-                                                (defaultStopHandler parentC))
-    return (t, c)
-  where
-    startup :: Process CFOFO STOFO ()
-    startup = do
-        childs <- mapM spawnChild children
-        modify (\_ -> STOFO (reverse childs))
-        forever eventLoop
-    eventLoop :: Process CFOFO STOFO ()
-    eventLoop = do
-        mTid <- liftIO myThreadId
-        pc <- asks oparent
-        ch <- asks oChan
-        m <- liftIO . atomically $
-            (readTChan ch >>= return . Left) `orElse`
-            (readTChan pc >>= return . Right)
-        case m of
-            Left ev -> case ev of
-                    IAmDying tid -> pruneChild tid
-                    SpawnNew chld -> do nc <- spawnChild chld
-                                        modify (\(STOFO cs) -> STOFO (nc : cs))
-                    _ -> fail "Impossible (2)"
-            Right ev -> case ev of
-                PleaseDie tid | tid == mTid -> do
-                    gets oChildInfo >>= mapM_ finChild
-                    stopP
-                _                           -> return ()
-    pruneChild tid = modify (\(STOFO cs) -> STOFO (filter chk cs))
-          where chk (HSupervisor t) = t == tid
-                chk (HWorker t)     = t == tid
+oneForOne :: String -> Children -> SupervisorChannel -> IO (ThreadId, SupervisorChannel)
+oneForOne = start OneForOne
 
 
-finChild :: SupervisorConf a => ChildInfo -> Process a b ()
-finChild (HWorker tid) = liftIO $ killThread tid -- Make this call killP in Process?
+-- | Run a set of processes and do it once in the sense that if someone dies,
+--   no restart is attempted. We will just kill off everybody without any kind
+--   of prejudice.
+allForOne :: String -> Children -> SupervisorChannel -> IO (ThreadId, SupervisorChannel)
+allForOne = start AllForOne
+
+
+finChild :: ChildInfo -> Process CF ST ()
+finChild (HWorker tid) = liftIO $ killThread tid
 finChild (HSupervisor tid) = do
-    c <- getChan <$> ask
+    c <- asks chan
     liftIO . atomically $ writeTChan c (PleaseDie tid)
 
-spawnChild :: SupervisorConf a => Child -> Process a b ChildInfo
+spawnChild :: Child -> Process CF ST ChildInfo
 spawnChild (Worker proc)     = do
-    c <- getChan <$> ask
+    c <- asks chan
     nc <- liftIO . atomically $ dupTChan c
     tid <- liftIO $ proc nc
     return $ HWorker tid
 spawnChild (Supervisor proc) = do
-    c <- getChan <$> ask
+    c <- asks chan
     nc <- liftIO . atomically $ dupTChan c
-    tid <- liftIO $ proc nc
+    (tid, _) <- liftIO $ proc nc
     return $ HSupervisor tid
 
-defaultStopHandler :: SupervisorChan -> Process a b ()
+defaultStopHandler :: SupervisorChannel -> Process a b ()
 defaultStopHandler supC = do
     t <- liftIO $ myThreadId
     liftIO . atomically $ writeTChan supC $ IAmDying t

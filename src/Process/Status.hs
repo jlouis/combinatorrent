@@ -86,7 +86,7 @@ instance Show StatusState where
 
 -- | Start a new Status process with an initial torrent state and a
 --   channel on which to transmit status updates to the tracker.
-start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChan -> IO ThreadId
+start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChannel -> IO ThreadId
 start fp statusC tv supC = do
     r <- newIORef (0,0)
     spawnP (CF statusC tv) M.empty

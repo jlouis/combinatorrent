@@ -42,8 +42,7 @@ instance Logging CF where
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
 start :: TChan SenderQMsg -> TMVar B.ByteString -> BandwidthChannel
-           -> SupervisorChan
-           -> IO ThreadId
+           -> SupervisorChannel -> IO ThreadId
 start inC outC bandwC supC = spawnP (CF inC outC bandwC) (ST Q.empty 0)
         (catchP (forever pgm)
                 (defaultStopHandler supC))

@@ -35,7 +35,7 @@ instance Logging CF where
 
 -- | Start the logging process and return a channel to it. Sending on this
 --   Channel means writing stuff out on stdOut
-start :: TMVar () -> St.StatusChannel -> SupervisorChan -> IO ThreadId
+start :: TMVar () -> St.StatusChannel -> SupervisorChannel -> IO ThreadId
 start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP

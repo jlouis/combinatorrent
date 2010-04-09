@@ -94,7 +94,7 @@ data ST = ST {
 
 start :: InfoHash -> TorrentInfo -> PeerId -> PortID
       -> Status.StatusChannel -> TrackerChannel -> PeerMgr.PeerMgrChannel
-      -> SupervisorChan -> IO ThreadId
+      -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
        spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
                     (cleanupP (forever loop)

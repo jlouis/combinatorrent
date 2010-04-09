@@ -45,7 +45,7 @@ data ST = ST
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChan-> IO ThreadId
+start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChannel -> IO ThreadId
 start handles pm fspC supC =
     spawnP (CF fspC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
   where

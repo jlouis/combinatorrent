@@ -128,7 +128,7 @@ download flags names = do
     stv <- atomically $ newTVar []
     debugM "Main" "Created channels"
     pid <- generatePeerId
-    tid <- allForOne "MainSup"
+    (tid, _) <- allForOne "MainSup"
               (workersWatch ++
               [ Worker $ Console.start waitC statusC
               , Worker $ TorrentManager.start watchC statusC stv chokeC pid pmC

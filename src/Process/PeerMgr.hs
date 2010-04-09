@@ -54,7 +54,7 @@ type PeerMgrChannel = TChan PeerMgrMsg
 
 data CF = CF { peerCh :: PeerMgrChannel
              , mgrCh :: MgrChannel
-             , peerPool :: SupervisorChan
+             , peerPool :: SupervisorChannel
              , chokeMgrCh :: ChokeMgrChannel
              , chokeRTV :: RateTVar
              }
@@ -72,7 +72,7 @@ data ST = ST { peersInQueue  :: ![(InfoHash, Peer)]
              }
 
 start :: PeerMgrChannel -> PeerId
-      -> ChokeMgrChannel -> RateTVar -> SupervisorChan
+      -> ChokeMgrChannel -> RateTVar -> SupervisorChannel
       -> IO ThreadId
 start ch pid chokeMgrC rtv supC =
     do mgrC <- newTChanIO
@@ -160,7 +160,7 @@ addIncoming conn = do
 
 type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
 
-connect :: ConnectRecord -> SupervisorChan -> MgrChannel -> RateTVar -> ChanManageMap
+connect :: ConnectRecord -> SupervisorChannel -> MgrChannel -> RateTVar -> ChanManageMap
         -> IO ThreadId
 connect (host, port, pid, ih) pool mgrC rtv cmap =
     forkIO (connector >> return ())
@@ -188,7 +188,7 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                         SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
-acceptor :: (Handle, HostName, PortNumber) -> SupervisorChan
+acceptor :: (Handle, HostName, PortNumber) -> SupervisorChannel
          -> PeerId -> MgrChannel -> RateTVar -> ChanManageMap
          -> IO ThreadId
 acceptor (h,hn,pn) pool pid mgrC rtv cmmap =

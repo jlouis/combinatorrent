@@ -19,7 +19,7 @@ data CF = CF { peerMgrCh :: PeerMgrChannel }
 instance Logging CF where
     logName _ = "Process.Listen"
 
-start :: PortID -> PeerMgrChannel -> SupervisorChan -> IO ThreadId
+start :: PortID -> PeerMgrChannel -> SupervisorChannel -> IO ThreadId
 start port peerMgrC supC = do
     spawnP (CF peerMgrC) () (catchP (openListen >>= pgm)
                         (defaultStopHandler supC)) -- TODO: Close socket resource!

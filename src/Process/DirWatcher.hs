@@ -33,7 +33,7 @@ instance Logging CF where
 
 start :: FilePath -- ^ Path to watch
       -> TorrentMgrChan -- ^ Channel to return answers on
-      -> SupervisorChan
+      -> SupervisorChannel
       -> IO ThreadId
 start fp chan supC = do
     spawnP (CF chan fp) S.empty

@@ -135,7 +135,7 @@ instance Logging CF where
 type PieceMgrProcess v = Process CF ST v
 
 start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChannel -> ST -> InfoHash
-      -> SupervisorChan -> IO ThreadId
+      -> SupervisorChannel -> IO ThreadId
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
     spawnP (CF mgrC fspC chokeC statC ih) db

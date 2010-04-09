@@ -55,7 +55,7 @@ start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
       -> ChokeMgr.ChokeMgrChannel
       -> PeerId
       -> PeerMgr.PeerMgrChannel
-      -> SupervisorChan
+      -> SupervisorChannel
       -> IO ThreadId
 start chan statusC stv chokeC pid peerC supC =
     spawnP (CF chan statusC stv pid peerC chokeC) (ST [])
@@ -103,7 +103,7 @@ startTorrent fp = do
     let left = bytesLeft haveMap pieceMap
     ti <- liftIO $ mkTorrentInfo bc
     pieceDb <- PieceMgr.createPieceDb haveMap pieceMap
-    tid <- liftIO $ allForOne ("TorrentSup - " ++ fp)
+    (tid, _) <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
                      , Worker $ PieceMgr.start pieceMgrC fspC chokeC statusC pieceDb (infoHash ti)
                      , Worker $ Tracker.start (infoHash ti) ti pid defaultPort statusC trackerC pmC
