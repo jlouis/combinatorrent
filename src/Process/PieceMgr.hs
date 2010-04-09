@@ -160,7 +160,10 @@ sendChokeMgr e = do
     modify (\db -> db { donePush = tail (donePush db) })
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
-traceMsg m = modify (\db -> db { traceBuffer = trace (show m) (traceBuffer db) })
+traceMsg m = do
+    tb <- gets traceBuffer
+    let ntb = (trace $! show m) tb
+    modify (\db -> db { traceBuffer = ntb })
 
 rpcMessage :: Process CF ST ()
 rpcMessage = do
