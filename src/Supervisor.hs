@@ -30,9 +30,14 @@ import Process
 data Child = Supervisor (SupervisorChannel -> IO (ThreadId, SupervisorChannel))
            | Worker     (SupervisorChannel -> IO ThreadId)
 
+instance Show Child where
+    show (Supervisor _) = "Supervisor"
+    show (Worker _)      = "Worker"
+
 data SupervisorMsg = IAmDying ThreadId
                    | PleaseDie ThreadId
                    | SpawnNew Child
+  deriving Show
 
 type SupervisorChannel = TChan SupervisorMsg
 type Children = [Child]
@@ -83,7 +88,7 @@ eventLoop = do
         Left (IAmDying tid) -> handleIAmDying tid
         Left (SpawnNew chld) -> handleSpawnNew chld
         Right (PleaseDie tid) | tid == mTid -> handlePleaseDie
-        _ -> fail "Unknown type of message in supervisor"
+        _ -> return () -- Ignore these. Since the chan is duped, we get stray messages from above
 
 handleIAmDying :: ThreadId -> Process CF ST ()
 handleIAmDying tid = do
