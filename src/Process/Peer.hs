@@ -61,9 +61,9 @@ start h pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     receiverC <- newTChanIO
     sendBWC <- newTChanIO
     return [Worker $ Sender.start h senderMV,
-            Worker $ SenderQ.start queueC senderMV sendBWC,
+            Worker $ SenderQ.start queueC senderMV sendBWC fsC,
             Worker $ Receiver.start h receiverC,
-            Worker $ peerP pMgrC rtv pieceMgrC fsC pm nPieces
+            Worker $ peerP pMgrC rtv pieceMgrC pm nPieces
                                 queueC receiverC sendBWC stv ih]
 
 -- INTERNAL FUNCTIONS
@@ -73,7 +73,6 @@ data CF = CF { inCh :: TChan (Message, Integer)
              , outCh :: TChan SenderQ.SenderQMsg
              , peerMgrCh :: MgrChannel
              , pieceMgrCh :: PieceMgrChannel
-             , fsCh :: FSPChannel
              , peerCh :: PeerChannel
              , sendBWCh :: BandwidthChannel
              , timerCh :: TChan ()
@@ -82,7 +81,6 @@ data CF = CF { inCh :: TChan (Message, Integer)
              , pcInfoHash :: InfoHash
              , pieceMap :: !PieceMap
              , piecesDoneTV :: TMVar [PieceNum]
-             , readBlockTV  :: TMVar B.ByteString
              , interestTV :: TMVar Bool
              , grabBlockTV :: TMVar Blocks
              }
@@ -103,21 +101,20 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              }
 
 
-peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> FSPChannel -> PieceMap -> Int
+peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> PieceMap -> Int
          -> TChan SenderQ.SenderQMsg -> TChan (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
          -> SupervisorChannel -> IO ThreadId
-peerP pMgrC rtv pieceMgrC fsC pm nPieces outBound inBound sendBWC stv ih supC = do
+peerP pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
     ch <- newTChanIO
     tch <- newTChanIO
     ct <- getCurrentTime
     pdtmv <- newEmptyTMVarIO
-    rbtmv <- newEmptyTMVarIO
     intmv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
-    spawnP (CF inBound outBound pMgrC pieceMgrC fsC ch sendBWC tch stv rtv ih pm
-                    pdtmv rbtmv intmv gbtmv)
+    spawnP (CF inBound outBound pMgrC pieceMgrC ch sendBWC tch stv rtv ih pm
+                    pdtmv intmv gbtmv)
            (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False)
                        (cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
@@ -321,18 +318,7 @@ requestMsg :: PieceNum -> Block -> Process CF ST ()
 requestMsg pn blk = do
     choking <- gets weChoke
     unless (choking)
-         (do
-            bs <- readBlock pn blk -- TODO: Pushdown to send process
-            outChan $ SenderQ.SenderQM $ Piece pn (blockOffset blk) bs)
-
--- | Read a block from the filesystem for sending
-readBlock :: PieceNum -> Block -> Process CF ST B.ByteString
-readBlock pn blk = do
-    v <- asks readBlockTV
-    fch <- asks fsCh
-    liftIO $ do
-        atomically $ writeTChan fch (ReadBlock pn blk v)
-        atomically $ takeTMVar v
+         (outChan $ SenderQ.SenderQPiece pn blk)
 
 -- | Handle a Piece Message incoming from the peer
 pieceMsg :: PieceNum -> Int -> B.ByteString -> Process CF ST ()
