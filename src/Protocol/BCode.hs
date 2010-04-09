@@ -70,7 +70,7 @@ instance Arbitrary BCode where
       where bc' :: Int -> Gen BCode
             bc' 0 = oneof [BInt <$> arbitrary,
                            BString <$> arbitrary]
-            bc' n | n > 0 =
+            bc' n =
                 oneof [BInt <$> arbitrary,
                        BString <$> arbitrary,
                        BArray <$> sequence (replicate n $ bc' (n `div` 8)),
@@ -293,18 +293,18 @@ infoFiles bc = let mbFpath = fromBS `fmap` infoName bc
                    mbLength = infoLength bc
                    mbFiles = do BArray fileList <- searchInfo "files" bc
                                 return $ do fileDict@(BDict _) <- fileList
-                                            let Just (BInt length) = search [toPS "length"] fileDict
-                                                Just (BArray path) = search [toPS "path"] fileDict
-                                                path' = map (\(BString s) -> fromBS s) path
-                                            return (path', length)
+                                            let Just (BInt l) = search [toPS "length"] fileDict
+                                                Just (BArray pth) = search [toPS "path"] fileDict
+                                                pth' = map (\(BString s) -> fromBS s) pth
+                                            return (pth', l)
                in case (mbFpath, mbLength, mbFiles) of
                     (Just fpath, _, Just files) ->
                         Just $
-                        map (\(path, length) ->
-                                 (fpath:path, length)
+                        map (\(pth, l) ->
+                                 (fpath:pth, l)
                             ) files
-                    (Just fpath, Just length, _) ->
-                        Just [([fpath], length)]
+                    (Just fpath, Just l, _) ->
+                        Just [([fpath], l)]
                     (_, _, Just files) ->
                         Just files
                     _ ->
