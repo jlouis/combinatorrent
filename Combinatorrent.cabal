@@ -63,6 +63,7 @@ executable Combinatorrent
     hslogger,
     HTTP,
     HUnit,
+    mmap,
     mtl,
     network,
     parsec,
