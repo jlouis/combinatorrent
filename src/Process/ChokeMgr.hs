@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TupleSections #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, TupleSections #-}
 module Process.ChokeMgr (
     -- * Types, Channels
       ChokeMgrChannel
@@ -11,6 +11,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.DeepSeq
 import Control.Exception (assert)
 import Control.Monad.Reader
 import Control.Monad.State
@@ -41,6 +42,9 @@ data ChokeMgrMsg = Tick                                  -- ^ Request that we ru
                  | PieceDone InfoHash PieceNum           -- ^ Note that a given piece is done
                  | BlockComplete InfoHash PieceNum Block -- ^ Note that a block is complete (endgame)
                  | TorrentComplete InfoHash              -- ^ Note that the torrent in question is complete
+
+instance NFData ChokeMgrMsg
+
 
 type ChokeMgrChannel = TChan ChokeMgrMsg
 type RateTVar = TVar [(ThreadId, (Double, Double, Bool, Bool, Bool))]

@@ -10,7 +10,8 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Exception (assert)
+import Control.DeepSeq
+import Control.Exception (assert, evaluate)
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -29,7 +30,7 @@ import System.Random.Shuffle
 
 import Process.FS hiding (start)
 import Process.Status as STP hiding (start) 
-import Process.ChokeMgr (ChokeMgrMsg(..), ChokeMgrChannel)
+import Process.ChokeMgr hiding (start)
 import Supervisor
 import Torrent
 import Tracer
@@ -193,7 +194,8 @@ storeBlock pn blk d = do
    debugP $ "Storing block: " ++ show (pn, blk)
    fch <- asks fspCh
    liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
-   modify (\s -> s { downloading = downloading s \\ [(pn, blk)] })
+   ndl <- gets downloading >>= liftIO . evaluate . (\\ [(pn, blk)])
+   modify (\s -> s { downloading = ndl })
    endgameBroadcast pn blk
    done <- updateProgress pn blk
    when done
@@ -239,7 +241,10 @@ endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
 endgameBroadcast pn blk = do
     ih <- asks pMgrInfoHash
     gets endGaming >>=
-      flip when (modify (\db -> db { donePush = (BlockComplete ih pn blk) : donePush db }))
+      flip when
+        (do dp <- gets donePush
+            let dp' = (BlockComplete ih pn blk) : dp
+            modify (\db -> db { donePush = dp' `deepseq` dp' }))
 
 markDone :: PieceNum -> Process CF ST ()
 markDone pn = do
@@ -358,7 +363,9 @@ updateProgress pn blk = do
                                  -- at times
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
   where checkComplete pg = do
-            modify (\db -> db { inProgress = M.adjust (const pg) pn (inProgress db) })
+            ip <- gets inProgress
+            ip' <- liftIO . evaluate $ M.adjust (const pg) pn ip
+            modify (\db -> db { inProgress = ip' })
             debugP $ "Iphave : " ++ show (ipHave pg) ++ " ipDone: " ++ show (ipDone pg)
             return (ipHave pg == ipDone pg)
         ipHave = S.size . ipHaveBlocks
