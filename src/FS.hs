@@ -17,10 +17,15 @@ import Control.Monad.State
 
 import Data.Array
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
+import Data.Word
 
-import System.IO
+import Foreign.Ptr
+import Foreign.ForeignPtr
+
+import System.IO.MMap
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (joinPath)
 
@@ -37,37 +42,31 @@ import Torrent
 --   FIXME: Replace this with a handle cache later. Many peers & many
 --          tiny files will make us overstep the fd limit (usually
 --          1024).
-newtype Handles = Handles [(Handle, Integer)]  -- ^[(fileHandle, fileLength)]
+data MMapF = MMapF {
+          regionPtr    :: ForeignPtr Word8
+        , regionOffset :: Int
+        , regionSize   :: Int
+        }
+
+newtype Handles = Handles [MMapF] -- ^ A list of memory mapped regions
 
 projectHandles :: Handles
-               -> Integer    -- ^Torrent offset
-               -> Integer    -- ^Torrent size
-               -> [(Handle   -- ^File handle
-                   ,Integer  -- ^File chunk offset
-                   ,Integer  -- ^File chunk size
+               -> Int    -- ^Torrent offset
+               -> Int    -- ^Torrent size
+               -> [(ForeignPtr Word8 -- ^File map location
+                   ,Int  -- ^File chunk offset
+                   ,Int  -- ^File chunk size
                    )]
-{-
-projectHandles handles offset size = let r = projectHandles' handles offset size
-                                     in trace ("projectHandles " ++
-                                               show handles ++ " " ++
-                                               show offset ++ " " ++
-                                               show size ++ " = " ++
-                                               show r
-                                              ) $
-                                        r
--}
-projectHandles (Handles handles@((h1, length1):handles')) offset size
-    | size <= 0 =
-        fail "FS: Should have already stopped projection"
-    | null handles =
-        fail "FS: Attempt to read beyond torrent length"
-    | offset >= length1 =
-        projectHandles (Handles handles') (offset - length1) size
+projectHandles (Handles []) _ _ = fail "FS: Attempt to read beyond torrent length"
+projectHandles (Handles (h1 : handles')) offs size
+    | size <= 0 = fail "FS: Should have already stopped projection"
+    | offs >= fromIntegral (regionSize h1) =
+                projectHandles (Handles handles') (offs - (fromIntegral $ regionSize h1)) size
     | otherwise =
-        let size1 = length1 - offset  -- ^How much of h1 to take?
+        let size1 = fromIntegral (regionSize h1) - offs  -- ^How much of h1 to take?
         in if size1 >= size
-           then [(h1, offset, size)]
-           else (h1, offset, size1) :
+           then [(regionPtr h1, fromIntegral offs + regionOffset h1, size)]
+           else  (regionPtr h1, fromIntegral offs + regionOffset h1, size1) :
                 projectHandles (Handles handles') 0 (size - size1)
 
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
@@ -78,12 +77,9 @@ readPiece :: PieceNum -> Handles -> PieceMap -> IO L.ByteString
 readPiece pn handles mp =
     {-# SCC "readPiece" #-}
     do pInfo <- pInfoLookup pn mp
-       bs <- L.concat `fmap`
-             forM (projectHandles handles (offset pInfo) (len pInfo))
-                      (\(h, offset, size) ->
-                           do hSeek h AbsoluteSeek offset
-                              L.hGet h (fromInteger size)
-                      )
+       bs <- return . L.fromChunks $ map (\(p, off, sz) -> BI.fromForeignPtr p off sz)
+                          $ projectHandles handles (fromIntegral . offset $ pInfo)
+                                                   (fromIntegral . len $ pInfo)
        if L.length bs == (fromInteger . len $ pInfo)
           then return bs
           else fail "FS: Wrong number of bytes read"
@@ -94,13 +90,9 @@ readBlock :: PieceNum -> Block -> Handles -> PieceMap -> IO B.ByteString
 readBlock pn blk handles mp =
     {-# SCC "readBlock" #-}
     do pInfo <- pInfoLookup pn mp
-       B.concat `fmap`
-        forM (projectHandles handles (offset pInfo + (fromIntegral $ blockOffset blk))
-                                 (fromIntegral $ blockSize blk))
-                 (\(h, offset, size) ->
-                      do hSeek h AbsoluteSeek offset
-                         B.hGet h $ fromInteger size
-                 )
+       return . B.concat $ map (\(p, off, sz) -> BI.fromForeignPtr p off sz)
+                $ projectHandles handles (fromIntegral (offset pInfo) + (fromIntegral $ blockOffset blk))
+                                         (fromIntegral $ blockSize blk)
 
 -- | The call @writeBlock h n blk pm blkData@ will write the contents of @blkData@
 --   to the file pointed to by handle at the correct position in the file. If the
@@ -110,29 +102,25 @@ writeBlock handles n blk pm blkData =
     {-# SCC "writeBlock" #-}
     do when lenFail $ fail "Writing block of wrong length"
        pInfo <- pInfoLookup n pm
-       foldM_ (\blkData (h, offset, size) ->
-                   do let size' = fromInteger size
-                      hSeek h AbsoluteSeek offset
-                      B.hPut h $ B.take size' blkData
-                      hFlush h
-                      return $ B.drop size' blkData
-              ) blkData (projectHandles handles (position pInfo) (fromIntegral $ B.length blkData))
+       foldM_ (\blkD (pto, oto, szfrom) ->
+                   do let size' = szfrom
+                      (pfrom, ofrom, sz) <- return . BI.toForeignPtr $ B.take size' blkD
+                      BI.memcpy (plusPtr (unsafeForeignPtrToPtr pto) oto)
+                                (plusPtr (unsafeForeignPtrToPtr pfrom) ofrom) (fromIntegral sz)
+                      return $ B.drop size' blkD
+              ) blkData (projectHandles handles (fromIntegral . position $ pInfo) (fromIntegral $ B.length blkData))
        return ()
   where
     position :: PieceInfo -> Integer
     position pinfo = (offset pinfo) + fromIntegral (blockOffset blk)
     lenFail = B.length blkData /= blockSize blk
 
--- | The @checkPiece h inf@ checks the file system for correctness of a given piece, namely if
+-- | The @checkPiece inf hs@ checks the file system for correctness of a given piece, namely if
 --   the piece described by @inf@ is correct inside the file pointed to by @h@.
 checkPiece :: PieceInfo -> Handles -> IO Bool
 checkPiece inf handles = {-# SCC "checkPiece" #-} do
-  bs <- L.concat `fmap`
-        forM (projectHandles handles (offset inf) (fromInteger $ len inf))
-                 (\(h, offset, size) ->
-                      do hSeek h AbsoluteSeek offset
-                         L.hGet h (fromInteger size)
-                 )
+  bs <- return . L.fromChunks $ map (\(p, off, sz) -> BI.fromForeignPtr p off sz)
+                     $ projectHandles handles (fromIntegral . offset $ inf) (fromInteger $ len inf)
   dgs <- liftIO $ D.digest bs
   return (dgs == digest inf)
 
@@ -185,15 +173,20 @@ openAndCheckFile bc =
     do
        handles <- Handles `fmap`
                   forM files
-                           (\(path, length) ->
+                           (\(path, l) ->
                                 do let dir = joinPath $ init path
                                    when (dir /= "") $
                                         createDirectoryIfMissing True dir
                                    let fpath = joinPath path
-                                   h <- openBinaryFile fpath ReadWriteMode
-                                   return (h, length)
+                                   q <- mapFile fpath (fromIntegral l)
+                                   return q
                            )
        have <- checkFile handles pieceMap
        return (handles, have, pieceMap)
   where Just files = BCode.infoFiles bc
         Just pieceMap = mkPieceMap bc
+
+mapFile :: FilePath -> Int -> IO MMapF
+mapFile fpath l = do
+    (p, off, sz) <- mmapFileForeignPtr fpath ReadWriteEx (Just (0, l))
+    return $ MMapF p off sz
