@@ -194,8 +194,9 @@ storeBlock pn blk d = do
    debugP $ "Storing block: " ++ show (pn, blk)
    fch <- asks fspCh
    liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
-   ndl <- gets downloading >>= liftIO . evaluate . (\\ [(pn, blk)])
-   modify (\s -> s { downloading = ndl })
+   dld <- gets downloading
+   let ndl = dld \\ [(pn, blk)]
+   dld `deepseq` modify (\s -> s { downloading = ndl })
    endgameBroadcast pn blk
    done <- updateProgress pn blk
    when done
@@ -207,7 +208,7 @@ storeBlock pn blk d = do
                      ++ " completed, there are "
                      ++ (show pendSz) ++ " pending "
                      ++ (show $ M.size iprog) ++ " in progress"
-           l <- gets infoMap >>= (\pm -> return . len . (pm !) $ pn)
+           l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
            ih <- asks pMgrInfoHash
            c <- asks statusCh
            liftIO . atomically $ writeTChan c (CompletedPiece ih l)
@@ -244,7 +245,7 @@ endgameBroadcast pn blk = do
       flip when
         (do dp <- gets donePush
             let dp' = (BlockComplete ih pn blk) : dp
-            modify (\db -> db { donePush = dp' `deepseq` dp' }))
+            dp' `deepseq` modify (\db -> db { donePush = dp' }))
 
 markDone :: PieceNum -> Process CF ST ()
 markDone pn = do
@@ -466,7 +467,7 @@ pickRandom ls = do
 -- download at peers.
 createBlock :: PieceNum -> PieceMgrProcess [Block]
 createBlock pn = do
-     gets infoMap >>= (\im -> return . cBlock $ im ! pn)
+     gets infoMap >>= (\im -> return $! cBlock $ im ! pn)
          where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
@@ -496,8 +497,8 @@ assertST = {-# SCC "assertST" #-} do
     assertSets = do
         pending <- gets pendingPieces
         done    <- gets donePiece
-        down    <- return . map fst =<< gets downloading
-        iprog   <- return . M.keys  =<< gets inProgress
+        down    <- map fst <$> gets downloading
+        iprog   <- M.keys <$> gets inProgress
         pdownis <- anyM (flip PS.member pending) down
         donedownis <- anyM (flip PS.member done) down
         pdis <- PS.intersection pending done
