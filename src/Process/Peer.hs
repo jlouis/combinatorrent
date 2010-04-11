@@ -94,7 +94,7 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              , peerChoke      :: !Bool -- ^ Is the peer choking us? True if yes
              , peerInterested :: !Bool -- ^ True if the peer is interested
              , peerPieces     :: !(PS.PieceSet) -- ^ List of pieces the peer has access to
-             , missingPieces  :: Int -- ^ Tracks the number of pieces the peer misses before seeding
+             , missingPieces  :: !Int -- ^ Tracks the number of pieces the peer misses before seeding
              , upRate         :: !Rate -- ^ Upload rate towards the peer (estimated)
              , downRate       :: !Rate -- ^ Download rate from the peer (estimated)
              , runningEndgame :: !Bool -- ^ True if we are in endgame

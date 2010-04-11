@@ -97,7 +97,7 @@ start fp statusC tv supC = do
         case fp of
             Nothing -> return ()
             Just fpath -> liftIO $ writeFile fpath (show . gatherStats $ st)
-    pgm r = {-# SCC "StatusP" #-} do
+    pgm r = do
         fetchUpdates r
         d <- liftIO $ registerDelay (5 * 1000000)
         ch <- asks statusCh

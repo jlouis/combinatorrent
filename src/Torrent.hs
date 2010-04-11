@@ -27,6 +27,7 @@ module Torrent (
 where
 
 import Control.Applicative
+import Control.DeepSeq
 
 import Data.Array
 import Data.List
@@ -97,9 +98,12 @@ bytesLeft done pm =
 ----------------------------------------------------------------------
 type BlockSize = Int
 
-data Block = Block { blockOffset :: Int        -- ^ offset of this block within the piece
-                   , blockSize   :: BlockSize  -- ^ size of this block within the piece
+data Block = Block { blockOffset :: !Int        -- ^ offset of this block within the piece
+                   , blockSize   :: !BlockSize  -- ^ size of this block within the piece
                    } deriving (Eq, Ord, Show)
+
+instance NFData Block where
+    rnf (Block bo sz) = bo `seq` sz `seq` ()
 
 instance Arbitrary Block where
   arbitrary = Block <$> pos <*> pos
