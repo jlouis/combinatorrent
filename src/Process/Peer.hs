@@ -11,6 +11,7 @@ where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.DeepSeq
 import Control.Exception
 
 
@@ -330,8 +331,9 @@ pieceMsg n os bs = do
     -- When e is not a member, the piece may be stray, so ignore it.
     -- Perhaps print something here.
     when (S.member e q)
-        (do storeBlock n (Block os sz) bs
-            modify (\s -> s { blockQueue = S.delete e (blockQueue s)}))
+        (do storeBlock n blk bs
+            bq <- gets blockQueue >>= return . S.delete e
+            bq `deepseq` modify (\s -> s { blockQueue = bq }))
 
 -- | Handle a cancel message from the peer
 cancelMsg :: PieceNum -> Block -> Process CF ST ()

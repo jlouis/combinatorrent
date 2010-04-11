@@ -20,6 +20,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.DeepSeq
 import Control.Exception (assert)
 
 import Control.Monad.Reader
@@ -69,6 +70,10 @@ data StatusState = SState
              , state :: TorrentState
              , trackerMsgCh :: TrackerChannel
              }
+
+instance NFData StatusState where
+    rnf (SState up down l inc comp st _) =
+        rnf up `seq` rnf down `seq` rnf l `seq` rnf inc `seq` rnf comp `seq` rnf st `seq` ()
 
 gatherStats :: (Integer, Integer) -> [(String, String)]
 gatherStats (upload, download) =
@@ -149,8 +154,11 @@ fetchUpdates r = do
                     return updates
     mapM_ (\(PStat ih up down) -> do
         (u, d) <- liftIO $ readIORef r
-        liftIO $ writeIORef r (u+up, d+down)
-        modify (\s -> M.adjust (\st ->
-            st { uploaded = (uploaded st) + up
-               , downloaded = (downloaded st) + down }) ih s)) updates
+        let nup = u + up
+            ndn = d + down
+        liftIO $ nup `deepseq` ndn `deepseq` writeIORef r (nup, ndn)
+        s <- get
+        put $! M.adjust (\st ->
+            st `deepseq` st { uploaded = (uploaded st) + up
+                            , downloaded = (downloaded st) + down }) ih s) updates
 

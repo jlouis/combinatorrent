@@ -64,6 +64,8 @@ data TorrentInfo = TorrentInfo {
 data TorrentState = Seeding | Leeching
     deriving Show
 
+instance NFData TorrentState
+
 -- PIECES
 ----------------------------------------------------------------------
 type PieceNum = Int
@@ -103,7 +105,7 @@ data Block = Block { blockOffset :: !Int        -- ^ offset of this block within
                    } deriving (Eq, Ord, Show)
 
 instance NFData Block where
-    rnf (Block bo sz) = bo `seq` sz `seq` ()
+    rnf (Block bo sz) = rnf bo `seq` rnf sz `seq` ()
 
 instance Arbitrary Block where
   arbitrary = Block <$> pos <*> pos
