@@ -10,9 +10,11 @@ module Process.PeerMgr (
 )
 where
 
+import Control.Applicative
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.DeepSeq
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -48,7 +50,8 @@ data TorrentLocal = TorrentLocal
                         , tcPM      :: !PieceMap
                         }
 
-
+instance NFData ThreadId where
+    rnf x = x `seq` ()
 
 type PeerMgrChannel = TChan PeerMgrMsg
 
@@ -121,11 +124,13 @@ peerEvent msg = case msg of
     newPeer ih tid c = do debugP $ "Adding new peer " ++ show tid
                           cch <- asks chokeMgrCh
                           liftIO . atomically $ writeTChan cch (AddPeer ih tid c)
-                          modify (\s -> s { peers = M.insert tid c (peers s)})
+                          npeers <- M.insert tid c <$> gets peers
+                          npeers `deepseq` modify (\s -> s { peers = npeers })
     removePeer tid = do debugP $ "Removing peer " ++ show tid
                         cch <- asks chokeMgrCh
                         liftIO . atomically $ writeTChan cch (RemovePeer tid)
-                        modify (\s -> s { peers = M.delete tid (peers s)})
+                        npeers <- M.delete tid <$> gets peers
+                        npeers `deepseq` modify (\s -> s { peers = npeers })
 
 numPeers :: Int
 numPeers = 40

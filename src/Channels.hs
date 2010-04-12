@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeSynonymInstances #-}
 module Channels
     ( Peer(..)
     , PeerMessage(..)
@@ -12,6 +13,7 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.DeepSeq
 
 import Network
 import Torrent
@@ -25,6 +27,9 @@ data PeerMessage = ChokePeer
                  | CancelBlock PieceNum Block
 
 type PeerChannel = TChan PeerMessage
+
+instance NFData PeerChannel where
+    rnf pc = pc `seq` ()
 
 ---- TRACKER
 
