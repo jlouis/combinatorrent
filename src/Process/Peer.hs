@@ -281,7 +281,8 @@ haveMsg pn = do
 
 -- True if the peer is a seeder
 isASeeder :: Process CF ST Bool
-isASeeder = gets missingPieces >>= return . (==0)
+isASeeder = do sdr <- gets missingPieces
+               sdr `deepseq` (return $! sdr == 0)
 
 -- Decrease the counter of missing pieces for the peer
 decMissingCounter :: Int -> Process CF ST ()
