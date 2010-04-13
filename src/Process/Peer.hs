@@ -99,6 +99,7 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              , upRate         :: !Rate -- ^ Upload rate towards the peer (estimated)
              , downRate       :: !Rate -- ^ Download rate from the peer (estimated)
              , runningEndgame :: !Bool -- ^ True if we are in endgame
+             , lastMessage    :: !Int
              }
 
 
@@ -116,7 +117,7 @@ peerP pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
     pieceSet <- PS.new nPieces
     spawnP (CF inBound outBound pMgrC pieceMgrC ch sendBWC tch stv rtv ih pm
                     pdtmv intmv gbtmv)
-           (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False)
+           (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False 0)
                        (cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
 startup :: Int -> Process CF ST ()
@@ -198,6 +199,14 @@ chokeMsg msg = do
            modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
            outChan $ SenderQ.SenderQRequestPrune pn blk
 
+processLastMessage :: Process CF ST ()
+processLastMessage = do
+    lm <- gets lastMessage
+    if lm >= 24
+        then do outChan $ SenderQ.SenderQM KeepAlive
+        else let inc = succ lm
+             in inc `seq` modify (\st -> st { lastMessage = inc })
+
 -- A Timer event handles a number of different status updates. One towards the
 -- Choke Manager so it has a information about whom to choke and unchoke - and
 -- one towards the status process to keep track of uploaded and downloaded
@@ -205,6 +214,7 @@ chokeMsg msg = do
 timerTick :: Process CF ST ()
 timerTick = do
    mTid <- liftIO myThreadId
+   processLastMessage
    debugP "TimerEvent"
    tch <- asks timerCh
    _ <- registerSTM 5 tch ()
@@ -437,5 +447,6 @@ createPeerPieces nPieces =
 -- | Send a message on a chan from the process queue
 outChan :: SenderQ.SenderQMsg -> Process CF ST ()
 outChan qm = do
+    modify (\st -> st { lastMessage = 0 })
     ch <- asks outCh
     liftIO . atomically $ writeTChan ch qm
