@@ -9,7 +9,7 @@ test: build
 	runghc Setup.lhs test
 
 conf:
-	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization=2
+	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 
 conf-ts:
 	runghc Setup.lhs configure --flags="debug threadscope" --user
