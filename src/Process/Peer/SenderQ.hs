@@ -13,6 +13,7 @@ import Control.Monad.State
 import Prelude hiding (catch, log)
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 
 import Channels
 import Process
@@ -30,7 +31,7 @@ data SenderQMsg = SenderQCancel PieceNum Block -- ^ Peer requested that we cance
                 | SenderQRequestPrune PieceNum Block -- ^ Prune SendQueue of this (pn, blk) pair
 
 data CF = CF { sqIn :: TChan SenderQMsg
-             , sqOut :: TMVar B.ByteString
+             , sqOut :: TMVar L.ByteString
              , bandwidthCh :: BandwidthChannel
              , readBlockTV :: TMVar B.ByteString
              , fsCh        :: FSPChannel
@@ -45,7 +46,7 @@ instance Logging CF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-start :: TChan SenderQMsg -> TMVar B.ByteString -> BandwidthChannel
+start :: TChan SenderQMsg -> TMVar L.ByteString -> BandwidthChannel
       -> FSPChannel -> SupervisorChannel -> IO ThreadId
 start inC outC bandwC fspC supC = do
     rbtv <- liftIO newEmptyTMVarIO
@@ -68,7 +69,7 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                             Right (pn, blk) -> do d <- readBlock pn blk
                                                   return $ Piece pn (blockOffset blk) d
                      let bs = encodePacket p
-                         sz = fromIntegral $ B.length bs
+                         sz = fromIntegral $ L.length bs
                      liftIO . atomically $
                          (putTMVar ov bs >> return (Left sz)) `orElse`
                          (readTChan ic >>= return . Right)

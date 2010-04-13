@@ -22,7 +22,6 @@ where
 import Control.Applicative hiding (empty)
 import Control.Monad
 
-import Data.Monoid
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
@@ -87,8 +86,8 @@ p32be = putWord32be . fromIntegral
 decodeMsg :: Get Message
 decodeMsg = {-# SCC "decodeMsg" #-} get
 
-encodePacket :: Message -> B.ByteString
-encodePacket m = mconcat [szEnc, mEnc]
+encodePacket :: Message -> L.ByteString
+encodePacket m = L.fromChunks [szEnc, mEnc]
   where mEnc  = encode m
         sz    = B.length mEnc
         szEnc = runPut . p32be $ sz
