@@ -132,7 +132,7 @@ startup nPieces = do
     -- Install the StatusP timer
     c <- asks timerCh
     _ <- registerSTM 5 c ()
-    forever eventLoop
+    eventLoop
 
 cleanup :: Process CF ST ()
 cleanup = do
@@ -163,6 +163,7 @@ eventLoop = do
         ChokeMgrEvt m      -> chokeMsg m
         UpRateEvent up     -> modify (\s -> s { upRate = RC.update up $ upRate s})
         TimerEvent         -> timerTick
+    eventLoop
 
 data Operation = PeerMsgEvt (Message, Integer)
                | ChokeMgrEvt PeerMessage
