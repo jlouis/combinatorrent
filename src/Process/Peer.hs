@@ -161,7 +161,9 @@ eventLoop = do
     case op of
         PeerMsgEvt (m, sz) -> peerMsg m sz
         ChokeMgrEvt m      -> chokeMsg m
-        UpRateEvent up     -> modify (\s -> s { upRate = RC.update up $ upRate s})
+        UpRateEvent up     -> do s <- get
+                                 u <- return $ RC.update up $ upRate s
+                                 put $! s { upRate = u }
         TimerEvent         -> timerTick
     eventLoop
 
