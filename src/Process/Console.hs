@@ -39,9 +39,9 @@ start :: TMVar () -> St.StatusChannel -> SupervisorChannel -> IO ThreadId
 start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP
-    spawnP (CF cmdC wrtC) () (catchP (forever lp) (defaultStopHandler supC))
+    spawnP (CF cmdC wrtC) () (catchP eventLoop (defaultStopHandler supC))
   where
-    lp = do
+    eventLoop = do
         c <- asks cmdCh
         o <- asks wrtCh
         m <- liftIO . atomically $ readTChan c
@@ -54,6 +54,7 @@ start waitC statusC supC = do
                 liftIO . atomically $ writeTChan statusC (St.RequestAllTorrents v)
                 sts <- liftIO . atomically $ takeTMVar v
                 liftIO . atomically $ writeTChan o (show sts)
+        eventLoop
 
 helpMessage :: String
 helpMessage = concat

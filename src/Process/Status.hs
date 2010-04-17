@@ -95,7 +95,7 @@ start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChannel ->
 start fp statusC tv supC = do
     r <- newIORef (0,0)
     spawnP (CF statusC tv) M.empty
-        (cleanupP (forever (pgm r)) (defaultStopHandler supC) (cleanup r))
+        (cleanupP (pgm r) (defaultStopHandler supC) (cleanup r))
   where
     cleanup r = do
         st <- liftIO $ readIORef r
@@ -114,6 +114,7 @@ start fp statusC tv supC = do
         case x of
             Nothing -> return ()
             Just msg -> recvMsg msg
+        pgm r
 
 newMap :: Integer -> TrackerChannel -> StatusState
 newMap l trackerMsgC =

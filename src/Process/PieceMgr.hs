@@ -140,12 +140,15 @@ start :: PieceMgrChannel -> FSPChannel -> ChokeMgrChannel -> StatusChannel -> ST
 start mgrC fspC chokeC statC db ih supC =
     {-# SCC "PieceMgr" #-}
     spawnP (CF mgrC fspC chokeC statC ih) db
-                    (catchP (forever pgm)
+                    (catchP eventLoop
                         (defaultStopHandler supC))
-  where pgm = do
-          assertST
-          rpcMessage
-          drainSend
+
+eventLoop :: Process CF ST ()
+eventLoop = do
+    assertST
+    rpcMessage
+    drainSend
+    eventLoop
 
 drainSend :: Process CF ST ()
 drainSend = do

@@ -97,7 +97,7 @@ start :: InfoHash -> TorrentInfo -> PeerId -> PortID
       -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
        spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
-                    (cleanupP (forever loop)
+                    (cleanupP loop
                         (defaultStopHandler supC)
                         stopEvent)
   where
@@ -120,6 +120,7 @@ start ih ti pid port statusC msgC pc supC =
                 modify (\s -> s { state = Started }) >> talkTracker
             Complete ->
                   modify (\s -> s { state = Completed }) >> talkTracker
+          loop
     talkTracker = pokeTracker >>= timerUpdate
 
 eventTransition :: Process CF ST ()

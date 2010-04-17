@@ -37,13 +37,14 @@ start :: FilePath -- ^ Path to watch
       -> IO ThreadId
 start fp chan supC = do
     spawnP (CF chan fp) S.empty
-            (catchP (forever pgm) (defaultStopHandler supC))
+            (catchP pgm (defaultStopHandler supC))
   where pgm = do
         q <- liftIO $ registerDelay (5 * 1000000)
         liftIO . atomically $ do
             b <- readTVar q
             if b then return () else retry
         processDirectory
+        pgm
 
 processDirectory :: Process CF ST ()
 processDirectory = do

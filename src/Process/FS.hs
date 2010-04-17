@@ -47,7 +47,7 @@ data ST = ST
 
 start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChannel -> IO ThreadId
 start handles pm fspC supC =
-    spawnP (CF fspC) (ST handles pm) (catchP (forever lp) (defaultStopHandler supC))
+    spawnP (CF fspC) (ST handles pm) (catchP lp (defaultStopHandler supC))
   where
     lp = do
         c <- asks fspCh
@@ -70,3 +70,4 @@ start handles pm fspC supC =
                fh <- gets fileHandles
                pmap <- gets pieceMap
                liftIO $ FS.writeBlock fh pn blk pmap bs
+        lp

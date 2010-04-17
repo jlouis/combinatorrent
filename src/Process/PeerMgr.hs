@@ -82,7 +82,7 @@ start ch pid chokeMgrC rtv supC =
        fakeChan <- newTChanIO
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC rtv)
-              (ST [] M.empty pid cmap) (catchP (forever lp)
+              (ST [] M.empty pid cmap) (catchP lp
                                        (defaultStopHandler supC))
   where
     cmap = M.empty
@@ -96,6 +96,7 @@ start ch pid chokeMgrC rtv supC =
             Left msg -> incomingPeers msg
             Right msg -> peerEvent msg
         fillPeers
+        lp
 
 incomingPeers :: PeerMgrMsg -> Process CF ST ()
 incomingPeers msg =

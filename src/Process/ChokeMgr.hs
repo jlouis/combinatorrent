@@ -69,7 +69,7 @@ start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChannel
 start ch rtv ur supC = do
     _ <- registerSTM roundTickSecs ch Tick
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
-            (catchP (forever pgm)
+            (catchP pgm
               (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 slots S.empty M.empty []
@@ -84,6 +84,7 @@ start ch rtv ur supC = do
            BlockComplete ih pn blk -> informBlockComplete ih pn blk
            PieceDone ih pn -> informDone ih pn
            TorrentComplete ih -> modify (\s -> s { seeding = S.insert ih $ seeding s })
+        pgm
     tick = do debugP "Ticked"
               c <- asks mgrCh
               _ <- registerSTM roundTickSecs c Tick

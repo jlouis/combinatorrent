@@ -51,7 +51,7 @@ start :: TChan SenderQMsg -> TMVar L.ByteString -> BandwidthChannel
 start inC outC bandwC fspC supC = do
     rbtv <- liftIO newEmptyTMVarIO
     spawnP (CF inC outC bandwC rbtv fspC) (ST Q.empty 0)
-        (catchP (forever pgm)
+        (catchP pgm
                 (defaultStopHandler supC))
 
 pgm :: Process CF ST ()
@@ -86,6 +86,7 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                                    modifyQ (Q.push $ Left Choke)
                 SenderQRequestPrune n blk ->
                      modifyQ (Q.filter (filterRequest n blk))
+    pgm
 
 rateUpdateEvent :: Process CF ST ()
 rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
