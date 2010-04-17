@@ -50,11 +50,10 @@ Planned for the next release
 Items for later (no particular order)
 -------------------------------------
 
-   - Reduce CPU load and memory load. Alternative representations of various
-     data structures are needed.
+   - Reduce CPU load. Alternative representations of various data structures
+     are needed.
    - Play with the code coverage in GHC.
    - Add prioritization support of multiTorrents
-   - Support partial downloads (select files you want in the torrent)
    - Design, build and improve a graphic UI.
    - Design, build and improve a protocol for communicating with the client.
    - Azureus/Vuze has a keepalive flood detector built-in. Consider if this
