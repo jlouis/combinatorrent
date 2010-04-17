@@ -28,10 +28,12 @@ start h ch supC = spawnP (CF ch h) () (catchP pgm
                                               liftIO $ hClose h))
 
 pgm :: Process CF () ()
-pgm = forever $ do
-         ch <- asks chan
-         h <- asks hndl
-         liftIO $ do
-            r <- atomically $ takeTMVar ch
-            L.hPut h r
-            hFlush h
+pgm = do
+   ch <- asks chan
+   h <- asks hndl
+   liftIO $ do
+      r <- atomically $ takeTMVar ch
+      L.hPut h r
+      hFlush h
+   pgm
+

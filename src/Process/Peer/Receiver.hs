@@ -33,7 +33,7 @@ start :: Handle -> TChan (Message, Integer)
 start h ch supC = do
    hSetBuffering h NoBuffering
    spawnP (CF ch) h
-        (catchP (forever readSend)
+        (catchP readSend
                (defaultStopHandler supC))
 
 readSend :: Process CF Handle ()
@@ -49,6 +49,7 @@ readSend = do
                     Left _ -> do warningP "Incorrect parse in receiver, dying!"
                                  stopP
                     Right msg -> liftIO . atomically $ writeTChan c (msg, fromIntegral l)
+    readSend
 
 conv :: B.ByteString -> Process CF Handle Word32
 conv bs = do
