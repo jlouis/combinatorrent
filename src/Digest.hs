@@ -1,4 +1,5 @@
 -- | Simple abstraction for message digests
+{-# LANGUAGE TypeSynonymInstances #-}
 module Digest
   ( Digest
   , digest
@@ -6,6 +7,7 @@ module Digest
 where
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad.State
 
 import Data.Word
@@ -18,6 +20,8 @@ import qualified OpenSSL.Digest as SSL
 
 -- Consider newtyping this
 type Digest = B.ByteString
+
+instance NFData Digest
 
 digest :: L.ByteString -> IO B.ByteString
 digest bs = {-# SCC "sha1_digest" #-} B.pack <$> digestLBS SSL.SHA1 bs

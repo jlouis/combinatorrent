@@ -146,6 +146,7 @@ recvMsg msg =
             liftIO . atomically $ writeTChan (trackerMsgCh ns) Complete
             modify (\s -> M.insert ih (ns { state = Seeding}) s)
 
+
 fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()
 fetchUpdates r = do
     tv <- asks statusTV
@@ -159,7 +160,8 @@ fetchUpdates r = do
             ndn = d + down
         liftIO $ nup `deepseq` ndn `deepseq` writeIORef r (nup, ndn)
         s <- get
-        put $! M.adjust (\st ->
-            st `deepseq` st { uploaded = (uploaded st) + up
-                            , downloaded = (downloaded st) + down }) ih s) updates
+        let adjusted = M.adjust (\st ->
+                            st { uploaded = (uploaded st) + up
+                               , downloaded = (downloaded st) + down }) ih s
+        deepseq adjusted (put adjusted)) updates
 
