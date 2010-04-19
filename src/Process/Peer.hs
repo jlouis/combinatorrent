@@ -185,18 +185,15 @@ getPiecesDone = do
 -- | Process an event from the Choke Manager
 chokeMsg :: PeerMessage -> Process CF ST ()
 chokeMsg msg = do
-   debugP "ChokeMgrEvent"
    case msg of
        PieceCompleted pn -> outChan $ SenderQ.SenderQM $ Have pn
        ChokePeer -> do choking <- gets weChoke
                        when (not choking)
                             (do outChan $ SenderQ.SenderOChoke
-                                debugP "ChokePeer"
                                 modify (\s -> s {weChoke = True}))
        UnchokePeer -> do choking <- gets weChoke
                          when choking
                               (do outChan $ SenderQ.SenderQM Unchoke
-                                  debugP "UnchokePeer"
                                   modify (\s -> s {weChoke = False}))
        CancelBlock pn blk -> do
            modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
@@ -218,7 +215,6 @@ timerTick :: Process CF ST ()
 timerTick = do
    mTid <- liftIO myThreadId
    processLastMessage
-   debugP "TimerEvent"
    tch <- asks timerCh
    _ <- registerSTM 5 tch ()
    -- Tell the ChokeMgr about our progress
@@ -238,7 +234,6 @@ timerTick = do
    -- Tell the Status Process about our progress
    let (upCnt, nuRate) = RC.extractCount $ nur
        (downCnt, ndRate) = RC.extractCount $ ndr
-   debugP $ "Sending peerStats: " ++ show upCnt ++ ", " ++ show downCnt
    stv <- asks statTV
    ih <- asks pcInfoHash
    liftIO .atomically $ do
@@ -388,7 +383,6 @@ checkWatermark = do
     when (sz < mark)
         (do
            toQueue <- grabBlocks (hiMark - sz)
-           debugP $ "Got " ++ show (length toQueue) ++ " blocks: " ++ show toQueue
            queuePieces toQueue)
 
 -- These three values are chosen rather arbitrarily at the moment.
