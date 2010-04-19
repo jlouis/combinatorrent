@@ -388,13 +388,11 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 --   returns a list of Blocks which where grabbed.
 grabBlocks :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
 grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
-    ps' <- PS.copy eligible
-    blocks <- tryGrabProgress k ps' []
+    blocks <- tryGrab k eligible
     pend <- gets pendingPieces
     pendN <- PS.null pend
     if blocks == [] && pendN
-        then do ps'' <- PS.copy eligible
-                blks <- grabEndGame k ps''
+        then do blks <- grabEndGame k eligible
                 modify (\db -> db { endGaming = True })
                 debugP $ "PieceMgr entered endgame."
                 return $ Endgame blks
@@ -403,21 +401,23 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
 
 -- Grabbing blocks is a state machine implemented by tail calls
 -- Try grabbing pieces from the pieces in progress first
-tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
+tryGrab :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
+tryGrab k ps = tryGrabProgress k ps [] =<< (M.keys <$> gets inProgress)
+
+tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)] -> [PieceNum]
                 -> Process CF ST [(PieceNum, Block)]
-tryGrabProgress 0 _  captured = return captured
-tryGrabProgress n ps captured = grabber =<< (M.keys <$> gets inProgress)
-  where
-    grabber []       = tryGrabPending n ps captured
-    grabber (i : is) = do m <- PS.member i ps
-                          if m
-                            then grabFromProgress n ps i captured
-                            else grabber is
+tryGrabProgress 0 _ captured _ = return captured
+tryGrabProgress k ps captured [] = tryGrabPending k ps captured
+tryGrabProgress k ps captured (i : is) =
+    do m <- PS.member i ps
+       if m
+         then grabFromProgress k ps i captured is
+         else tryGrabProgress k ps captured is
 
 -- The Piece @p@ was found, grab it
-grabFromProgress :: PieceNum -> PS.PieceSet -> PieceNum -> [(PieceNum, Block)]
+grabFromProgress :: PieceNum -> PS.PieceSet -> PieceNum -> [(PieceNum, Block)] -> [PieceNum]
                  -> Process CF ST [(PieceNum, Block)]
-grabFromProgress n ps p captured = do
+grabFromProgress n ps p captured nxt = do
     inprog <- gets inProgress
     ipp <- case M.lookup p inprog of
               Nothing -> fail "grabFromProgress: could not lookup piece"
@@ -426,14 +426,16 @@ grabFromProgress n ps p captured = do
         nIpp = ipp { ipPendingBlocks = rest }
     -- This rather ugly piece of code should be substituted with something better
     if grabbed == []
-         -- All pieces are taken, try the next one.
-         then do PS.delete p ps --TODO: Dangerous since we will NEVER reconsider that piece then!
-                 tryGrabProgress n ps captured
-         else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
-                 tryGrabProgress (n - length grabbed) ps ([(p,g) | g <- grabbed] ++ captured)
+        then tryGrabProgress n ps captured nxt
+        else do modify (\db -> db { inProgress = M.insert p nIpp inprog })
+                tryGrabProgress
+                    (n - length grabbed) ps
+                    ([(p,g) | g <- grabbed] ++ captured)
+                    nxt
 
 -- Try grabbing pieces from the pending blocks
-tryGrabPending :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)] -> Process CF ST [(PieceNum, Block)]
+tryGrabPending :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
+               -> Process CF ST [(PieceNum, Block)]
 tryGrabPending n ps captured = do
     histo <- gets histogram
     pending <- gets pendingPieces
@@ -453,7 +455,7 @@ tryGrabPending n ps captured = do
                 ipp = InProgressPiece sz S.empty blockList
             PS.delete h =<< gets pendingPieces
             modify (\db -> db { inProgress    = M.insert h ipp inProg })
-            tryGrabProgress n ps captured
+            tryGrabProgress n ps captured [h]
 
 grabEndGame :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
 grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
