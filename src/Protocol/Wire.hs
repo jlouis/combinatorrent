@@ -41,7 +41,7 @@ import Torrent
 
 ------------------------------------------------------------
 
-type BitField    = L.ByteString
+type BitField    = B.ByteString
 
 data Message = KeepAlive
              | Choke
@@ -99,7 +99,7 @@ instance Serialize Message where
     put Interested      = p8 2
     put NotInterested   = p8 3
     put (Have pn)       = p8 4 *> p32be pn
-    put (BitField bf)   = p8 5 *> putLazyByteString bf
+    put (BitField bf)   = p8 5 *> putByteString bf
     put (Request pn (Block os sz))
                         = p8 6 *> mapM_ p32be [pn,os,sz]
     put (Piece pn os c) = p8 7 *> mapM_ p32be [pn,os] *> putByteString c
@@ -121,7 +121,7 @@ getUnchoke = byte 1 *> return Unchoke
 getIntr    = byte 2 *> return Interested
 getNI      = byte 3 *> return NotInterested
 getHave    = byte 4 *> (Have <$> gw32)
-getBF      = byte 5 *> (BitField <$> (remaining >>= getLazyByteString . fromIntegral))
+getBF      = byte 5 *> (BitField <$> (remaining >>= getByteString . fromIntegral))
 getReq     = byte 6 *> (Request  <$> gw32 <*> (Block <$> gw32 <*> gw32))
 getPiece   = byte 7 *> (Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString))
 getCancel  = byte 8 *> (Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32))
@@ -220,8 +220,8 @@ receiveHandshake h pid ihTst = do
 
 -- | The call @constructBitField pieces@ will return the a ByteString suitable for inclusion in a
 --   BITFIELD message to a peer.
-constructBitField :: Int -> [PieceNum] -> L.ByteString
-constructBitField sz pieces = L.pack . build $ m
+constructBitField :: Int -> [PieceNum] -> B.ByteString
+constructBitField sz pieces = B.pack . build $ m
     where m = map (`elem` pieces) [0..sz-1 + pad]
           pad = 8 - (sz `mod` 8)
           build [] = []

@@ -23,7 +23,6 @@ import Prelude hiding (catch, log)
 import Data.Array
 import Data.Bits
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 
 import qualified Data.PieceSet as PS
 import Data.Maybe
@@ -429,9 +428,9 @@ grabBlocks n = do
             modify (\s -> s { runningEndgame = True }) >> return bs
 
 
-createPeerPieces :: MonadIO m => Int -> L.ByteString -> m PS.PieceSet
+createPeerPieces :: MonadIO m => Int -> B.ByteString -> m PS.PieceSet
 createPeerPieces nPieces =
-    PS.fromList nPieces . map fromIntegral . concat . decodeBytes 0 . L.unpack
+    PS.fromList nPieces . map fromIntegral . concat . decodeBytes 0 . B.unpack
   where decodeByte :: Int -> Word8 -> [Maybe Int]
         decodeByte soFar w =
             let dBit n = if testBit w (7-n)
