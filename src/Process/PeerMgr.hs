@@ -22,8 +22,7 @@ import Control.Monad.Reader
 import Data.Array
 import qualified Data.Map as M
 
-import Network
-import System.IO
+import qualified Network.Socket as Sock
 import System.Log.Logger
 
 import Channels
@@ -39,7 +38,7 @@ import Supervisor
 import Torrent hiding (infoHash)
 
 data PeerMgrMsg = PeersFromTracker InfoHash [Peer]
-                | NewIncoming (Handle, HostName, PortNumber)
+                | NewIncoming (Sock.Socket, Sock.SockAddr)
                 | NewTorrent InfoHash TorrentLocal
                 | StopTorrent InfoHash
 
@@ -104,14 +103,14 @@ incomingPeers msg =
        PeersFromTracker ih ps -> do
               debugP "Adding peers to queue"
               modify (\s -> s { peersInQueue = (map (ih,) ps) ++ peersInQueue s })
-       NewIncoming conn@(h, _, _) -> do
+       NewIncoming conn@(s, _) -> do
            sz <- liftM M.size $ gets peers
            if sz < numPeers
                then do debugP "New incoming peer, handling"
                        _ <- addIncoming conn
                        return ()
                else do debugP "Already too many peers, closing!"
-                       liftIO $ hClose h
+                       liftIO $ Sock.sClose s
        NewTorrent ih tl -> do
            modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
        StopTorrent _ih -> do
@@ -147,15 +146,15 @@ fillPeers = do
             modify (\s -> s { peersInQueue = rest }))
 
 addPeer :: (InfoHash, Peer) -> Process CF ST ThreadId
-addPeer (ih, (Peer hn prt)) = do
+addPeer (ih, (Peer addr)) = do
     ppid <- gets peerId
     pool <- asks peerPool
     mgrC <- asks mgrCh
     cm   <- gets cmMap
     v    <- asks chokeRTV
-    liftIO $ connect (hn, prt, ppid, ih) pool mgrC v cm
+    liftIO $ connect (addr, ppid, ih) pool mgrC v cm
 
-addIncoming :: (Handle, HostName, PortNumber) -> Process CF ST ThreadId
+addIncoming :: (Sock.Socket, Sock.SockAddr) -> Process CF ST ThreadId
 addIncoming conn = do
     ppid   <- gets peerId
     pool <- asks peerPool
@@ -164,23 +163,23 @@ addIncoming conn = do
     cm   <- gets cmMap
     liftIO $ acceptor conn pool ppid mgrC v cm
 
-type ConnectRecord = (HostName, PortID, PeerId, InfoHash)
+type ConnectRecord = (Sock.SockAddr, PeerId, InfoHash)
 
 connect :: ConnectRecord -> SupervisorChannel -> MgrChannel -> RateTVar -> ChanManageMap
         -> IO ThreadId
-connect (host, port, pid, ih) pool mgrC rtv cmap =
+connect (addr, pid, ih) pool mgrC rtv cmap =
     forkIO (connector >> return ())
   where 
         connector =
-         do debugM "Process.PeerMgr.connect" $
-                "Connecting to " ++ show host ++ " (" ++ showPort port ++ ")"
-            h <- connectTo host port
+         do sock <- Sock.socket Sock.AF_INET Sock.Stream Sock.defaultProtocol
+            debugM "Process.PeerMgr.connect" $ "Connecting to: " ++ show addr
+            Sock.connect sock addr
             debugM "Process.PeerMgr.connect" "Connected, initiating handShake"
-            r <- initiateHandshake h pid ih
+            r <- initiateHandshake sock pid ih
             debugM "Process.PeerMgr.connect" "Handshake run"
             case r of
               Left err -> do debugM "Process.PeerMgr.connect"
-                                ("Peer handshake failure at host " ++ host
+                                ("Peer handshake failure at host " ++ show addr
                                   ++ " with error " ++ err)
                              return ()
               Right (_caps, _rpid, ihsh) ->
@@ -188,32 +187,32 @@ connect (host, port, pid, ih) pool mgrC rtv cmap =
                      let tc = case M.lookup ihsh cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
-                     children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
+                     children <- Peer.start sock mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
                                                       (tcPM tc) (succ . snd . bounds $ tcPM tc) ihsh
                      atomically $ writeTChan pool $
                         SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
 
-acceptor :: (Handle, HostName, PortNumber) -> SupervisorChannel
+acceptor :: (Sock.Socket, Sock.SockAddr) -> SupervisorChannel
          -> PeerId -> MgrChannel -> RateTVar -> ChanManageMap
          -> IO ThreadId
-acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
+acceptor (s,sa) pool pid mgrC rtv cmmap =
     forkIO (connector >> return ())
   where ihTst k = M.member k cmmap
         connector = do
             debugLog "Handling incoming connection"
-            r <- receiveHandshake h pid ihTst
+            r <- receiveHandshake s pid ihTst
             debugLog "RecvHandshake run"
             case r of
-                Left err -> do debugLog ("Incoming Peer handshake failure with " ++ show hn ++ "("
-                                            ++ show pn ++ "), error: " ++ err)
-                               return ()
+                Left err -> do debugLog ("Incoming Peer handshake failure with "
+                                            ++ show sa ++ ", error: " ++ err)
+                               return()
                 Right (_caps, _rpid, ih) ->
                     do debugLog "entering peerP loop code"
                        let tc = case M.lookup ih cmmap of
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
-                       children <- Peer.start h mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
+                       children <- Peer.start s mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatTV tc) (tcPM tc)
                                                         (succ . snd . bounds $ tcPM tc) ih
                        atomically $ writeTChan pool $
@@ -221,6 +220,3 @@ acceptor (h,hn,pn) pool pid mgrC rtv cmmap =
                        return ()
         debugLog = debugM "Process.PeerMgr.acceptor"
 
-showPort :: PortID -> String
-showPort (PortNumber pn) = show pn
-showPort _               = "N/A"

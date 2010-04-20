@@ -15,11 +15,11 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.DeepSeq
 
-import Network
+import Network.Socket
+
 import Torrent
 
-data Peer = Peer { peerHost :: HostName,
-                   peerPort :: PortID }
+data Peer = Peer SockAddr
 
 data PeerMessage = ChokePeer
                  | UnchokePeer

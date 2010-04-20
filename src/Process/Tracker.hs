@@ -18,11 +18,13 @@ import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
 
+import Data.Bits
 import Data.Char (ord, chr)
 import Data.List (intersperse)
 import qualified Data.ByteString as B
+import Data.Word
 
-import Network
+import Network.Socket as S
 import Network.HTTP hiding (port)
 import Network.URI hiding (unreserved)
 
@@ -88,11 +90,11 @@ data ST = ST {
         torrentInfo :: TorrentInfo
       , peerId :: PeerId
       , state :: TrackerEvent
-      , localPort :: PortID
+      , localPort :: S.PortNumber
       , nextTick :: Integer
       }
 
-start :: InfoHash -> TorrentInfo -> PeerId -> PortID
+start :: InfoHash -> TorrentInfo -> PeerId -> S.PortNumber
       -> Status.StatusChannel -> TrackerChannel -> PeerMgr.PeerMgrChannel
       -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
@@ -200,16 +202,44 @@ processResultDict d =
                        <*> (pure $ BCode.trackerMinInterval d)
 
 
-decodeIps :: B.ByteString -> [PeerMgr.Peer]
-decodeIps = decodeIps' . fromBS
+decodeIps :: (B.ByteString, B.ByteString) -> [PeerMgr.Peer]
+decodeIps (ipv4, ipv6) = decodeIps4 ipv4 ++ decodeIps6 ipv6
 
--- Decode a list of IP addresses. We expect these to be a compact response by default.
-decodeIps' :: String -> [PeerMgr.Peer]
-decodeIps' [] = []
-decodeIps' (b1:b2:b3:b4:p1:p2 : rest) = PeerMgr.Peer ip port : decodeIps' rest
-  where ip = concat . intersperse "." . map (show . ord) $ [b1, b2, b3, b4]
-        port = PortNumber . fromIntegral $ ord p1 * 256 + ord p2
-decodeIps' _xs = []
+decodeIps4 :: B.ByteString -> [PeerMgr.Peer]
+decodeIps4 bs | B.null bs = []
+              | B.length bs >= 6 =
+                    let (ip, r1) = B.splitAt 4 bs
+                        (port, r2) = B.splitAt 2 r1
+                        i' = cW32 ip
+                        p' = PortNum $ cW16 port
+                    in PeerMgr.Peer (S.SockAddrInet p' i') : decodeIps4 r2
+              | otherwise = [] -- Some trackers fail spectacularly
+
+decodeIps6 :: B.ByteString -> [PeerMgr.Peer]
+decodeIps6 bs | B.null bs = []
+              | B.length bs >= 18 =
+                    let (ip6, r1) = B.splitAt 16 bs
+                        (port, r2) = B.splitAt 2 r1
+                        i' = cW128 ip6
+                        p' = PortNum $ cW16 port
+                    in PeerMgr.Peer (S.SockAddrInet6 p' 0 i' 0) : decodeIps6 r2
+              | otherwise = [] -- Some trackers fail spectacularly
+
+cW32 :: B.ByteString -> Word32
+cW32 bs = fromIntegral . sum $ s
+  where up = B.unpack bs
+        s  = [ fromIntegral b `shiftL` sa | (b, sa) <- zip up [0,8,16,24]] :: [Word32]
+
+cW16 :: B.ByteString -> Word16
+cW16 bs = fromIntegral . sum $ s
+  where s = [ fromIntegral b `shiftL` sa | (b, sa) <- zip (B.unpack bs) [0,8]] :: [Word16]
+
+cW128 :: B.ByteString -> (Word32, Word32, Word32, Word32)
+cW128 bs =
+    let (q1, r1) = B.splitAt 4 bs
+        (q2, r2) = B.splitAt 4 r1
+        (q3, q4) = B.splitAt 4 r2
+    in (cW32 q1, cW32 q2, cW32 q3, cW32 q4)
 
 trackerRequest :: URI -> Process CF ST (Either String TrackerResponse)
 trackerRequest uri =
@@ -257,8 +287,7 @@ buildRequestURL ss = do ti <- gets torrentInfo
           prt :: Process CF ST Integer
           prt = do lp <- gets localPort
                    case lp of
-                     PortNumber pnum -> return $ fromIntegral pnum
-                     _ -> do fail "Unknown port type"
+                     PortNum pnum -> return $ fromIntegral pnum
           trackerfyEvent ev =
                 case ev of
                     Running   -> []

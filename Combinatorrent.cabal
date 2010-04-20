@@ -66,6 +66,7 @@ executable Combinatorrent
     HUnit,
     mtl,
     network,
+    network-bytestring,
     parsec,
     pretty,
     PSQueue,

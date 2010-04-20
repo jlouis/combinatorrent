@@ -36,6 +36,7 @@ import qualified Data.ByteString as B
 import qualified Data.Map as M
 
 import Network
+import Network.Socket
 import Numeric
 
 import System.Random
@@ -120,8 +121,8 @@ defaultOptimisticSlots :: Int
 defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
-defaultPort :: PortID
-defaultPort = PortNumber $ fromInteger 1579
+defaultPort :: PortNumber
+defaultPort = PortNum $ fromInteger 1579
 
 -- | The current version of the Combinatorrent protocol string. This is bumped
 --   whenever we make a radical change to the protocol communication or fix a grave bug.

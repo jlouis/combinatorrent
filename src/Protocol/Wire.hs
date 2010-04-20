@@ -36,7 +36,10 @@ import Data.Serialize.Put
 import Data.Serialize.Get
 
 import Data.Char
-import System.IO
+import Network.Socket hiding (send, sendTo, recv, recvFrom, KeepAlive)
+import Network.Socket.ByteString
+import qualified Network.Socket.ByteString.Lazy as Lz
+
 import System.Log.Logger
 
 import Test.Framework
@@ -215,10 +218,17 @@ toW8 = fromIntegral . ord
 
 
 -- | Receive the header parts from the other end
-receiveHeader :: Handle -> Int -> (InfoHash -> Bool)
+receiveHeader :: Socket -> Int -> (InfoHash -> Bool)
               -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
-receiveHeader h sz ihTst = parseHeader `fmap` B.hGet h sz
+receiveHeader sock sz ihTst = parseHeader `fmap` loop [] sz
   where parseHeader = runGet (headerParser ihTst)
+        loop :: [B.ByteString] -> Int -> IO B.ByteString
+        loop bs z | z == 0 = return . B.concat $ reverse bs
+                  | otherwise = do
+                        nbs <- recv sock z
+                        when (B.length nbs == 0) $ fail "Socket is dead"
+                        loop (nbs : bs) (z - B.length nbs)
+
 
 headerParser :: (InfoHash -> Bool) -> Get ([Capabilities], L.ByteString, InfoHash)
 headerParser ihTst = do
@@ -237,14 +247,13 @@ decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities _ = []
 
 -- | Initiate a handshake on a socket
-initiateHandshake :: Handle -> PeerId -> InfoHash
+initiateHandshake :: Socket -> PeerId -> InfoHash
                   -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
-initiateHandshake handle peerid infohash = do
+initiateHandshake sock peerid infohash = do
     debugM "Protocol.Wire" "Sending off handshake message"
-    L.hPut handle msg
-    hFlush handle
+    _ <- Lz.send sock msg
     debugM "Protocol.Wire" "Receiving handshake from other end"
-    receiveHeader handle sz (== infohash)
+    receiveHeader sock sz (== infohash)
   where msg = handShakeMessage peerid infohash
         sz = fromIntegral (L.length msg)
 
@@ -256,17 +265,16 @@ handShakeMessage pid ih =
                                  putByteString . toBS $ pid]
 
 -- | Receive a handshake on a socket
-receiveHandshake :: Handle -> PeerId -> (InfoHash -> Bool)
+receiveHandshake :: Socket -> PeerId -> (InfoHash -> Bool)
                  -> IO (Either String ([Capabilities], L.ByteString, InfoHash))
-receiveHandshake h pid ihTst = do
+receiveHandshake s pid ihTst = do
     debugM "Protocol.Wire" "Receiving handshake from other end"
-    r <- receiveHeader h sz ihTst
+    r <- receiveHeader s sz ihTst
     case r of
         Left err -> return $ Left err
         Right (caps, rpid, ih) ->
             do debugM "Protocol.Wire" "Sending back handshake message"
-               L.hPut h (msg ih)
-               hFlush h
+               _ <- Lz.send s (msg ih)
                return $ Right (caps, rpid, ih)
   where msg ih = handShakeMessage pid ih
         sz = fromIntegral (L.length $ msg (B.pack $ replicate 20 32)) -- Dummy value

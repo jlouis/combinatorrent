@@ -31,7 +31,7 @@ import Data.Set as S hiding (map)
 import Data.Time.Clock
 import Data.Word
 
-import System.IO
+import Network.Socket hiding (KeepAlive)
 
 import Channels
 import Process
@@ -52,17 +52,17 @@ import qualified Process.Peer.Receiver as Receiver
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Handle -> MgrChannel -> RateTVar -> PieceMgrChannel
+start :: Socket -> MgrChannel -> RateTVar -> PieceMgrChannel
              -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
-start h pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
+start s pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- newTChanIO
     senderMV <- newEmptyTMVarIO
     receiverC <- newTChanIO
     sendBWC <- newTChanIO
-    return [Worker $ Sender.start h senderMV,
+    return [Worker $ Sender.start s senderMV,
             Worker $ SenderQ.start queueC senderMV sendBWC fsC,
-            Worker $ Receiver.start h receiverC,
+            Worker $ Receiver.start s receiverC,
             Worker $ peerP pMgrC rtv pieceMgrC pm nPieces
                                 queueC receiverC sendBWC stv ih]
 

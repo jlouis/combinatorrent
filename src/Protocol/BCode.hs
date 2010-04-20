@@ -250,8 +250,10 @@ trackerError, trackerWarning :: BCode -> Maybe B.ByteString
 trackerError = searchStr "failure reason"
 trackerWarning = searchStr "warning mesage"
 
-trackerPeers :: BCode -> Maybe B.ByteString
-trackerPeers = searchStr "peers"
+trackerPeers :: BCode -> Maybe (B.ByteString, B.ByteString)
+trackerPeers bc = do v4 <- searchStr "peers" bc
+                     v6 <- return $ maybe (B.empty) id $ searchStr "peers6" bc
+                     return (v4, v6)
 
 info :: BCode -> Maybe BCode
 info = search [toPS "info"]
