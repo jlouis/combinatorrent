@@ -9,6 +9,7 @@ module Protocol.Wire
     ( Message(..)
     , encodePacket
     , decodeMsg
+    , getAPMsg -- ^ Run attoparsec-based parser on input
     , BitField
     , constructBitField
     -- Handshaking
@@ -24,6 +25,9 @@ import Control.Monad
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
+
+import Data.Attoparsec as A
+import Data.Attoparsec.Combinator as AC
 
 import Data.Serialize
 import Data.Serialize.Put
@@ -113,6 +117,36 @@ instance Serialize Message where
        <|> getBF      <|> getReq
        <|> getPiece   <|> getCancel
        <|> getPort
+
+getAPMsg :: Int -> Parser Message
+getAPMsg l =
+    AC.choice [ A.word8 0 *> return Choke
+              , A.word8 1 *> return Unchoke
+              , A.word8 2 *> return Interested
+              , A.word8 3 *> return NotInterested
+              , A.word8 4 *> (Have <$> apW32be)
+              , A.word8 5 *> (BitField <$> (A.take (l-1)))
+              , A.word8 6 *> (Request <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+              , A.word8 7 *> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
+              , A.word8 8 *> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+              , A.word8 9 *> (Port . fromIntegral <$> apW16be)]
+
+apW32be :: Parser Int
+apW32be = do
+    [b1,b2,b3,b4] <- replicateM 4 A.anyWord8
+    let b1' = fromIntegral b1
+        b2' = fromIntegral b2
+        b3' = fromIntegral b3
+        b4' = fromIntegral b4
+    return (b4' + (256 * b3') + (256 * 256 * b2') + (256 * 256 * 256 * b1'))
+
+apW16be :: Parser Int
+apW16be = do
+    [b1, b2] <- replicateM 2 A.anyWord8
+    let b1' = fromIntegral b1
+        b2' = fromIntegral b2
+    return (b2' + 256 * b1')
+
 
 getBF, getChoke, getUnchoke, getIntr, getNI, getHave, getReq :: Get Message
 getPiece, getCancel, getPort, getKA :: Get Message

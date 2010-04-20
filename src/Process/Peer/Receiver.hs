@@ -4,12 +4,14 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (assert)
 
 import Control.Monad.Reader
 import Control.Monad.State
 
 import Prelude hiding (catch, log)
 
+import qualified Data.Attoparsec as A
 import qualified Data.ByteString as B
 import qualified Data.Serialize.Get as G
 
@@ -45,10 +47,13 @@ readSend = do
     if (l == 0)
         then return ()
         else do bs <- {-# SCC "hGet_From_BS" #-} liftIO $ B.hGet h (fromIntegral l)
-                case G.runGet decodeMsg bs of
-                    Left _ -> do warningP "Incorrect parse in receiver, dying!"
-                                 stopP
-                    Right msg -> liftIO . atomically $ writeTChan c (msg, fromIntegral l)
+                let sz = B.length bs
+                case A.parse (getAPMsg sz) bs of
+                    A.Done r msg ->
+                        assert (B.null r) $ liftIO . atomically $
+                            writeTChan c (msg, fromIntegral l)
+                    _ -> do warningP "Incorrect parse in receiver, dying!"
+                            stopP
     readSend
 
 conv :: B.ByteString -> Process CF Handle Word32
