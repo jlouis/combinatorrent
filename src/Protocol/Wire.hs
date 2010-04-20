@@ -7,9 +7,11 @@
 
 module Protocol.Wire
     ( Message(..)
+    , msgSize
     , encodePacket
     , decodeMsg
-    , getAPMsg -- ^ Run attoparsec-based parser on input
+    , getMsg -- ^ Run attoparsec-based parser on input
+    , getAPMsg
     , BitField
     , constructBitField
     -- Handshaking
@@ -59,6 +61,19 @@ data Message = KeepAlive
              | Cancel PieceNum Block
              | Port Integer
   deriving (Eq, Show)
+
+msgSize :: Message -> Int
+msgSize KeepAlive      = 0
+msgSize Choke          = 1
+msgSize Unchoke        = 1
+msgSize Interested     = 1
+msgSize NotInterested  = 1
+msgSize (Have _)       = 5
+msgSize (BitField bf)  = B.length bf + 1
+msgSize (Request _ _)  = 13
+msgSize (Piece _ _ bs) = 9 + B.length bs
+msgSize (Cancel _ _)   = 13
+msgSize (Port _)       = 3
 
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
@@ -117,6 +132,11 @@ instance Serialize Message where
        <|> getBF      <|> getReq
        <|> getPiece   <|> getCancel
        <|> getPort
+
+getMsg :: Parser Message
+getMsg = do
+    l <- apW32be
+    getAPMsg l
 
 getAPMsg :: Int -> Parser Message
 getAPMsg l =

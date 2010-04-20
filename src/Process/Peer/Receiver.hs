@@ -4,7 +4,6 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Exception (assert)
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -13,10 +12,6 @@ import Prelude hiding (catch, log)
 
 import qualified Data.Attoparsec as A
 import qualified Data.ByteString as B
-import qualified Data.Serialize.Get as G
-
-
-import Data.Word
 
 import System.IO
 
@@ -42,23 +37,17 @@ readSend :: Process CF Handle ()
 readSend = do
     h <- get
     c <- asks rpMsgCh
-    bs' <- liftIO $ B.hGet h 4
-    l <- conv bs'
-    if (l == 0)
-        then return ()
-        else do bs <- {-# SCC "hGet_From_BS" #-} liftIO $ B.hGet h (fromIntegral l)
-                let sz = B.length bs
-                case A.parse (getAPMsg sz) bs of
-                    A.Done r msg ->
-                        assert (B.null r) $ liftIO . atomically $
-                            writeTChan c (msg, fromIntegral l)
-                    _ -> do warningP "Incorrect parse in receiver, dying!"
-                            stopP
-    readSend
+    _ <- liftIO $ hWaitForInput h (-1)
+    bs <- liftIO $ B.hGetNonBlocking h 8192
+    loop h c (A.parse getMsg bs)
+  where loop h c (A.Done r msg) = do
+            liftIO . atomically $ writeTChan c (msg, fromIntegral $ msgSize msg)
+            loop h c (A.parse getMsg r)
+        loop h c (prt@(A.Partial _)) = do
+            _ <- liftIO $ hWaitForInput h (-1)
+            bs <- liftIO $ B.hGetNonBlocking h 8192
+            loop h c (A.feed prt bs)
+        loop _ _ (A.Fail _ _ _) =
+                    do warningP "Incorrect parse in receiver, dying!"
+                       stopP
 
-conv :: B.ByteString -> Process CF Handle Word32
-conv bs = do
-    case G.runGet G.getWord32be bs of
-      Left err -> do warningP $ "Incorrent parse in receiver, dying: " ++ show err
-                     stopP
-      Right i -> return i
