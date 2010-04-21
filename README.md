@@ -36,10 +36,15 @@ explanation of these)
 
    - 003, 004, 020,
 
+Combinatorrent implicitly supports these extensions
+
+   - 027: Support by the virtue of only supporting a single tracker and no
+     DHT.
+
 Combinatorrent is not supporting these BEPs, but strives to do so one day:
 
    - 005, 006, 007, 009, 010, 012, 015, 016, 017, 018, 019, 023, 021, 022,
-     024, 026, 027, 028, 029, 030, 031, 032
+     024, 026, 028, 029, 030, 031, 032
 
 Debugging
 ---------
