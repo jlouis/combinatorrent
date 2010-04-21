@@ -34,17 +34,30 @@ Currently haskell-torrent supports the following BEPs (See the
 [BEP Process](http://www.bittorrent.org/beps/bep_0000.html) document for an
 explanation of these)
 
-   - 003, 004, 020,
+   - 0003, 0004, 0020,
 
 Combinatorrent implicitly supports these extensions
 
-   - 027: Support by the virtue of only supporting a single tracker and no
+   - 0027: Support by the virtue of only supporting a single tracker and no
      DHT.
+
+Partially supported extensions:
+
+   - 0007: Combinatorrent understands and uses the "peers6" response from
+     the tracker to connect clients. On the other hand, it does nothing to
+     provide the "ipv4=" and "ipv6=" keys on tracker requests. As such, it
+     can be claimed that 0007 support is available, as everything we left
+     out is only qualified as MAY.
+
+   - 0023: Combinatorrent supports the "compact" response only, although it
+     is explicitly stated that the client must support both. In practice it
+     has little impact as all modern trackers will only return compact
+     responses anyway.
 
 Combinatorrent is not supporting these BEPs, but strives to do so one day:
 
-   - 005, 006, 007, 009, 010, 012, 015, 016, 017, 018, 019, 023, 021, 022,
-     024, 026, 028, 029, 030, 031, 032
+   - 0005, 0006, 0009, 0010, 0012, 0015, 0016, 0017, 0018, 0019, 0021, 0022,
+     0024, 0026, 0028, 0029, 0030, 0031, 0032
 
 Debugging
 ---------
