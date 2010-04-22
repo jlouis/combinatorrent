@@ -80,6 +80,9 @@ executable Combinatorrent
     time
 
   ghc-options: -Wall -fno-warn-orphans -threaded
+  if impl(ghc >= 6.13.0)
+      ghc-options: -rtsopts
+
   if !flag(debug)
       cpp-options: "-DNDEBUG"
 
