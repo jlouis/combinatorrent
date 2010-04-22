@@ -56,19 +56,20 @@ projectHandles handles offset size = let r = projectHandles' handles offset size
                                               ) $
                                         r
 -}
-projectHandles (Handles handles@((h1, length1):handles')) offset size
+projectHandles (Handles handles@((h1, length1):handles')) offs size
     | size <= 0 =
         fail "FS: Should have already stopped projection"
     | null handles =
         fail "FS: Attempt to read beyond torrent length"
-    | offset >= length1 =
-        projectHandles (Handles handles') (offset - length1) size
+    | offs >= length1 =
+        projectHandles (Handles handles') (offs - length1) size
     | otherwise =
-        let size1 = length1 - offset  -- ^How much of h1 to take?
+        let size1 = length1 - offs  -- ^How much of h1 to take?
         in if size1 >= size
-           then [(h1, offset, size)]
-           else (h1, offset, size1) :
+           then [(h1, offs, size)]
+           else (h1, offs, size1) :
                 projectHandles (Handles handles') 0 (size - size1)
+projectHandles (Handles []) _ _ = fail "FS: Empty Handles list, can't happen"
 
 pInfoLookup :: PieceNum -> PieceMap -> IO PieceInfo
 pInfoLookup pn mp = return $ mp ! pn
@@ -80,8 +81,8 @@ readPiece pn handles mp =
     do pInfo <- pInfoLookup pn mp
        bs <- L.concat `fmap`
              forM (projectHandles handles (offset pInfo) (len pInfo))
-                      (\(h, offset, size) ->
-                           do hSeek h AbsoluteSeek offset
+                      (\(h, offs, size) ->
+                           do hSeek h AbsoluteSeek offs
                               L.hGet h (fromInteger size)
                       )
        if L.length bs == (fromInteger . len $ pInfo)
@@ -97,8 +98,8 @@ readBlock pn blk handles mp =
        B.concat `fmap`
         forM (projectHandles handles (offset pInfo + (fromIntegral $ blockOffset blk))
                                  (fromIntegral $ blockSize blk))
-                 (\(h, offset, size) ->
-                      do hSeek h AbsoluteSeek offset
+                 (\(h, offs, size) ->
+                      do hSeek h AbsoluteSeek offs
                          B.hGet h $ fromInteger size
                  )
 
@@ -110,12 +111,12 @@ writeBlock handles n blk pm blkData =
     {-# SCC "writeBlock" #-}
     do when lenFail $ fail "Writing block of wrong length"
        pInfo <- pInfoLookup n pm
-       foldM_ (\blkData (h, offset, size) ->
+       foldM_ (\blkData' (h, offs, size) ->
                    do let size' = fromInteger size
-                      hSeek h AbsoluteSeek offset
-                      B.hPut h $ B.take size' blkData
+                      hSeek h AbsoluteSeek offs
+                      B.hPut h $ B.take size' blkData'
                       hFlush h
-                      return $ B.drop size' blkData
+                      return $ B.drop size' blkData'
               ) blkData (projectHandles handles (position pInfo) (fromIntegral $ B.length blkData))
        return ()
   where
@@ -129,8 +130,8 @@ checkPiece :: PieceInfo -> Handles -> IO Bool
 checkPiece inf handles = {-# SCC "checkPiece" #-} do
   bs <- L.concat `fmap`
         forM (projectHandles handles (offset inf) (fromInteger $ len inf))
-                 (\(h, offset, size) ->
-                      do hSeek h AbsoluteSeek offset
+                 (\(h, offs, size) ->
+                      do hSeek h AbsoluteSeek offs
                          L.hGet h (fromInteger size)
                  )
   dgs <- liftIO $ D.digest bs
@@ -185,13 +186,13 @@ openAndCheckFile bc =
     do
        handles <- Handles `fmap`
                   forM files
-                           (\(path, length) ->
+                           (\(path, l) ->
                                 do let dir = joinPath $ init path
                                    when (dir /= "") $
                                         createDirectoryIfMissing True dir
                                    let fpath = joinPath path
                                    h <- openBinaryFile fpath ReadWriteMode
-                                   return (h, length)
+                                   return (h, l)
                            )
        have <- checkFile handles pieceMap
        return (handles, have, pieceMap)
