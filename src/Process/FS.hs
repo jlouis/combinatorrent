@@ -47,7 +47,8 @@ data ST = ST
 
 start :: FS.Handles -> FS.PieceMap -> FSPChannel -> SupervisorChannel -> IO ThreadId
 start handles pm fspC supC =
-    spawnP (CF fspC) (ST handles pm) (catchP lp (defaultStopHandler supC))
+    spawnP (CF fspC) (ST handles pm) ({-# SCC "FS" #-}
+                                        catchP lp (defaultStopHandler supC))
   where
     lp = do
         c <- asks fspCh

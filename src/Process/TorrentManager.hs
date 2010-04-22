@@ -59,7 +59,7 @@ start :: TorrentMgrChan -- ^ Channel to watch for changes to torrents
       -> IO ThreadId
 start chan statusC stv chokeC pid peerC supC =
     spawnP (CF chan statusC stv pid peerC chokeC) (ST [])
-                (catchP pgm (defaultStopHandler supC))
+                ({-# SCC "TorrentManager" #-} catchP pgm (defaultStopHandler supC))
   where pgm = startStop >> dirMsg >> pgm
         dirMsg = do
             c <- asks tCh

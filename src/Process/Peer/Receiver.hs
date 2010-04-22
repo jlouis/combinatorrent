@@ -30,7 +30,7 @@ start :: Socket -> TChan (Message, Integer)
           -> SupervisorChannel -> IO ThreadId
 start s ch supC = do
    spawnP (CF ch) s
-        (catchP readSend
+        ({-# SCC "Receiver" #-} catchP readSend
                (defaultStopHandler supC))
 
 readSend :: Process CF Socket ()

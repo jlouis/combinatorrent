@@ -15,6 +15,6 @@ import Control.Concurrent.STM
 import Control.Monad.Trans
 
 registerSTM :: MonadIO m => Int -> TChan a -> a -> m ThreadId
-registerSTM secs c m = liftIO $ forkIO $ do
+registerSTM secs c m = liftIO $ forkIO $ {-# SCC "Timer" #-} do
     threadDelay (secs * 1000000)
     atomically $ writeTChan c m

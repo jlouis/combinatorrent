@@ -21,7 +21,7 @@ instance Logging CF where
 
 start :: PortNumber -> PeerMgrChannel -> SupervisorChannel -> IO ThreadId
 start port peerMgrC supC = do
-    spawnP (CF peerMgrC) () (catchP (openListen port >>= eventLoop)
+    spawnP (CF peerMgrC) () ({-# SCC "Listen" #-} catchP (openListen port >>= eventLoop)
                         (defaultStopHandler supC)) -- TODO: Close socket resource!
 
 openListen :: PortNumber -> Process CF () Socket

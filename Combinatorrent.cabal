@@ -79,7 +79,6 @@ executable Combinatorrent
     test-framework-quickcheck2,
     time
 
-  ghc-prof-options: -auto-all -caf-all
   ghc-options: -Wall -fno-warn-orphans -threaded
   if !flag(debug)
       cpp-options: "-DNDEBUG"

@@ -69,7 +69,7 @@ start :: ChokeMgrChannel -> RateTVar -> Int -> SupervisorChannel
 start ch rtv ur supC = do
     _ <- registerSTM roundTickSecs ch Tick
     spawnP (CF ch rtv) (initPeerDB $ calcUploadSlots ur Nothing)
-            (catchP pgm
+            ({-# SCC "ChokeMgr" #-} catchP pgm
               (defaultStopHandler supC))
   where
     initPeerDB slots = PeerDB 2 slots S.empty M.empty []

@@ -39,7 +39,8 @@ start :: TMVar () -> St.StatusChannel -> SupervisorChannel -> IO ThreadId
 start waitC statusC supC = do
     cmdC <- readerP -- We shouldn't be doing this in the long run
     wrtC <- writerP
-    spawnP (CF cmdC wrtC) () (catchP eventLoop (defaultStopHandler supC))
+    spawnP (CF cmdC wrtC) () ({-# SCC "Console" #-}
+                                catchP eventLoop (defaultStopHandler supC))
   where
     eventLoop = do
         c <- asks cmdCh
@@ -69,14 +70,15 @@ writerP :: IO (TChan String)
 writerP = do wrt <- newTChanIO
              _ <- forkIO $ lp wrt
              return wrt
-  where lp wCh = forever (do m <- atomically $ readTChan wCh
-                             putStrLn m)
+  where lp wCh = {-# SCC "writerP" #-}
+                    forever (do m <- atomically $ readTChan wCh
+                                putStrLn m)
 
 readerP :: IO CmdChannel
 readerP = do cmd <- newTChanIO
              _ <- forkIO $ lp cmd
              return cmd
-  where lp cmd = forever $
+  where lp cmd = {-# SCC "readerP" #-} forever $
            do l <- getLine
               atomically $ writeTChan cmd
                 (case l of

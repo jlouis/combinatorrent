@@ -81,7 +81,7 @@ start ch pid chokeMgrC rtv supC =
        fakeChan <- newTChanIO
        pool <- liftM snd $ oneForOne "PeerPool" [] fakeChan
        spawnP (CF ch mgrC pool chokeMgrC rtv)
-              (ST [] M.empty pid cmap) (catchP lp
+              (ST [] M.empty pid cmap) ({-# SCC "PeerMgr" #-} catchP lp
                                        (defaultStopHandler supC))
   where
     cmap = M.empty
@@ -170,7 +170,7 @@ connect :: ConnectRecord -> SupervisorChannel -> MgrChannel -> RateTVar -> ChanM
 connect (addr, pid, ih) pool mgrC rtv cmap =
     forkIO (connector >> return ())
   where 
-        connector =
+        connector = {-# SCC "connect" #-}
          do sock <- Sock.socket Sock.AF_INET Sock.Stream Sock.defaultProtocol
             debugM "Process.PeerMgr.connect" $ "Connecting to: " ++ show addr
             Sock.connect sock addr
@@ -199,7 +199,7 @@ acceptor :: (Sock.Socket, Sock.SockAddr) -> SupervisorChannel
 acceptor (s,sa) pool pid mgrC rtv cmmap =
     forkIO (connector >> return ())
   where ihTst k = M.member k cmmap
-        connector = do
+        connector = {-# SCC "acceptor" #-} do
             debugLog "Handling incoming connection"
             r <- receiveHandshake s pid ihTst
             debugLog "RecvHandshake run"

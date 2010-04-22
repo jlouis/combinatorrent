@@ -117,7 +117,8 @@ peerP pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
     spawnP (CF inBound outBound pMgrC pieceMgrC ch sendBWC tch stv rtv ih pm
                     pdtmv intmv gbtmv)
            (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False 0)
-                       (cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
+                       ({-# SCC "PeerControl" #-}
+                            cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
 startup :: Int -> Process CF ST ()
 startup nPieces = do
@@ -386,10 +387,10 @@ checkWatermark = do
 
 -- These three values are chosen rather arbitrarily at the moment.
 loMark :: Int
-loMark = 10
+loMark = 5
 
 hiMark :: Int
-hiMark = 15
+hiMark = 25
 
 -- Low mark when running in endgame mode
 endgameLoMark :: Int

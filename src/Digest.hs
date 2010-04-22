@@ -27,16 +27,15 @@ digest :: L.ByteString -> IO B.ByteString
 digest bs = {-# SCC "sha1_digest" #-} B.pack <$> digestLBS SSL.SHA1 bs
 
 digestLBS :: SSL.MessageDigest -> L.ByteString -> IO [Word8]
-digestLBS mdType xs = {-# SCC "sha1_digestLBS" #-}
-  SSL.mkDigest mdType $ evalStateT (updateLBS xs >> SSL.final)
+digestLBS mdType xs = SSL.mkDigest mdType $ evalStateT (updateLBS xs >> SSL.final)
 
 updateBS :: B.ByteString -> SSL.Digest ()
-updateBS bs = {-# SCC "sha1_updateBS" #-} do
+updateBS bs = do
     SSL.DST ctx <- get
     _ <- liftIO $ unsafeUseAsCStringLen bs $
             \(ptr, len) -> SSL.digestUpdate ctx (castPtr ptr) (fromIntegral len)
     return ()
 
 updateLBS :: L.ByteString -> SSL.Digest ()
-updateLBS lbs = {-# SCC "sha1_updateLBS" #-} mapM_ updateBS chunked
+updateLBS lbs = mapM_ updateBS chunked
   where chunked = {-# SCC "sha1_updateLBS_chunked" #-} L.toChunks lbs

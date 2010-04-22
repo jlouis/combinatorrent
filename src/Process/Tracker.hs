@@ -99,7 +99,7 @@ start :: InfoHash -> TorrentInfo -> PeerId -> S.PortNumber
       -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
        spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
-                    (cleanupP loop
+                    ({-# SCC "Tracker" #-} cleanupP loop
                         (defaultStopHandler supC)
                         stopEvent)
   where

@@ -51,7 +51,7 @@ start :: TChan SenderQMsg -> TMVar L.ByteString -> BandwidthChannel
 start inC outC bandwC fspC supC = do
     rbtv <- liftIO newEmptyTMVarIO
     spawnP (CF inC outC bandwC rbtv fspC) (ST Q.empty 0)
-        (catchP pgm
+        ({-# SCC "SenderQ" #-} catchP pgm
                 (defaultStopHandler supC))
 
 pgm :: Process CF ST ()
