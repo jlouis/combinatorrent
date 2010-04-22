@@ -37,7 +37,7 @@ readSend :: Process CF Socket ()
 readSend = do
     s <- get
     c <- asks rpMsgCh
-    bs <- liftIO $ recv s 4096
+    bs <- liftIO $ recv s 2048
     when (B.length bs == 0) stopP
     loop s c (A.parse getMsg bs)
   where loop s c (A.Done r msg) = do
