@@ -154,18 +154,16 @@ drainSend = do
     dl <- gets donePush
     if (null dl)
         then return ()
-        else sendChokeMgr (head dl) >> drainSend
-
-sendChokeMgr :: ChokeMgrMsg -> Process CF ST ()
-sendChokeMgr e = do
-    c <- asks chokeCh
-    liftIO . atomically $ writeTChan c e
-    modify (\db -> db { donePush = tail (donePush db) })
+        else do
+          c <- asks chokeCh
+          liftIO . atomically $ writeTChan c (head dl)
+          s <- get
+          put $! s { donePush = tail (donePush s) }
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
 traceMsg m = do
     tb <- gets traceBuffer
-    let ntb = (trace $! show m) tb
+    let !ntb = (trace $! show m) tb
     modify (\db -> db { traceBuffer = ntb })
 
 rpcMessage :: Process CF ST ()
@@ -189,7 +187,6 @@ rpcMessage = do
       AskInterested pieces retC -> {-# SCC "AskInterested" #-} do
          intr <- askInterested pieces
          liftIO . atomically $ do putTMVar retC intr -- And this neither too!
-
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock pn blk d = do
