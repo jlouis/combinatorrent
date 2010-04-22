@@ -171,7 +171,7 @@ traceMsg m = do
 rpcMessage :: Process CF ST ()
 rpcMessage = do
     ch <- asks pieceMgrCh
-    m <- liftIO . atomically $ readTChan ch
+    m <- {-# SCC "Channel_Read" #-} liftIO . atomically $ readTChan ch
     traceMsg m
     case m of
       GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
