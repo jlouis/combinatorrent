@@ -14,6 +14,7 @@ module Torrent (
     , PieceInfo(..)
     , BlockSize
     , Block(..)
+    , Capabilities(..)
     -- * Interface
     , determineState
     , bytesLeft
@@ -66,6 +67,12 @@ data TorrentState = Seeding | Leeching
     deriving Show
 
 instance NFData TorrentState
+
+----------------------------------------------------------------------
+-- Capabilities
+
+data Capabilities = Fast
+  deriving (Show, Eq)
 
 -- PIECES
 ----------------------------------------------------------------------

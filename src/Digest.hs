@@ -3,6 +3,7 @@
 module Digest
   ( Digest
   , digest
+  , digestBS
   )
 where
 
@@ -25,6 +26,9 @@ instance NFData Digest
 
 digest :: L.ByteString -> IO B.ByteString
 digest bs = {-# SCC "sha1_digest" #-} B.pack <$> digestLBS SSL.SHA1 bs
+
+digestBS :: B.ByteString -> IO B.ByteString
+digestBS bs = digest . L.fromChunks $ [bs]
 
 digestLBS :: SSL.MessageDigest -> L.ByteString -> IO [Word8]
 digestLBS mdType xs = SSL.mkDigest mdType $ evalStateT (updateLBS xs >> SSL.final)

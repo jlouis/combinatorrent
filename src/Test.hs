@@ -12,7 +12,7 @@ import qualified Data.PieceSet  (testSuite)
 import qualified Data.Queue     (testSuite)
 import qualified Protocol.BCode (testSuite)
 import qualified Protocol.Wire  (testSuite)
-
+import qualified Process.Peer   (testSuite)
 
 runTests :: IO ()
 runTests =
@@ -23,6 +23,7 @@ runTests =
      , Data.PieceSet.testSuite
      , Protocol.BCode.testSuite
      , Protocol.Wire.testSuite
+     , Process.Peer.testSuite
      ]
 
 testSuite :: Test

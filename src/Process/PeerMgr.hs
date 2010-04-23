@@ -182,13 +182,15 @@ connect (addr, pid, ih) pool mgrC rtv cmap =
                                 ("Peer handshake failure at host " ++ show addr
                                   ++ " with error " ++ err)
                              return ()
-              Right (_caps, _rpid, ihsh) ->
+              Right (caps, _rpid, ihsh) ->
                   do debugM "Process.PeerMgr.connect" "entering peerP loop code"
                      let tc = case M.lookup ihsh cmap of
                                     Nothing -> error "Impossible (2), I hope"
                                     Just x  -> x
-                     children <- Peer.start sock mgrC rtv (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
-                                                      (tcPM tc) (succ . snd . bounds $ tcPM tc) ihsh
+                     children <- Peer.start sock caps mgrC rtv
+                                                      (tcPcMgrCh tc) (tcFSCh tc) (tcStatTV tc)
+                                                      (tcPM tc) (succ . snd . bounds $ tcPM tc)
+                                                      ihsh
                      atomically $ writeTChan pool $
                         SpawnNew (Supervisor $ allForOne "PeerSup" children)
                      return ()
@@ -207,12 +209,12 @@ acceptor (s,sa) pool pid mgrC rtv cmmap =
                 Left err -> do debugLog ("Incoming Peer handshake failure with "
                                             ++ show sa ++ ", error: " ++ err)
                                return()
-                Right (_caps, _rpid, ih) ->
+                Right (caps, _rpid, ih) ->
                     do debugLog "entering peerP loop code"
                        let tc = case M.lookup ih cmmap of
                                   Nothing -> error "Impossible, I hope"
                                   Just x  -> x
-                       children <- Peer.start s mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
+                       children <- Peer.start s caps mgrC rtv (tcPcMgrCh tc) (tcFSCh tc)
                                                         (tcStatTV tc) (tcPM tc)
                                                         (succ . snd . bounds $ tcPM tc) ih
                        atomically $ writeTChan pool $

@@ -14,6 +14,7 @@ import Prelude hiding (catch, log)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
+import Data.List (foldl')
 
 import Channels
 import Process
@@ -35,6 +36,7 @@ data CF = CF { sqIn :: TChan SenderQMsg
              , bandwidthCh :: BandwidthChannel
              , readBlockTV :: TMVar B.ByteString
              , fsCh        :: FSPChannel
+             , fastExtension :: Bool
              }
 
 data ST = ST { outQueue         :: !(Q.Queue (Either Message (PieceNum, Block)))
@@ -46,11 +48,12 @@ instance Logging CF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-start :: TChan SenderQMsg -> TMVar L.ByteString -> BandwidthChannel
+start :: [Capabilities] -> TChan SenderQMsg -> TMVar L.ByteString -> BandwidthChannel
       -> FSPChannel -> SupervisorChannel -> IO ThreadId
-start inC outC bandwC fspC supC = do
+start caps inC outC bandwC fspC supC = do
     rbtv <- liftIO newEmptyTMVarIO
-    spawnP (CF inC outC bandwC rbtv fspC) (ST Q.empty 0)
+    spawnP (CF inC outC bandwC rbtv fspC
+                (Fast `elem` caps)) (ST Q.empty 0)
         ({-# SCC "SenderQ" #-} catchP pgm
                 (defaultStopHandler supC))
 
@@ -81,11 +84,39 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
             case m of
                 SenderQM msg -> modifyQ (Q.push $ Left msg)
                 SenderQPiece n blk -> modifyQ (Q.push $ Right (n, blk))
-                SenderQCancel n blk -> modifyQ (Q.filter (filterPiece n blk))
-                SenderOChoke -> do modifyQ (Q.filter filterAllPiece)
-                                   modifyQ (Q.push $ Left Choke)
-                SenderQRequestPrune n blk ->
-                     modifyQ (Q.filter (filterRequest n blk))
+                SenderQCancel n blk -> do
+                    fe <- asks fastExtension
+                    if fe
+                        then do
+                            piece <- partitionQ (filterPiece n blk)
+                            case piece of
+                                [] -> return () -- Piece must have been sent
+                                [_] -> modifyQ (Q.push (Left $ RejectRequest n blk))
+                                _ -> fail "Impossible case"
+                        else modifyQ (Q.filter (filterPiece n blk))
+                SenderOChoke -> do
+                    fe <- asks fastExtension
+                    if fe
+                        then do
+                            -- In the fast extension, we explicitly reject all pieces
+                            pieces <- partitionQ filterAllPiece
+                            modifyQ (Q.push $ Left Choke)
+                            let rejects = map (\(Right (pn, blk)) -> Left $ RejectRequest pn blk)
+                                              pieces
+                            modifyQ (flip (foldl' (flip Q.push)) rejects)
+                        else do modifyQ (Q.filter filterAllPiece)
+                                modifyQ (Q.push $ Left Choke)
+                SenderQRequestPrune n blk -> do
+                    fe <- asks fastExtension
+                    piece <- partitionQ (filterRequest n blk)
+                    case piece of
+                      [] -> modifyQ (Q.push (Left $ Cancel n blk)) -- Piece Must have been sent
+                      [_] -> if fe
+                                then modifyQ -- This is a hack for now
+                                       (Q.push (Left $ Cancel n blk) .
+                                        Q.push (Left $ Request n blk))
+                                else modifyQ (Q.filter (filterRequest n blk))
+                      _ -> fail "Impossible case"
     pgm
 
 rateUpdateEvent :: Process CF ST ()
@@ -95,24 +126,34 @@ rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
     liftIO . atomically $ writeTChan bwc l
     modify (\s -> s { bytesTransferred = 0 })
 
-filterAllPiece :: Either Message (PieceNum, Block) -> Bool
+-- The type of the Outgoing queue
+type OutQT = Either Message (PieceNum, Block)
+
+filterAllPiece :: OutQT -> Bool
 filterAllPiece (Right _) = True
 filterAllPiece (Left  _) = False
 
-filterPiece :: PieceNum -> Block -> Either Message (PieceNum, Block) -> Bool
+filterPiece :: PieceNum -> Block -> OutQT -> Bool
 filterPiece n blk (Right (n1, blk1)) | n == n1 && blk == blk1 = False
                                      | otherwise              = True
 filterPiece _ _   _                                           = True
 
-filterRequest :: PieceNum -> Block -> Either Message (PieceNum, Block) -> Bool
+filterRequest :: PieceNum -> Block -> OutQT -> Bool
 filterRequest n blk (Left (Request n1 blk1)) | n == n1 && blk == blk1 = False
                                              | otherwise              = True
 filterRequest _ _   _                                                 = True
 
-modifyQ :: (Q.Queue (Either Message (PieceNum, Block)) ->
-            Q.Queue (Either Message (PieceNum, Block)))
+modifyQ :: (Q.Queue (OutQT) ->
+            Q.Queue (OutQT))
                     -> Process CF ST ()
 modifyQ f = modify (\s -> s { outQueue = f $! outQueue s })
+
+partitionQ :: (OutQT -> Bool) -> Process CF ST [OutQT]
+partitionQ p = do
+    s <- get
+    let (as, nq) = Q.partition p $ outQueue s
+    put $! s { outQueue = nq }
+    return as
 
 -- | Read a block from the filesystem for sending
 readBlock :: PieceNum -> Block -> Process CF ST B.ByteString

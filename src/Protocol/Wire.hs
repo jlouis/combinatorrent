@@ -30,12 +30,14 @@ import qualified Data.ByteString.Lazy as L
 
 import Data.Attoparsec as A
 import Data.Attoparsec.Combinator as AC
+import Data.Bits (testBit, setBit)
 
 import Data.Serialize
 import Data.Serialize.Put
 import Data.Serialize.Get
 
 import Data.Char
+import Data.Maybe (catMaybes)
 import Network.Socket hiding (send, sendTo, recv, recvFrom, KeepAlive)
 import Network.Socket.ByteString
 import qualified Network.Socket.ByteString.Lazy as Lz
@@ -63,28 +65,44 @@ data Message = KeepAlive
              | Piece PieceNum Int B.ByteString
              | Cancel PieceNum Block
              | Port Integer
+             | HaveAll
+             | HaveNone
+             | Suggest PieceNum
+             | RejectRequest PieceNum Block
+             | AllowedFast PieceNum
+             | ExtendedMsg Int B.ByteString
   deriving (Eq, Show)
 
 msgSize :: Message -> Int
-msgSize KeepAlive      = 0
-msgSize Choke          = 1
-msgSize Unchoke        = 1
-msgSize Interested     = 1
-msgSize NotInterested  = 1
-msgSize (Have _)       = 5
-msgSize (BitField bf)  = B.length bf + 1
-msgSize (Request _ _)  = 13
-msgSize (Piece _ _ bs) = 9 + B.length bs
-msgSize (Cancel _ _)   = 13
-msgSize (Port _)       = 3
+msgSize KeepAlive           = 0
+msgSize Choke               = 1
+msgSize Unchoke             = 1
+msgSize Interested          = 1
+msgSize NotInterested       = 1
+msgSize (Have _)            = 5
+msgSize (BitField bf)       = B.length bf + 1
+msgSize (Request _ _)       = 13
+msgSize (Piece _ _ bs)      = 9 + B.length bs
+msgSize (Cancel _ _)        = 13
+msgSize (Port _)            = 3
+msgSize HaveAll             = 1
+msgSize HaveNone            = 1
+msgSize (Suggest _)         = 5
+msgSize (RejectRequest _ _) = 13
+msgSize (AllowedFast _)     = 5
+msgSize (ExtendedMsg _ bs)  = B.length bs + 5
 
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
-                       return NotInterested,
+                       return NotInterested, return HaveAll, return HaveNone,
+                       Suggest <$> pos,
+                       RejectRequest <$> pos <*> arbitrary,
+                       AllowedFast <$> pos,
                        Have <$> pos,
                        BitField <$> arbitrary,
                        Request <$> pos <*> arbitrary,
                        Piece <$> pos <*> pos <*> arbitrary,
+                       ExtendedMsg <$> pos <*> arbitrary,
                        Cancel <$> pos <*> arbitrary,
                        Port <$> choose (0,16383)]
         where
@@ -97,7 +115,9 @@ protocolHeader :: String
 protocolHeader = "BitTorrent protocol"
 
 extensionBasis :: Word64
-extensionBasis = 0
+extensionBasis =
+    (flip setBit 2) -- Fast extension
+    0
 
 p8 :: Word8 -> Put
 p8 = putWord8
@@ -128,13 +148,26 @@ instance Serialize Message where
     put (Cancel pn (Block os sz))
                         = p8 8 *> mapM_ p32be [pn,os,sz]
     put (Port p)        = p8 9 *> (putWord16be . fromIntegral $ p)
+    put (RejectRequest pn (Block os sz))
+                        = p8 10 *> mapM_ p32be [pn,os,sz]
+    put (AllowedFast pn)
+                        = p8 11 *> p32be pn
+    put (Suggest pn)    = p8 13 *> p32be pn
+    put (ExtendedMsg idx bs)
+                        = p8 20 *> p32be idx *> putByteString bs
+    put HaveAll         = p8 14
+    put HaveNone        = p8 15
 
     get =  getKA      <|> getChoke
        <|> getUnchoke <|> getIntr
        <|> getNI      <|> getHave
        <|> getBF      <|> getReq
        <|> getPiece   <|> getCancel
-       <|> getPort
+       <|> getPort    <|> getHaveAll
+       <|> getHaveNone
+       <|> getSuggest <|> getRejectRequest
+       <|> getAllowedFast
+       <|> getExtendedMsg
 
 getMsg :: Parser Message
 getMsg = do
@@ -143,16 +176,23 @@ getMsg = do
 
 getAPMsg :: Int -> Parser Message
 getAPMsg l =
-    AC.choice [ A.word8 0 *> return Choke
-              , A.word8 1 *> return Unchoke
-              , A.word8 2 *> return Interested
-              , A.word8 3 *> return NotInterested
-              , A.word8 4 *> (Have <$> apW32be)
-              , A.word8 5 *> (BitField <$> (A.take (l-1)))
-              , A.word8 6 *> (Request <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-              , A.word8 7 *> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
-              , A.word8 8 *> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-              , A.word8 9 *> (Port . fromIntegral <$> apW16be)]
+    AC.choice [ A.word8 0  *> return Choke
+              , A.word8 1  *> return Unchoke
+              , A.word8 2  *> return Interested
+              , A.word8 3  *> return NotInterested
+              , A.word8 4  *> (Have <$> apW32be)
+              , A.word8 5  *> (BitField <$> (A.take (l-1)))
+              , A.word8 6  *> (Request <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+              , A.word8 7  *> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
+              , A.word8 8  *> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+              , A.word8 9  *> (Port . fromIntegral <$> apW16be)
+              , A.word8 10 *> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+              , A.word8 11 *> (AllowedFast <$> apW32be)
+              , A.word8 13 *> (Suggest <$> apW32be)
+              , A.word8 14 *> return HaveAll
+              , A.word8 15 *> return HaveNone
+              , A.word8 20 *> (ExtendedMsg <$> apW32be <*> A.take (l - 5))
+              ]
 
 apW32be :: Parser Int
 apW32be = do
@@ -173,16 +213,24 @@ apW16be = do
 
 getBF, getChoke, getUnchoke, getIntr, getNI, getHave, getReq :: Get Message
 getPiece, getCancel, getPort, getKA :: Get Message
-getChoke   = byte 0 *> return Choke
-getUnchoke = byte 1 *> return Unchoke
-getIntr    = byte 2 *> return Interested
-getNI      = byte 3 *> return NotInterested
-getHave    = byte 4 *> (Have <$> gw32)
-getBF      = byte 5 *> (BitField <$> (remaining >>= getByteString . fromIntegral))
-getReq     = byte 6 *> (Request  <$> gw32 <*> (Block <$> gw32 <*> gw32))
-getPiece   = byte 7 *> (Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString))
-getCancel  = byte 8 *> (Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32))
-getPort    = byte 9 *> (Port . fromIntegral <$> getWord16be)
+getRejectRequest, getAllowedFast, getSuggest, getHaveAll, getHaveNone :: Get Message
+getExtendedMsg :: Get Message
+getChoke         = byte 0  *> return Choke
+getUnchoke       = byte 1  *> return Unchoke
+getIntr          = byte 2  *> return Interested
+getNI            = byte 3  *> return NotInterested
+getHave          = byte 4  *> (Have <$> gw32)
+getBF            = byte 5  *> (BitField <$> (remaining >>= getByteString . fromIntegral))
+getReq           = byte 6  *> (Request  <$> gw32 <*> (Block <$> gw32 <*> gw32))
+getPiece         = byte 7  *> (Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString))
+getCancel        = byte 8  *> (Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32))
+getPort          = byte 9  *> (Port . fromIntegral <$> getWord16be)
+getRejectRequest = byte 10 *> (RejectRequest <$> gw32 <*> (Block <$> gw32 <*> gw32))
+getAllowedFast   = byte 11 *> (AllowedFast <$> gw32)
+getSuggest       = byte 13 *> (Suggest <$> gw32)
+getHaveAll       = byte 14 *> return HaveAll
+getHaveNone      = byte 15 *> return HaveNone
+getExtendedMsg   = byte 20 *> (ExtendedMsg <$> gw32 <*> (remaining >>= getByteString))
 getKA      = do
     empty <- isEmpty
     if empty
@@ -242,9 +290,9 @@ headerParser ihTst = do
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid, ihR)
 
-data Capabilities
 decodeCapabilities :: Word64 -> [Capabilities]
-decodeCapabilities _ = []
+decodeCapabilities w = catMaybes
+    [ if testBit w 2 then Just Fast else Nothing ]
 
 -- | Initiate a handshake on a socket
 initiateHandshake :: Socket -> PeerId -> InfoHash

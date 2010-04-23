@@ -9,6 +9,7 @@ module Data.Queue (
               , remove
               , push
               , pop
+              , Data.Queue.partition
               , Data.Queue.filter
               -- * Test Suite
               , testSuite
@@ -68,7 +69,14 @@ remove (Queue [] b)       = remove (Queue (reverse b) [])
 filter :: (a -> Bool) -> Queue a -> Queue a
 filter p (Queue front back) = Queue (Lst.filter p front) (Lst.filter p back)
 
+-- | Find elements matching an predicate and lift them out of the queue
+partition :: (a -> Bool) -> Queue a -> ([a], Queue a)
+partition p (Queue front back) =
+    let (ft, fl) = Lst.partition p front
+        (bt, bl) = Lst.partition p back
+    in (ft ++ bt, Queue fl bl)
 
+---------------------------------------------------------------------
 -- Tests
 
 testSuite :: Test

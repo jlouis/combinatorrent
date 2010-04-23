@@ -5,6 +5,8 @@ module Process.Peer (
       PeerMessage(..)
     -- * Interface
     , Process.Peer.start
+    -- * Tests
+    , Process.Peer.testSuite
     )
 where
 
@@ -23,9 +25,11 @@ import Prelude hiding (catch, log)
 import Data.Array
 import Data.Bits
 import qualified Data.ByteString as B
+import Data.Function (on)
 
 import qualified Data.PieceSet as PS
 import Data.Maybe
+import Data.Monoid(Monoid(..), Last(..))
 
 import Data.Set as S hiding (map)
 import Data.Time.Clock
@@ -33,7 +37,12 @@ import Data.Word
 
 import Network.Socket hiding (KeepAlive)
 
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Test.HUnit hiding (Path, Test, assert)
+
 import Channels
+import Digest
 import Process
 import Process.FS
 import Process.PieceMgr
@@ -52,18 +61,18 @@ import qualified Process.Peer.Receiver as Receiver
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Socket -> MgrChannel -> RateTVar -> PieceMgrChannel
+start :: Socket -> [Capabilities] -> MgrChannel -> RateTVar -> PieceMgrChannel
              -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
-start s pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
+start s caps pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- newTChanIO
     senderMV <- newEmptyTMVarIO
     receiverC <- newTChanIO
     sendBWC <- newTChanIO
     return [Worker $ Sender.start s senderMV,
-            Worker $ SenderQ.start queueC senderMV sendBWC fsC,
+            Worker $ SenderQ.start caps queueC senderMV sendBWC fsC,
             Worker $ Receiver.start s receiverC,
-            Worker $ peerP pMgrC rtv pieceMgrC pm nPieces
+            Worker $ peerP caps pMgrC rtv pieceMgrC pm nPieces
                                 queueC receiverC sendBWC stv ih]
 
 -- INTERNAL FUNCTIONS
@@ -83,6 +92,7 @@ data CF = CF { inCh :: TChan (Message, Integer)
              , piecesDoneTV :: TMVar [PieceNum]
              , interestTV :: TMVar Bool
              , grabBlockTV :: TMVar Blocks
+             , extConf :: ExtensionConfig
              }
 
 instance Logging CF where
@@ -101,12 +111,126 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              , lastMessage    :: !Int
              }
 
+data ExtensionConfig = ExtensionConfig
+        { handleHaveAll :: Last (Process CF ST ())
+        , handleHaveNone :: Last (Process CF ST ())
+        , handleBitfield :: Last (BitField -> Process CF ST ())
+        , handleSuggest :: Last (PieceNum -> Process CF ST ())
+        , handleAllowedFast :: Last (PieceNum -> Process CF ST ())
+        , handleRejectRequest :: Last (PieceNum -> Block -> Process CF ST ())
+        , handleExtendedMsg :: Last (Int -> B.ByteString -> Process CF ST ())
+        , handleRequestMsg :: Last (PieceNum -> Block -> Process CF ST ())
+        , handleChokeMsg   :: Last (Process CF ST ())
+        , handleCancelMsg  :: Last (PieceNum -> Block -> Process CF ST ())
+        , handlePieceMsg   :: Last (PieceNum -> Int -> B.ByteString -> Process CF ST ())
+        }
 
-peerP :: MgrChannel -> RateTVar -> PieceMgrChannel -> PieceMap -> Int
+emptyExtensionConfig :: ExtensionConfig
+emptyExtensionConfig = ExtensionConfig
+    mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty
+
+appendEConfig :: ExtensionConfig -> ExtensionConfig -> ExtensionConfig
+appendEConfig a b =
+    ExtensionConfig {
+        handleHaveAll       = app handleHaveAll a b
+      , handleHaveNone      = app handleHaveNone a b
+      , handleBitfield      = app handleBitfield a b
+      , handleSuggest       = app handleSuggest a b
+      , handleAllowedFast   = app handleAllowedFast a b
+      , handleRejectRequest = app handleRejectRequest a b
+      , handleExtendedMsg   = app handleExtendedMsg a b
+      , handleRequestMsg    = app handleRequestMsg a b
+      , handleChokeMsg      = app handleChokeMsg a b
+      , handleCancelMsg     = app handleCancelMsg a b
+      , handlePieceMsg      = app handlePieceMsg a b
+    }
+ where app f = mappend `on` f
+
+instance Monoid ExtensionConfig where
+    mempty = emptyExtensionConfig
+    mappend = appendEConfig
+
+-- | Constructor for 'Last' values.
+ljust :: a -> Last a
+ljust = Last . Just
+
+-- | Deconstructor for 'Last' values.
+fromLJ :: (ExtensionConfig -> Last a)    -- ^ Field to access.
+       -> ExtensionConfig                -- ^ Default to use.
+       -> a
+fromLJ f cfg = case f cfg of
+                 Last Nothing  -> fromLJ f extensionBase
+                 Last (Just a) -> a
+
+extensionBase :: ExtensionConfig
+extensionBase = ExtensionConfig
+                 (ljust errorHaveAll)
+                 (ljust errorHaveNone)
+                 (ljust bitfieldMsg)
+                 (ljust errorSuggest)
+                 (ljust errorAllowedFast)
+                 (ljust errorRejectRequest)
+                 (ljust errorExtendedMsg)
+                 (ljust requestMsg)
+                 (ljust chokeMsg)
+                 (ljust cancelBlock)
+                 (ljust pieceMsg)
+
+fastExtension :: ExtensionConfig
+fastExtension = ExtensionConfig
+                    (ljust haveAllMsg)
+                    (ljust haveNoneMsg)
+                    (ljust bitfieldMsg)
+                    (ljust ignoreSuggest)
+                    (ljust ignoreAllowedFast)
+                    (ljust rejectMsg)
+                    mempty
+                    (ljust requestFastMsg)
+                    (ljust fastChokeMsg)
+                    (ljust fastCancelBlock)
+                    (ljust fastPieceMsg)
+
+ignoreSuggest :: PieceNum -> Process CF ST ()
+ignoreSuggest _ = debugP "Ignoring SUGGEST message"
+
+ignoreAllowedFast :: PieceNum -> Process CF ST ()
+ignoreAllowedFast _ =  debugP "Ignoring ALLOWEDFAST message"
+
+errorHaveAll :: Process CF ST ()
+errorHaveAll = do
+    errorP "Received a HAVEALL, but the extension is not enabled"
+    stopP
+
+errorHaveNone :: Process CF ST ()
+errorHaveNone = do
+    errorP "Received a HAVENONE, but the extension is not enabled"
+    stopP
+
+errorSuggest :: PieceNum -> Process CF ST ()
+errorSuggest _ = do
+    errorP "Received a SUGGEST PIECE, but the extension is not enabled"
+    stopP
+
+errorAllowedFast :: PieceNum -> Process CF ST ()
+errorAllowedFast _ = do
+    errorP "Received a ALLOWEDFAST, but the extension is not enabled"
+    stopP
+
+errorRejectRequest :: PieceNum -> Block -> Process CF ST ()
+errorRejectRequest _ _ = do
+    errorP "Received a REJECT REQUEST, but the extension is not enabled"
+    stopP
+
+errorExtendedMsg :: Int -> B.ByteString -> Process CF ST ()
+errorExtendedMsg _ _ = do
+    errorP "Received an EXTENDED MESSAGE, but the extension is not enabled"
+    stopP
+
+peerP :: [Capabilities] -> MgrChannel -> RateTVar -> PieceMgrChannel -> PieceMap -> Int
          -> TChan SenderQ.SenderQMsg -> TChan (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
          -> SupervisorChannel -> IO ThreadId
-peerP pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
+peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
     ch <- newTChanIO
     tch <- newTChanIO
     ct <- getCurrentTime
@@ -114,11 +238,16 @@ peerP pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
     intmv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
+    let cs = configCapabilities caps
     spawnP (CF inBound outBound pMgrC pieceMgrC ch sendBWC tch stv rtv ih pm
-                    pdtmv intmv gbtmv)
+                    pdtmv intmv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False 0)
                        ({-# SCC "PeerControl" #-}
                             cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
+
+configCapabilities :: [Capabilities] -> ExtensionConfig
+configCapabilities caps =
+    mconcat [mempty, if Fast `elem` caps then fastExtension else mempty]
 
 startup :: Int -> Process CF ST ()
 startup nPieces = do
@@ -159,7 +288,7 @@ eventLoop = do
     op <- readOp
     case op of
         PeerMsgEvt (m, sz) -> peerMsg m sz
-        ChokeMgrEvt m      -> chokeMsg m
+        ChokeMgrEvt m      -> chokeMgrMsg m
         UpRateEvent up     -> do s <- get
                                  u <- return $ RC.update up $ upRate s
                                  put $! s { upRate = u }
@@ -180,8 +309,8 @@ getPiecesDone = do
     liftIO $ do atomically $ takeTMVar c
 
 -- | Process an event from the Choke Manager
-chokeMsg :: PeerMessage -> Process CF ST ()
-chokeMsg msg = do
+chokeMgrMsg :: PeerMessage -> Process CF ST ()
+chokeMgrMsg msg = do
    case msg of
        PieceCompleted pn -> outChan $ SenderQ.SenderQM $ Have pn
        ChokePeer -> do choking <- gets weChoke
@@ -193,8 +322,20 @@ chokeMsg msg = do
                               (do outChan $ SenderQ.SenderQM Unchoke
                                   modify (\s -> s {weChoke = False}))
        CancelBlock pn blk -> do
-           modify (\s -> s { blockQueue = S.delete (pn, blk) $ blockQueue s })
-           outChan $ SenderQ.SenderQRequestPrune pn blk
+            cf <- asks extConf
+            fromLJ handleCancelMsg cf pn blk
+
+cancelBlock :: PieceNum -> Block -> Process CF ST ()
+cancelBlock pn blk = do
+    s <- get
+    put $! s { blockQueue = S.delete (pn, blk) $ blockQueue s }
+    outChan $ SenderQ.SenderQRequestPrune pn blk
+
+fastCancelBlock :: PieceNum -> Block -> Process CF ST ()
+fastCancelBlock pn blk = do
+    bq <- gets blockQueue
+    when (S.member (pn, blk) bq)
+        $ outChan $ SenderQ.SenderQRequestPrune pn blk
 
 processLastMessage :: Process CF ST ()
 processLastMessage = do
@@ -241,25 +382,52 @@ timerTick = do
    modify (\s -> s { upRate = nuRate, downRate = ndRate })
 
 
+chokeMsg :: Process CF ST ()
+chokeMsg = do
+    putbackBlocks
+    s <- get
+    put $! s { peerChoke = True }
+
+fastChokeMsg :: Process CF ST ()
+fastChokeMsg = do
+    s <- get
+    put $! s { peerChoke = True}
+
+unchokeMsg :: Process CF ST ()
+unchokeMsg = do
+    s <- get
+    put $! s { peerChoke = False }
+    fillBlocks
+
 -- | Process an Message from the peer in the other end of the socket.
 peerMsg :: Message -> Integer -> Process CF ST ()
 peerMsg msg sz = do
    modify (\s -> s { downRate = RC.update sz $ downRate s})
    case msg of
      KeepAlive  -> return ()
-     Choke      -> do putbackBlocks
-                      modify (\s -> s { peerChoke = True })
-     Unchoke    -> do modify (\s -> s { peerChoke = False })
-                      fillBlocks
+     Choke      -> asks extConf >>= fromLJ handleChokeMsg
+     Unchoke    -> unchokeMsg
      Interested -> modify (\s -> s { peerInterested = True })
      NotInterested -> modify (\s -> s { peerInterested = False })
      Have pn -> haveMsg pn
      BitField bf -> bitfieldMsg bf
-     Request pn blk -> requestMsg pn blk
-     Piece n os bs -> do pieceMsg n os bs
+     Request pn blk -> do cf <- asks extConf
+                          fromLJ handleRequestMsg cf pn blk
+     Piece n os bs -> do cf <- asks extConf
+                         fromLJ handlePieceMsg cf n os bs
                          fillBlocks
      Cancel pn blk -> cancelMsg pn blk
      Port _ -> return () -- No DHT yet, silently ignore
+     HaveAll -> fromLJ handleHaveAll =<< asks extConf
+     HaveNone -> fromLJ handleHaveNone =<< asks extConf
+     Suggest pn -> do cf <- asks extConf
+                      fromLJ handleSuggest cf pn
+     AllowedFast pn -> do cf <- asks extConf
+                          fromLJ handleAllowedFast cf pn
+     RejectRequest pn blk -> do cf <- asks extConf
+                                fromLJ handleRejectRequest cf pn blk
+     ExtendedMsg idx bs -> do cf <- asks extConf
+                              fromLJ handleExtendedMsg cf idx bs
 
 -- | Put back blocks for other peer processes to grab. This is done whenever
 -- the peer chokes us, or if we die by an unknown cause.
@@ -317,6 +485,28 @@ bitfieldMsg bf = do
         else do infoP "Got out of band Bitfield request, dying"
                 stopP
 
+haveAllNoneMsg :: String -> Bool -> Process CF ST ()
+haveAllNoneMsg ty a = do
+    pieces <- gets peerPieces
+    piecesNull <- PS.null pieces
+    if piecesNull
+        then do nPieces <- succ . snd . bounds <$> asks pieceMap
+                pp <- createAllPieces nPieces a
+                modify (\s -> s { peerPieces = pp})
+                peerLs <- PS.toList pp
+                msgPieceMgr (PeerHave peerLs)
+                decMissingCounter (length peerLs)
+                considerInterest
+        else do infoP $ "Got out of band " ++ ty ++ " request, dying"
+                stopP
+
+haveNoneMsg :: Process CF ST ()
+haveNoneMsg = haveAllNoneMsg "HaveNone" False
+
+haveAllMsg :: Process CF ST ()
+haveAllMsg = haveAllNoneMsg "HaveAll" True
+
+
 -- | Process a request message from the Peer
 requestMsg :: PieceNum -> Block -> Process CF ST ()
 requestMsg pn blk = do
@@ -324,19 +514,52 @@ requestMsg pn blk = do
     unless (choking)
          (outChan $ SenderQ.SenderQPiece pn blk)
 
+requestFastMsg :: PieceNum -> Block -> Process CF ST ()
+requestFastMsg pn blk = do
+    choking <- gets weChoke
+    if choking
+        then outChan $ SenderQ.SenderQM (RejectRequest pn blk)
+        else outChan $ SenderQ.SenderQPiece pn blk
+
 -- | Handle a Piece Message incoming from the peer
 pieceMsg :: PieceNum -> Int -> B.ByteString -> Process CF ST ()
-pieceMsg n os bs = do
+pieceMsg pn offs bs = pieceMsg' pn offs bs >> return ()
+
+fastPieceMsg :: PieceNum -> Int -> B.ByteString -> Process CF ST ()
+fastPieceMsg pn offs bs = do
+    r <- pieceMsg' pn offs bs
+    unless r
+        (do infoP "Peer sent out-of-band piece we did not request, closing"
+            stopP)
+
+pieceMsg' :: PieceNum -> Int -> B.ByteString -> Process CF ST Bool
+pieceMsg' n os bs = do
     let sz = B.length bs
         blk = Block os sz
         e = (n, blk)
     q <- gets blockQueue
     -- When e is not a member, the piece may be stray, so ignore it.
     -- Perhaps print something here.
-    when (S.member e q)
-        (do storeBlock n blk bs
-            bq <- gets blockQueue >>= return . S.delete e
-            bq `deepseq` modify (\s -> s { blockQueue = bq }))
+    if S.member e q
+        then do storeBlock n blk bs
+                bq <- gets blockQueue >>= return . S.delete e
+                s <- get
+                bq `deepseq` put $! s { blockQueue = bq }
+                return True
+        else return False
+
+rejectMsg :: PieceNum -> Block -> Process CF ST ()
+rejectMsg pn blk = do
+    let e = (pn, blk)
+    q <- gets blockQueue
+    if S.member e q
+        then do
+            msgPieceMgr (PutbackBlocks [e])
+            s <- get
+            put $! s { blockQueue = S.delete e q }
+        else do
+            infoP "Peer rejected piece/block we never requested, stopping"
+            stopP
 
 -- | Handle a cancel message from the peer
 cancelMsg :: PieceNum -> Block -> Process CF ST ()
@@ -392,8 +615,15 @@ endgameLoMark = 1
 -- | Queue up pieces for retrieval at the Peer
 queuePieces :: [(PieceNum, Block)] -> Process CF ST ()
 queuePieces toQueue = do
-    mapM_ (uncurry pushRequest) toQueue
-    modify (\s -> s { blockQueue = S.union (blockQueue s) (S.fromList toQueue) })
+    s <- get
+    let bq = blockQueue s
+    q <- forM toQueue
+            (\(p, b) -> do
+                if S.member (p, b) bq
+                    then return Nothing
+                    else do pushRequest p b
+                            return $ Just (p, b))
+    put $! s { blockQueue = S.union bq (S.fromList $ catMaybes q) }
 
 -- | Push a request to the peer so he can send it to us
 pushRequest :: PieceNum -> Block -> Process CF ST ()
@@ -416,6 +646,10 @@ grabBlocks n = do
         Endgame bs ->
             modify (\s -> s { runningEndgame = True }) >> return bs
 
+
+createAllPieces :: MonadIO m => Int -> Bool -> m PS.PieceSet
+createAllPieces n False = PS.fromList n []
+createAllPieces n True  = PS.fromList n [0..(n-1)]
 
 createPeerPieces :: MonadIO m => Int -> B.ByteString -> m PS.PieceSet
 createPeerPieces nPieces =
@@ -441,3 +675,50 @@ msgPieceMgr m = do
    pmc <- asks pieceMgrCh
    {-# SCC "Channel_Write" #-} liftIO . atomically $ writeTChan pmc m
 
+
+-- IP address is given in host byte-order
+allowedFast :: Word32 -> InfoHash -> Int -> Int -> IO [Word32]
+allowedFast ip ihash sz n = generate n [] x []
+  where
+    -- Take pieces from the generated ones and refill when it is exhausted.
+    -- While taking pieces, kill duplicates
+    generate 0 pcs _ _ = return $ reverse pcs
+    generate k pcs hsh (p : rest)
+            | p `elem` pcs = generate k pcs hsh rest
+            | otherwise    = generate (k-1) (p : pcs) hsh rest
+    generate k pcs hsh [] = do
+        nhsh <- Digest.digestBS hsh
+        generate k pcs nhsh (genPieces nhsh)
+
+    genPieces hash | B.null hash = []
+                   | otherwise   =
+                      let (h, rest) = B.splitAt 4 hash
+                          bytes :: [Word32]
+                          bytes    = [fromIntegral z `shiftL` s |
+                                            (z, s) <- zip (B.unpack h) [24,16,8,0]]
+                          ntohl = fromIntegral . sum
+                      in ((ntohl bytes) `mod` fromIntegral sz) : genPieces rest
+    -- To prevent a Peer to reconnect, obtain a new IP and thus new FAST-set pieces, we mask out
+    -- the lower bits
+    ipBytes     = B.pack $ map fromIntegral
+                         [ (ip .&. 0xFF000000) `shiftR` 24
+                         , (ip .&. 0x00FF0000) `shiftR` 16
+                         , (ip .&. 0x0000FF00) `shiftR`  8
+                         , 0
+                         ]
+    x = B.concat [ipBytes, ihash]
+
+testSuite :: Test
+testSuite = testGroup "Process/Peer"
+    [ testCase "AllowedFast" testAllowedFast ]
+
+testAllowedFast :: Assertion
+testAllowedFast = do
+    pcs <- allowedFast (ip32 [80,4,4,200]) tHash 1313 7
+    assertEqual "Test1" [1059,431,808,1217,287,376,1188] pcs
+    pcs' <- allowedFast (ip32 [80,4,4,200]) tHash 1313 9
+    assertEqual "Test2" [1059,431,808,1217,287,376,1188,353,508] pcs'
+  where ip32 :: [Int] -> Word32
+        ip32 bytes = fromIntegral $ sum [b `shiftL` s | (b, s) <- zip bytes [24,16,8,0]]
+        tHash :: B.ByteString
+        tHash = B.pack $ take 20 (repeat 0xaa)
