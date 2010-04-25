@@ -4,7 +4,7 @@
 
 ## Git version
 GITHEAD=$(awk '/^version:/ {print $2}' Combinatorrent.cabal)
-if test -d "${GIT_DIR:-.gitf}" ; then
+if test -d "${GIT_DIR:-.git}" ; then
     GITHEAD=`git describe 2>/dev/null`
 
     if test -z ${GITHEAD} ; then
