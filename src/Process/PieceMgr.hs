@@ -435,9 +435,10 @@ tryGrabPending :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
 tryGrabPending n ps captured = do
     histo <- gets histogram
     pending <- gets pendingPieces
-    selector <- PS.freeze ps
-    pendingS <- PS.freeze pending
-    let culprits = PendS.pick (\p -> selector p && pendingS p) histo
+    culprits <- liftIO $ PendS.pick (\p -> do a <- PS.member p ps
+                                              b <- PS.member p pending
+                                              return $ a && b)
+                                    histo
     case culprits of
         Nothing -> do
             isn <- PS.intersection ps pending

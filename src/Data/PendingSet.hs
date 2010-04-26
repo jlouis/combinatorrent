@@ -51,17 +51,20 @@ unhaves pns = flip (foldl f) pns
 -- Each piece is discriminated by a selector function until the first hit is
 -- found. Then all Pieces of the same priority accepted by the selector is
 -- chosen for return.
-pick :: (PieceNum -> Bool) -> PendingSet -> Maybe [PieceNum]
+pick :: (PieceNum -> IO Bool) -> PendingSet -> IO (Maybe [PieceNum])
 pick selector ps = findPri (minView . unPS $ ps)
-  where findPri Nothing = Nothing
-        findPri (Just (pn :-> p, rest)) =
-            if selector pn
+  where findPri Nothing = return Nothing
+        findPri (Just (pn :-> p, rest)) = do
+            r <- selector pn
+            if r
                 then pickAtPri p [pn] (minView rest)
                 else findPri $ minView rest
-        pickAtPri _p acc Nothing = Just acc
+        pickAtPri _p acc Nothing = return $ Just acc
         pickAtPri  p acc (Just (pn :-> p', rest))
-            | p == p' = if selector pn
-                            then pickAtPri p (pn : acc) $ minView rest
-                            else pickAtPri p acc $ minView rest
-            | otherwise = Just acc
+            | p == p' = do
+                r <- selector pn
+                if r
+                    then pickAtPri p (pn : acc) $ minView rest
+                    else pickAtPri p acc $ minView rest
+            | otherwise = return $ Just acc
 
