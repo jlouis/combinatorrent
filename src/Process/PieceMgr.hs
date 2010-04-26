@@ -389,10 +389,13 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
     pendN <- PS.null pend
     if blocks == [] && pendN
         then do blks <- grabEndGame k eligible
-                modify (\db -> db { endGaming = True })
+                db <- get
+                put $! db { endGaming = True }
                 debugP $ "PieceMgr entered endgame."
                 return $ Endgame blks
-        else do modify (\s -> s { downloading = blocks ++ (downloading s) })
+        else do s <- get
+                let !dld = downloading s
+                put $! s { downloading = blocks ++ dld }
                 return $ Leech blocks
 
 -- Grabbing blocks is a state machine implemented by tail calls
