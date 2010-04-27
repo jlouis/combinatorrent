@@ -147,15 +147,15 @@ instance Serialize Message where
     put (Cancel pn (Block os sz))
                         = p8 8 *> mapM_ p32be [pn,os,sz]
     put (Port p)        = p8 9 *> (putWord16be . fromIntegral $ p)
-    put (RejectRequest pn (Block os sz))
-                        = p8 10 *> mapM_ p32be [pn,os,sz]
-    put (AllowedFast pn)
-                        = p8 11 *> p32be pn
-    put (Suggest pn)    = p8 13 *> p32be pn
+    put (Suggest pn)    = p8 0x0D *> p32be pn
     put (ExtendedMsg idx bs)
                         = p8 20 *> p32be idx *> putByteString bs
-    put HaveAll         = p8 14
-    put HaveNone        = p8 15
+    put HaveAll         = p8 0x0E
+    put HaveNone        = p8 0x0F
+    put (RejectRequest pn (Block os sz))
+                        = p8 0x10 *> mapM_ p32be [pn,os,sz]
+    put (AllowedFast pn)
+                        = p8 0x11 *> p32be pn
 
     get =  getKA      <|> getChoke
        <|> getUnchoke <|> getIntr
@@ -189,13 +189,13 @@ getAPMsg l = do
         7  -> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
         8  -> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
         9  -> (Port . fromIntegral <$> apW16be)
-        10 -> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-        11 -> (AllowedFast <$> apW32be)
-        13 -> (Suggest <$> apW32be)
-        14 -> return HaveAll
-        15 -> return HaveNone
+        0x0D -> (Suggest <$> apW32be)
+        0x0E -> return HaveAll
+        0x0F -> return HaveNone
+        0x10 -> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+        0x11 -> (AllowedFast <$> apW32be)
         20 -> (ExtendedMsg <$> apW32be <*> A.take (l - 5))
-        _  -> fail "Illegal parse"
+        k  -> fail $ "Illegal parse, code: " ++ show k
 
 apW32be :: Parser Int
 apW32be = do
@@ -228,11 +228,11 @@ getReq           = byte 6  *> (Request  <$> gw32 <*> (Block <$> gw32 <*> gw32))
 getPiece         = byte 7  *> (Piece    <$> gw32 <*> gw32 <*> (remaining >>= getByteString))
 getCancel        = byte 8  *> (Cancel   <$> gw32 <*> (Block <$> gw32 <*> gw32))
 getPort          = byte 9  *> (Port . fromIntegral <$> getWord16be)
-getRejectRequest = byte 10 *> (RejectRequest <$> gw32 <*> (Block <$> gw32 <*> gw32))
-getAllowedFast   = byte 11 *> (AllowedFast <$> gw32)
-getSuggest       = byte 13 *> (Suggest <$> gw32)
-getHaveAll       = byte 14 *> return HaveAll
-getHaveNone      = byte 15 *> return HaveNone
+getSuggest       = byte 0x0D *> (Suggest <$> gw32)
+getHaveAll       = byte 0x0E *> return HaveAll
+getHaveNone      = byte 0x0F *> return HaveNone
+getRejectRequest = byte 0x10 *> (RejectRequest <$> gw32 <*> (Block <$> gw32 <*> gw32))
+getAllowedFast   = byte 0x11 *> (AllowedFast <$> gw32)
 getExtendedMsg   = byte 20 *> (ExtendedMsg <$> gw32 <*> (remaining >>= getByteString))
 getKA      = do
     empty <- isEmpty
