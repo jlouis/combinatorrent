@@ -57,14 +57,20 @@ pick selector ps = findPri (minView . unPS $ ps)
         findPri (Just (pn :-> p, rest)) = do
             r <- selector pn
             if r
-                then pickAtPri p [pn] (minView rest)
+                then pickAtPri numToPick p [pn] (minView rest)
                 else findPri $ minView rest
-        pickAtPri _p acc Nothing = return $ Just acc
-        pickAtPri  p acc (Just (pn :-> p', rest))
+        pickAtPri 0 _p acc _ = return $ Just acc
+        pickAtPri _ _p acc Nothing = return $ Just acc
+        pickAtPri k p acc (Just (pn :-> p', rest))
             | p == p' = do
                 r <- selector pn
                 if r
-                    then pickAtPri p (pn : acc) $ minView rest
-                    else pickAtPri p acc $ minView rest
+                    then pickAtPri (k-1) p (pn : acc) $ minView rest
+                    else pickAtPri k p acc $ minView rest
             | otherwise = return $ Just acc
 
+-- | Number of pieces to pick with the picker. Setting an upper limit here because if a lot
+--   of peers have all pieces, these numbers grow insanely big, leading to allocation we
+--   don't really need.
+numToPick :: Int
+numToPick = 7
