@@ -35,11 +35,6 @@ wish-list.
      also try to drain the socket again while waiting on the Control
      process. Doing this will lower the contended point of communication in
      the system.
-   - Investigate and use the Event Library of Bryan O'Sullivan and Johan
-     Tibell:
-
-     [A Haskell event notification library - Github](http://github.com/tibbe/event)
-   - Be explicit and use Word32 in the Wire Protocol.
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
 
