@@ -47,7 +47,8 @@ readSend = do
             bs <- liftIO $ recv s 4096
             when (B.length bs == 0) stopP
             loop s c (A.feed prt bs)
-        loop _ _ (A.Fail _ _ _) =
-                    do warningP "Incorrect parse in receiver, dying!"
+        loop _ _ (A.Fail _ ctx err) =
+                    do warningP $ "Incorrect parse in receiver, context: "
+                                        ++ show ctx ++ ", " ++ show err
                        stopP
 
