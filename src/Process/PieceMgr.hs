@@ -401,13 +401,15 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
 -- Grabbing blocks is a state machine implemented by tail calls
 -- Try grabbing pieces from the pieces in progress first
 tryGrab :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
-tryGrab k ps = tryGrabProgress k ps [] =<< (M.keys <$> gets inProgress)
+tryGrab k ps = {-# SCC "tryGrabProgress" #-}
+    tryGrabProgress k ps [] =<< (M.keys <$> gets inProgress)
 
 tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)] -> [PieceNum]
                 -> Process CF ST [(PieceNum, Block)]
 tryGrabProgress 0 _ captured _ = return captured
-tryGrabProgress k ps captured [] = tryGrabPending k ps captured
-tryGrabProgress k ps captured (i : is) =
+tryGrabProgress k ps captured [] = {-# SCC "tryGrabProgress_k_e" #-}
+        tryGrabPending k ps captured
+tryGrabProgress k ps captured (i : is) = {-# SCC "tryGrabProgress_k_is" #-}
     do m <- PS.member i ps
        if m
          then grabFromProgress k ps i captured is
@@ -416,7 +418,7 @@ tryGrabProgress k ps captured (i : is) =
 -- The Piece @p@ was found, grab it
 grabFromProgress :: PieceNum -> PS.PieceSet -> PieceNum -> [(PieceNum, Block)] -> [PieceNum]
                  -> Process CF ST [(PieceNum, Block)]
-grabFromProgress n ps p captured nxt = do
+grabFromProgress n ps p captured nxt = {-# SCC "grabFromProgress" #-} do
     inprog <- gets inProgress
     ipp <- case M.lookup p inprog of
               Nothing -> fail "grabFromProgress: could not lookup piece"
@@ -435,19 +437,20 @@ grabFromProgress n ps p captured nxt = do
 -- Try grabbing pieces from the pending blocks
 tryGrabPending :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)]
                -> Process CF ST [(PieceNum, Block)]
-tryGrabPending n ps captured = do
+tryGrabPending n ps captured = {-# SCC "tryGrabPending" #-} do
     histo <- gets histogram
     pending <- gets pendingPieces
-    culprits <- liftIO $ PendS.pick (\p -> do a <- PS.member p ps
-                                              b <- PS.member p pending
-                                              return $ a && b)
-                                    histo
+    culprits <- {-# SCC "PendS.pick" #-}
+        liftIO $ PendS.pick (\p -> do a <- PS.member p ps
+                                      b <- PS.member p pending
+                                      return $ a && b)
+                            histo
     case culprits of
-        Nothing -> do
+        Nothing -> {-# SCC "No_Culprits" #-} do
             isn <- PS.intersection ps pending
             assert (null isn) (return ())
             return captured
-        Just pieces -> do
+        Just pieces -> {-# SCC "Build_Blocks" #-} do
             h <- pickRandom pieces
             inProg <- gets inProgress
             blockList <- createBlock h
@@ -458,7 +461,8 @@ tryGrabPending n ps captured = do
             tryGrabProgress n ps captured [h]
 
 grabEndGame :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
-grabEndGame n ps = do -- In endgame we are allowed to grab from the downloaders
+grabEndGame n ps = {-# SCC "grabEndGame" #-} do
+    -- In endgame we are allowed to grab from the downloaders
     dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
     take n . shuffle' dls (length dls) <$> liftIO newStdGen
 
