@@ -620,14 +620,10 @@ queuePieces toQueue = do
     q <- forM toQueue
             (\(p, b) -> do
                 if S.member (p, b) bq
-                    then return Nothing
-                    else do pushRequest p b
+                    then return Nothing -- Ignore pieces which are already in queue
+                    else do outChan $ SenderQ.SenderQM $ Request p b
                             return $ Just (p, b))
     put $! s { blockQueue = S.union bq (S.fromList $ catMaybes q) }
-
--- | Push a request to the peer so he can send it to us
-pushRequest :: PieceNum -> Block -> Process CF ST ()
-pushRequest pn blk = outChan $ SenderQ.SenderQM $ Request pn blk
 
 -- | Tell the PieceManager to store the given block
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()

@@ -92,7 +92,7 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                             case piece of
                                 [] -> return () -- Piece must have been sent
                                 [_] -> modifyQ (Q.push (Left $ RejectRequest n blk))
-                                _ -> fail "Impossible case"
+                                ps -> fail $ "Impossible case, SenderQCancel " ++ show (length ps)
                         else modifyQ (Q.filter (filterPiece n blk))
                 SenderOChoke -> do
                     fe <- asks fastExtension
@@ -108,15 +108,16 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                                 modifyQ (Q.push $ Left Choke)
                 SenderQRequestPrune n blk -> do
                     fe <- asks fastExtension
-                    piece <- partitionQ (filterRequest n blk)
+                    piece <- partitionQ (pickRequest n blk)
                     case piece of
-                      [] -> modifyQ (Q.push (Left $ Cancel n blk)) -- Piece Must have been sent
+                      [] -> modifyQ (Q.push (Left $ Cancel n blk)) -- Request must have been sent
                       [_] -> if fe
                                 then modifyQ -- This is a hack for now
                                        (Q.push (Left $ Cancel n blk) .
                                         Q.push (Left $ Request n blk))
-                                else modifyQ (Q.filter (filterRequest n blk))
-                      _ -> fail "Impossible case"
+                                else return ()
+                      ps -> fail $ "Impossible case, SenderQRequestPrune "
+                                ++ show ps ++ ", " ++ show fe
     pgm
 
 rateUpdateEvent :: Process CF ST ()
@@ -138,10 +139,9 @@ filterPiece n blk (Right (n1, blk1)) | n == n1 && blk == blk1 = False
                                      | otherwise              = True
 filterPiece _ _   _                                           = True
 
-filterRequest :: PieceNum -> Block -> OutQT -> Bool
-filterRequest n blk (Left (Request n1 blk1)) | n == n1 && blk == blk1 = False
-                                             | otherwise              = True
-filterRequest _ _   _                                                 = True
+pickRequest :: PieceNum -> Block -> OutQT -> Bool
+pickRequest n blk (Left (Request n1 blk1)) | n == n1 && blk == blk1 = True
+pickRequest _ _   _                                                 = False
 
 modifyQ :: (Q.Queue (OutQT) ->
             Q.Queue (OutQT))
