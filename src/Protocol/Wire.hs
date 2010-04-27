@@ -172,7 +172,9 @@ instance Serialize Message where
 getMsg :: Parser Message
 getMsg = do
     l <- apW32be
-    getAPMsg l
+    if l == 0
+        then return KeepAlive
+        else getAPMsg l
 
 getAPMsg :: Int -> Parser Message
 getAPMsg l =
