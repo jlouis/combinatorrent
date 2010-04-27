@@ -29,7 +29,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
 import Data.Attoparsec as A
-import Data.Attoparsec.Combinator as AC
 import Data.Bits (testBit, setBit)
 
 import Data.Serialize
@@ -177,24 +176,26 @@ getMsg = do
         else getAPMsg l
 
 getAPMsg :: Int -> Parser Message
-getAPMsg l =
-    AC.choice [ A.word8 0  *> return Choke
-              , A.word8 1  *> return Unchoke
-              , A.word8 2  *> return Interested
-              , A.word8 3  *> return NotInterested
-              , A.word8 4  *> (Have <$> apW32be)
-              , A.word8 5  *> (BitField <$> (A.take (l-1)))
-              , A.word8 6  *> (Request <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-              , A.word8 7  *> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
-              , A.word8 8  *> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-              , A.word8 9  *> (Port . fromIntegral <$> apW16be)
-              , A.word8 10 *> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
-              , A.word8 11 *> (AllowedFast <$> apW32be)
-              , A.word8 13 *> (Suggest <$> apW32be)
-              , A.word8 14 *> return HaveAll
-              , A.word8 15 *> return HaveNone
-              , A.word8 20 *> (ExtendedMsg <$> apW32be <*> A.take (l - 5))
-              ]
+getAPMsg l = do
+    c <- A.anyWord8
+    case c of
+        0  -> return Choke
+        1  -> return Unchoke
+        2  -> return Interested
+        3  -> return NotInterested
+        4  -> (Have <$> apW32be)
+        5  -> (BitField <$> (A.take (l-1)))
+        6  -> (Request <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+        7  -> (Piece <$> apW32be <*> apW32be <*> A.take (l - 9))
+        8  -> (Cancel <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+        9  -> (Port . fromIntegral <$> apW16be)
+        10 -> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
+        11 -> (AllowedFast <$> apW32be)
+        13 -> (Suggest <$> apW32be)
+        14 -> return HaveAll
+        15 -> return HaveNone
+        20 -> (ExtendedMsg <$> apW32be <*> A.take (l - 5))
+        _  -> fail "Illegal parse"
 
 apW32be :: Parser Int
 apW32be = do
