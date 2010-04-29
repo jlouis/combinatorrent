@@ -318,11 +318,15 @@ chokeMgrMsg msg = do
             considerInterest
        ChokePeer -> do choking <- gets weChoke
                        when (not choking)
-                            (do outChan $ SenderQ.SenderOChoke
+                            (do t <- liftIO myThreadId
+                                debugP $ "Pid " ++ show t ++ " choking"
+                                outChan $ SenderQ.SenderOChoke
                                 modify (\s -> s {weChoke = True}))
        UnchokePeer -> do choking <- gets weChoke
                          when choking
-                              (do outChan $ SenderQ.SenderQM Unchoke
+                              (do t <- liftIO myThreadId
+                                  debugP $ "Pid " ++ show t ++ " unchoking"
+                                  outChan $ SenderQ.SenderQM Unchoke
                                   modify (\s -> s {weChoke = False}))
        CancelBlock pn blk -> do
             cf <- asks extConf
@@ -452,6 +456,7 @@ haveMsg pn = do
     let (lo, hi) = bounds pm
     if pn >= lo && pn <= hi
         then do PS.insert pn =<< gets peerPieces
+                debugP $ "Peer has pn: " ++ show pn
                 msgPieceMgr (PeerHave [pn])
                 decMissingCounter 1
                 considerInterest
@@ -520,12 +525,14 @@ haveAllMsg = haveAllNoneMsg "HaveAll" True
 requestMsg :: PieceNum -> Block -> Process CF ST ()
 requestMsg pn blk = do
     choking <- gets weChoke
-    unless (choking)
-         (outChan $ SenderQ.SenderQPiece pn blk)
+    unless choking
+        (do debugP $ "Peer requested: " ++ show pn ++ "(" ++ show blk ++ ")"
+            outChan $ SenderQ.SenderQPiece pn blk)
 
 requestFastMsg :: PieceNum -> Block -> Process CF ST ()
 requestFastMsg pn blk = do
     choking <- gets weChoke
+    debugP $ "Peer fastRequested: " ++ show pn ++ "(" ++ show blk ++ ")"
     if choking
         then outChan $ SenderQ.SenderQM (RejectRequest pn blk)
         else outChan $ SenderQ.SenderQPiece pn blk
