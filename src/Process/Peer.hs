@@ -312,7 +312,10 @@ getPiecesDone = do
 chokeMgrMsg :: PeerMessage -> Process CF ST ()
 chokeMgrMsg msg = do
    case msg of
-       PieceCompleted pn -> outChan $ SenderQ.SenderQM $ Have pn
+       PieceCompleted pn -> do
+            debugP "Telling about Piece Completion"
+            outChan $ SenderQ.SenderQM $ Have pn
+            considerInterest
        ChokePeer -> do choking <- gets weChoke
                        when (not choking)
                             (do outChan $ SenderQ.SenderOChoke
@@ -605,7 +608,6 @@ checkWatermark = do
         mark = if eg then endgameLoMark else loMark
     when (sz < mark)
         (do toQueue <- grabBlocks (hiMark - sz)
-            when (Prelude.null toQueue) considerInterest
             queuePieces toQueue)
 
 -- These three values are chosen rather arbitrarily at the moment.
