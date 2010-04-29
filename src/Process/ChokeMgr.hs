@@ -120,14 +120,19 @@ data Peer   = Peer
         , pChannel  :: PeerChannel
         }
 
+instance Show Peer where
+    show (Peer tid _ _) = "(Peer " ++ show tid ++ "...)"
+
 -- | Peer upload and download ratio
 data PRate  = PRate { pUpRate   :: Double,
                       pDownRate :: Double }
+  deriving Show
 -- | Current State of the peer
 data PState = PState { pChokingUs :: Bool -- ^ True if the peer is choking us
                      , pInterestedInUs :: Bool -- ^ Reflection from Peer DB
                      , pIsASeeder :: Bool -- ^ True if the peer is a seeder
                      }
+  deriving Show
 
 type RateMap = M.Map ThreadId (PRate, PState)
 data PeerDB = PeerDB
@@ -201,7 +206,10 @@ rechoke = do
     sd <- gets seeding
     rm <- gets rateMap
     debugP $ "Chain is:  " ++ show (map pThreadId chn)
+    debugP $ "RateMap is:  " ++ show rm
     let (seed, down) = splitSeedLeech sd rm chn
+    debugP $ "Seeders " ++ show seed
+    debugP $ "Downloaders " ++ show down
     electedPeers <- selectPeers us down seed
     performChokingUnchoking electedPeers chn
 
@@ -323,8 +331,12 @@ performChokingUnchoking elected peers =
   where
     -- Partition the peers in elected and non-elected
     (electedPeers, nonElectedPeers) = partition (\rd -> S.member (pThreadId rd) elected) peers
-    unchoke p = msgPeer (pChannel p) UnchokePeer
-    choke   p = msgPeer (pChannel p) ChokePeer
+    unchoke p = do
+        debugP $ "Unchoking: " ++ show p
+        msgPeer (pChannel p) UnchokePeer
+    choke   p = do
+        debugP $ "Choking: " ++ show p
+        msgPeer (pChannel p) ChokePeer
 
     -- If we have k optimistic slots, @optChoke k peers@ will unchoke the first
     -- @k@ peers interested in us. The rest will either be unchoked if they are
