@@ -88,7 +88,7 @@ pgm = {-# SCC "Peer.SendQueue" #-} do
                     fe <- asks fastExtension
                     if fe
                         then do
-                            piece <- partitionQ (filterPiece n blk)
+                            piece <- partitionQ (pickPiece n blk)
                             case piece of
                                 [] -> return () -- Piece must have been sent
                                 [_] -> modifyQ (Q.push (Left $ RejectRequest n blk))
@@ -133,6 +133,10 @@ type OutQT = Either Message (PieceNum, Block)
 filterAllPiece :: OutQT -> Bool
 filterAllPiece (Right _) = True
 filterAllPiece (Left  _) = False
+
+pickPiece :: PieceNum -> Block -> OutQT -> Bool
+pickPiece n blk (Right (n1, blk1)) | n == n1 && blk == blk1 = True
+pickPiece _ _   _                                           = False
 
 filterPiece :: PieceNum -> Block -> OutQT -> Bool
 filterPiece n blk (Right (n1, blk1)) | n == n1 && blk == blk1 = False
