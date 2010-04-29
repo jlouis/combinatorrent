@@ -1,0 +1,281 @@
+Haskell vs. Erlang
+==================
+
+Since I wrote a bittorrent client in both Erlang and Haskell, etorrent and
+combinatorrent respectively, I decided to put up some bait. This might erupt in
+a language war and "My language is better than yours", but I feel I am
+obligated to write something subjective. Here is to woes of programming in
+Haskell and Erlang.
+
+Neither Haskell, nor Erlang was a first language for me. I have programmed
+serious programs in C, Standard ML, Ocaml, Python, Java and Perl; tasted the cake
+of Go, Javascript, Scheme and Ruby; and has written substantial stuff in Coq and Twelf.
+I love static type systems, a bias that will rear its ugly head and breathe
+fire.
+
+I have written Haskell code seriously since 2005 and Erlang code seriously
+since 2007. I have programmed functionally since 1997 or so. My toilet reading
+currently is "Categories for the working mathematician" by Mac Lane. Ten years
+ago it was "ML for the working programmer" by Paulson.
+
+Enough about me.
+
+Caveats:
+--------
+
+With any language war material follows a disclaimer and a healthy dose of
+caveats. This is subjective. You have to live with it being subjective. My
+writing can't be objective and colorful at the same time. And I like colors in
+my life. Also, it is no fun reading a table listing the comparison. Rather, I
+will try to make it into a good foil duel with attacks, parries, guards,
+pierces, bananas, and barbed wire.
+
+I built etorrent in Erlang first and combinatorrent in Haskell second. Hence,
+the 2nd time around, with the sole goal of redoing the functionality of
+etorrent was much easier and could proceed much faster. The Erlang code is
+slightly fattier at 4.2K lines versus 3.6K lines of Haskell (SLOCs). The
+performance of the two clients is roughly equal, but more time was spent at
+optimizing the Haskell code.
+
+My hypothesis is this: The Erlang VM is much better at IO than the GHC compiler
+I wield and use for Haskell. GHC kills the Erlang VM for everything else
+though, perhaps included message passing.
+
+Also, the quality of the Erlang code could be better, relatively compared to
+the Haskell code.
+
+Enough!
+
+Enough with the caveats!
+
+Haskell cons:
+-------------
+
+What weighs against using Haskell for the project? First is laziness. Sometimes
+you want your code to be strict and sometimes lazy. In combinatorrent, we do
+some statistics which we don't really need to calculate unless we want to
+present them. Stuff like bytes uploaded and downloaded for instance. Since you
+do not necessarily ask for these statistics, the compiler is free to build up
+thunks of the calculation and you have a neat little space leak. This is a
+recurring problem until you learn how to harness the strictness annotations
+of Haskell. Then the problem disappears.
+
+IO in Haskell is somewhat weak if you naively assume a String is fast. But
+there is help from Bytestrings, attoparsec and low-level Socket networking.
+Combinatorrent could use more help with getting the speed up here. I have
+substituted the IO layers lowest level some 2-3 times in combinatorrent.
+Contrast this with Erlang, where the original protocol parser and IO is the one
+still standing.
+
+The GHC compiler has, comparatively, more performance regressions compared to
+the Erlang VM. It should come as no surprise: GHC is acting as both a research
+vehicle and a compiler implementation. I want to stress however, that this has
+not worried me a lot. When asking the GHC developers for help, the response has
+been fast and helpful, and in every case it was easy to fix or work around.
+Also, change is a necessary thing if you want to improve.
+
+Haskell pros:
+-------------
+
+Haskell has one very cool thing: Static typing (remember the bias!). The type
+system of Haskell is the most advanced type system for a general purpose
+language in existence. The only systems which can beat it are theorem provers
+like Coq, and they are not general purpose programming languages (Morriset and
+the YNot team might disagree though!). Static typing has some really cool
+merits. Bugs are caught fast and early; types ensure few corner cases in the
+programs (why check for null when it can't be represented). The types is my
+program skeleton and the program inhabiting the type is the flesh. Getting the
+skeleton right yields small and succinct programs. The abstraction
+possibilities from this is unparalleled in any language I have seen (and I've
+seen a few).
+
+The GHC compiler provides programs which have excellent execution speed. You
+don't need to worry a lot about speed when the compiler simply fixes most of
+the problems for you. This in turn means that you can write abstract code
+without worrying too much about the result. This yields vastly more general and
+simpler programs.
+
+One very big difference in the implementations is that of STM channels versus
+Erlangs message passing. In Erlang, each process has a mailbox of unbounded
+size. You send messages to the mailbox, identified by the process ID of the
+mailbox owner. In Haskell, we use STM Channels for most communication. Thus,
+you send messages not to the PID of a process, but to a specific channel. This
+effectively changes some rules in channel network configuration. In Erlang you
+must either globally register a process or propagate PIDs. In Haskell, channels
+are created and then propagated to communicating parties. I find the Haskell
+approach considerably easier - but also note that in a statically typed
+language, channels is the way to go. The sum type for a PID mailbox would be
+cumbersome in comparison.
+
+Haskell has excellent library and data structure support. For instance you have
+access to priority search queues via Hackage. PSQueues are useful for
+implementing the piece histogram in a bittorrent client: knowing how rare a
+given piece is so you can seek to fetch the rarest first.
+
+Haskell can create (im-)mutable (un-)boxed arrays. These are useful in a
+bittorrent client in several places. Immutable arrays for storing knowledge
+about pieces is an example. Or bit-arrays for storing knowledge about the
+pieces a given peer has. Erlang has no easy access to these and no guarantee of
+the data representation.
+
+Bryan O'Sullivans attoparsec library allows for incremental parsing. When you
+get a new chunk of data from the network, you feed it to attoparsec. It will
+either give you a parsed message and the remaining bytes, or it will hand you
+back a continuation. This continuation, if invoked with more food, will
+continue the parsing. For network sockets the incrementality is pure win.
+
+The GHC compiler has some awesome profiling tools, including a powerful heap
+profiler. Using this, the run-time and memory usage of combinatorrent was
+brought down.
+
+Finally, testing in Haskell is easy. QuickCheck and Test.Framework provides a
+--tests target built into the combinatorrent binary itself. Self tests are
+easy.
+
+Haskell mistakes:
+-----------------
+
+I made some mistakes when writing the Haskell client. For one I relied on the
+CML library until I realized STM would do an equal or better job. The amount of
+Haskell developers with STM experience compared to the CML head-count made the
+decision to change easy.
+
+Furthermore, I should have focused on laziness earlier in the process. The
+first combinatorrent releases leak memory because of lazy thunk buildup. The
+latter versions, after I understood it intuitively, does not leak.
+
+Erlang cons:
+------------
+
+In Erlang, dynamic typing is the norm. Rather than enforce typing, you can get
+warnings by a type analyzer tool, the dialyzer, if need be. Running this on the
+code is a good idea to weed out some problems quickly. When building etorrent I
+had much use of the dialyzer and used a at that time experimental extension:
+spec() specifications. Yet, I think that 19/20 errors in my erlang programs
+were errors which a type system would have caught easily. This means you spend
+more time actually running the program and observing its behavior. Also note
+that dynamic typing hurts less in Erlang compared to other languages. A process
+is comprehensible in its own right and that reduces the interface to the
+process communication - a much simpler task.
+
+Etorrent has less stability than combinatorrent and has erred more. Yet, this
+is no problem for a bittorrent client since the supervisor-tree in Erlang/OTP
+will automatically restart broken parts of the system. For a bittorrent client
+we can live with a death once a week or once a day without any troubles.
+
+You have no mutability in Erlang and you have far less options for data
+representation. This in turn make certain algorithms rather hard to express or
+you have to opt for variant with a larger space usage. There were no
+Cabal-equivalent at the time I wrote the code and thus fewer libraries to
+choose from.
+
+For the built-in libraries, the HTTP library was more strict with respect to
+correctness. In turn, many trackers would not communicate with it and I had to
+provide a wrapper around the library. Today, this might have changed though.
+Haskells HTTP library worked out of the box with no changes.
+
+Erlangs syntax, compared to Haskell, is ugly, clunky and cumbersome. Make no
+mistake though: Tanks are ugly, clunky and cumbersome. It does not make tanks
+less menacing.
+
+Erlang pros:
+------------
+
+One application SASL. SASL is a system logger which will record in a
+ring-buffer any kind of process death and process restart. I used this a lot
+when developing. I would load a couple of torrents in the client and go to bed.
+Next morning I would check the SASL log for any error that might have occurred
+and fix those bugs. This way of developing is good for a bittorrent client:
+utmost stability is not needed. We just to get the number of errors below a
+certain threshold. Rather than waste time fixing a bug which only occurs once
+every year, we can concentrate on the things that matter.
+
+The IO layer in Erlangs VM is FAST! It is written in C, and it is optimized
+heavily because this is what Erlang does best. For file IO it uses asynchronous
+threads to circumvent having to wait on the kernel. For the network, it plugs
+into epoll() getting good performance in turn.
+
+The Beam VM of Erlang is a beast of stability. Basically, it doesn't quit
+unless you nuke it from orbit. One of the smaller things I learned some weeks
+ago was the rudimentary flow control trick. Erlang schedules by counting
+reductions in an Erlang process and then switching process context when it has
+no more reductions in its time share. Sending a message never fails but it
+costs reductions proportional to the queue size of the receiving process.
+Hence, many senders have a harder time overloading a single receiver. The trick
+is simple, easily implementable and provides some simple flow control. While
+not fail-safe, it ups the ante for when communication overload happens.
+
+Erlang has OTP, the Open Telecom Platform, which is a callback-framework for
+processes. You implement a set of callbacks and hand over control to the
+OTP-portion of your process. OTP then handles a lot of the ugly, gritty details
+leaving your part simple. OTP also provides the supervision of processes,
+restarting them if they err. Supervisor-processes form trees so *they* are in
+turn supervised. It isn't turtles all the way down in an Erlang VM...
+
+Erlang executes fast enough for most things. Haskell gives you faster
+execution, but Erlang was more than adequate for a bittorrent client in the
+speed department. As an example of how this plays together with the IO layer,
+an early version of etorrent could sustain 700 megabit network load on a local
+network of 1 gigabit when seeding. The current version of etorrent can do the
+same as a seeder I suspect. Also, message passing in Erlang is blazing fast.
+It feels like a function call - a key to good Erlang I think.
+
+The Erlang shell can easily be used as a poor mans user interface. Etorrent
+simply responds to some functions in the shell, showing status of the running
+system. I suspect GHCi can do the same, but I never got around to doing it and
+it doesn't seem as easy to pull off.
+
+I love the Erlang way of programming. You assume your code does the right thing
+and let it crash otherwise. If it crashes too often you handle that case. Code
+is not lingered with error handling for things that never happen and should it
+happen occasionally, the supervisor tree saves the day. 
+
+
+Erlang mistakes:
+----------------
+
+Unfortunately, I made a number of mistakes in Etorrent. Most of these has to do
+with being the first version. Fred P. Brooks hinted that you want to throw away
+things when building the first version. And I did. I used ETS tables in places
+where they are not good. ETS is a table in which you can store any erlang term
+and later retrieve it. They give you a way to circumvent the representation
+limitation in Erlang. But they are no silver bullet: When you pull out a term,
+you copy it to the process pulling it. When your terms are 4-8 megabyte in
+size, that hurts a lot.
+
+I relied far too much on mnesia, the database in Erlang. Mnesia is basically
+using software-transactional-memory so locking is optimistic. When you have
+something like 80 writers wanting access to the same row in a table, then the
+system starves. Also, there is no need for a bittorrent application to require
+a mnesia store. A simple serialization of key data to a file based on a timer
+is more than adequate.
+
+I made several mistakes in the process model. I thought that choking was local
+to a torrent while in reality it is a global thing for all torrents currently
+being downloaded. These reorganizations require quite some refactoring - and
+missing in the static typing department these are somewhat more expensive
+compared to Haskell refactorings.
+
+I thought autotools were a good idea. It is not. Autotools is the Maven of C
+programming.
+
+Finally, I shedded unit-tests. In a dynamically typed environment you need lots
+and lots of these. But I decided against them early on. In hindsight this was
+probably a mistake. While unit-testing Erlang code is hard, it is by no means
+impossible.
+
+Future:
+-------
+
+The future brings exciting things with it. I will continue Combinatorrent
+development. I am almost finished with the Fast-extension (BEP 0006) for
+combinatorrent and have some more optimization branches ready as well. I still
+follow Erlang in general because it is an interesting language with a lot of
+cool uses. I do check that etorrent compiles on new releases of Erlang. If
+anyone shows interest in any of the client implementations, feel free to
+contact me. I will happily answer questions.
+
+There is no clear winner in the duel. I *prefer* Haskell, but I am biased and
+believe in static typing. Yet I *like* programming in Erlang - both languages
+are good from different perspectives.
+
