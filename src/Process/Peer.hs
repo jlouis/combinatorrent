@@ -48,7 +48,7 @@ import Process.FS
 import Process.PieceMgr
 import RateCalc as RC
 import Process.Status
-import Process.ChokeMgr (RateTVar)
+import qualified Process.ChokeMgr as ChokeMgr (RateTVar, PeerRateInfo(..))
 import Process.Timer
 import Supervisor
 import Torrent
@@ -61,7 +61,7 @@ import qualified Process.Peer.Receiver as Receiver
 -- INTERFACE
 ----------------------------------------------------------------------
 
-start :: Socket -> [Capabilities] -> MgrChannel -> RateTVar -> PieceMgrChannel
+start :: Socket -> [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgrChannel
              -> FSPChannel -> TVar [PStat] -> PieceMap -> Int -> InfoHash
              -> IO Children
 start s caps pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
@@ -86,7 +86,7 @@ data CF = CF { inCh :: TChan (Message, Integer)
              , sendBWCh :: BandwidthChannel
              , timerCh :: TChan ()
              , statTV :: TVar [PStat]
-             , rateTV :: RateTVar
+             , rateTV :: ChokeMgr.RateTVar
              , pcInfoHash :: InfoHash
              , pieceMap :: !PieceMap
              , piecesDoneTV :: TMVar [PieceNum]
@@ -226,7 +226,7 @@ errorExtendedMsg _ _ = do
     errorP "Received an EXTENDED MESSAGE, but the extension is not enabled"
     stopP
 
-peerP :: [Capabilities] -> MgrChannel -> RateTVar -> PieceMgrChannel -> PieceMap -> Int
+peerP :: [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgrChannel -> PieceMap -> Int
          -> TChan SenderQ.SenderQMsg -> TChan (Message, Integer) -> BandwidthChannel
          -> TVar [PStat] -> InfoHash
          -> SupervisorChannel -> IO ThreadId
@@ -337,8 +337,8 @@ fastCancelBlock pn blk = do
     when (S.member (pn, blk) bq)
         $ outChan $ SenderQ.SenderQRequestPrune pn blk
 
-processLastMessage :: Process CF ST ()
-processLastMessage = do
+checkKeepAlive :: Process CF ST ()
+checkKeepAlive = do
     lm <- gets lastMessage
     if lm >= 24
         then do outChan $ SenderQ.SenderQM KeepAlive
@@ -352,7 +352,7 @@ processLastMessage = do
 timerTick :: Process CF ST ()
 timerTick = do
    mTid <- liftIO myThreadId
-   processLastMessage
+   checkKeepAlive
    tch <- asks timerCh
    _ <- registerSTM 5 tch ()
    -- Tell the ChokeMgr about our progress
@@ -368,7 +368,12 @@ timerTick = do
    rtv <- asks rateTV
    liftIO . atomically $ do
        q <- readTVar rtv
-       writeTVar rtv ((mTid, (up, down, i, seed, pchoke)) : q)
+       writeTVar rtv ((mTid, ChokeMgr.PRI {
+                                   ChokeMgr.peerUpRate = up,
+                                   ChokeMgr.peerDownRate = down,
+                                   ChokeMgr.peerInterested = i,
+                                   ChokeMgr.peerSeeding = seed,
+                                   ChokeMgr.peerChokingUs = pchoke }) : q)
    -- Tell the Status Process about our progress
    let (upCnt, nuRate) = RC.extractCount $ nur
        (downCnt, ndRate) = RC.extractCount $ ndr
@@ -454,7 +459,7 @@ haveMsg pn = do
 -- True if the peer is a seeder
 isASeeder :: Process CF ST Bool
 isASeeder = do sdr <- gets missingPieces
-               sdr `deepseq` (return $! sdr == 0)
+               return $! sdr == 0
 
 -- Decrease the counter of missing pieces for the peer
 decMissingCounter :: Int -> Process CF ST ()

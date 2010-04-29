@@ -3,6 +3,7 @@ module Process.ChokeMgr (
     -- * Types, Channels
       ChokeMgrChannel
     , RateTVar
+    , PeerRateInfo(..)
     , ChokeMgrMsg(..)
     -- * Interface
     , start
@@ -47,7 +48,15 @@ instance NFData ChokeMgrMsg
 
 
 type ChokeMgrChannel = TChan ChokeMgrMsg
-type RateTVar = TVar [(ThreadId, (Double, Double, Bool, Bool, Bool))]
+data PeerRateInfo = PRI {
+        peerUpRate   :: Double,
+        peerDownRate :: Double,
+        peerInterested :: Bool,
+        peerSeeding  :: Bool,
+        peerChokingUs :: Bool }
+    deriving Show
+
+type RateTVar = TVar [(ThreadId, PeerRateInfo)]
 
 data CF = CF { mgrCh :: ChokeMgrChannel
              , rateTV :: RateTVar }
@@ -140,11 +149,12 @@ updateDB = do
                     return q
     case rateUpdate of
         [] -> return ()
-        updates ->  let f old (tid, (uprt, downrt, interested, seeder, choking)) =
-                             M.insert tid (PRate { pUpRate = uprt, pDownRate = downrt },
-                                           PState { pInterestedInUs = interested,
-                                                    pIsASeeder      = seeder,
-                                                    pChokingUs      = choking }) old
+        updates ->  let f old (tid, pri) =
+                             M.insert tid (PRate { pUpRate = peerUpRate pri,
+                                                   pDownRate = peerDownRate pri },
+                                           PState { pInterestedInUs = peerInterested pri,
+                                                    pIsASeeder      = peerSeeding pri,
+                                                    pChokingUs      = peerChokingUs pri }) old
                         nm m = foldl f m $ reverse updates
                     in do
                         debugP $ "Rate updates since last round: " ++ show updates
