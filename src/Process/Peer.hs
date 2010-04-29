@@ -447,6 +447,7 @@ haveMsg pn = do
                 msgPieceMgr (PeerHave [pn])
                 decMissingCounter 1
                 considerInterest
+                fillBlocks
         else do warningP "Unknown Piece"
                 stopP
 
@@ -576,14 +577,16 @@ considerInterest = do
     if interested
         then do modify (\s -> s { weInterested = True })
                 outChan $ SenderQ.SenderQM Interested
-        else modify (\s -> s { weInterested = False})
+        else do modify (\s -> s { weInterested = False})
+                outChan $ SenderQ.SenderQM NotInterested
 
 -- | Try to fill up the block queue at the peer. The reason we pipeline a
 -- number of blocks is to get around the line delay present on the internet.
 fillBlocks :: Process CF ST ()
 fillBlocks = do
     choked <- gets peerChoke
-    unless choked checkWatermark
+    interested <- gets weInterested
+    when (not choked && interested) checkWatermark
 
 -- | check the current Watermark level. If we are below the lower one, then
 -- fill till the upper one. This in turn keeps the pipeline of pieces full as
@@ -596,9 +599,9 @@ checkWatermark = do
     let sz = S.size q
         mark = if eg then endgameLoMark else loMark
     when (sz < mark)
-        (do
-           toQueue <- grabBlocks (hiMark - sz)
-           queuePieces toQueue)
+        (do toQueue <- grabBlocks (hiMark - sz)
+            when (Prelude.null toQueue) considerInterest
+            queuePieces toQueue)
 
 -- These three values are chosen rather arbitrarily at the moment.
 loMark :: Int
