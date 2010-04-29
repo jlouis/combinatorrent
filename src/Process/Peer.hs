@@ -590,10 +590,16 @@ considerInterest = do
     msgPieceMgr (AskInterested pcs c)
     interested <- liftIO $ do atomically $ takeTMVar c
     if interested
-        then do modify (\s -> s { weInterested = True })
-                outChan $ SenderQ.SenderQM Interested
-        else do modify (\s -> s { weInterested = False})
-                outChan $ SenderQ.SenderQM NotInterested
+        then do oldI <- gets weInterested
+                when (interested /= oldI)
+                    (do modify (\s -> s { weInterested = True })
+                        debugP "We are interested"
+                        outChan $ SenderQ.SenderQM Interested)
+        else do oldI <- gets weInterested
+                when (interested /= oldI)
+                    (do modify (\s -> s { weInterested = False})
+                        debugP "We are not interested"
+                        outChan $ SenderQ.SenderQM NotInterested)
 
 -- | Try to fill up the block queue at the peer. The reason we pipeline a
 -- number of blocks is to get around the line delay present on the internet.
