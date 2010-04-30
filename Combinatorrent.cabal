@@ -54,7 +54,7 @@ executable Combinatorrent
     array >= 0.3,
     attoparsec,
     base >= 3.0,
-    base <= 5.0,
+    base < 5.0,
     bytestring,
     cereal,
     containers,
