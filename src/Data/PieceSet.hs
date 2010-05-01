@@ -4,7 +4,6 @@ module Data.PieceSet
     , new
     , size
     , full
-    , copy
     , delete
     , Data.PieceSet.null
     , insert
@@ -54,11 +53,6 @@ full = {-# SCC "Data.PieceSet/full" #-} Data.PieceSet.all (==True)
 insert :: MonadIO m => Int -> PieceSet -> m ()
 insert n (PieceSet ps) = {-# SCC "Data.PieceSet/insert" #-}
     liftIO $ writeArray ps n True
-
-copy :: MonadIO m => PieceSet -> m PieceSet
-copy (PieceSet ps) = liftIO $ do
-    newArr <- mapArray id ps
-    return $ PieceSet $ newArr
 
 size :: MonadIO m => PieceSet -> m Int
 size (PieceSet arr) = {-# SCC "Data.PieceSet/size" #-}
@@ -118,7 +112,6 @@ testSuite = testGroup "Data/PieceSet"
     , testCase "Intersection" testIntersect
     , testCase "Membership" testMember
     , testCase "Insert/Delete" testInsertDelete
-    , testCase "Copy" testCopy
     ]
 
 testNewSize :: Assertion
@@ -182,17 +175,4 @@ testInsertDelete = do
     assertBool "Ins/del #4" =<< liftM not (member 3 ps)
     insert 5 ps
     assertBool "Ins/del #5" =<< member 5 ps
-
-testCopy :: Assertion
-testCopy = do
-    ps <- new 10
-    insert 3 ps
-    pc <- copy ps
-    insert 4 pc
-    delete 3 pc
-    assertBool "#1" =<< member 3 ps
-    assertBool "#2" =<< liftM not (member 3 pc)
-    assertBool "#3" =<< member 4 pc
-    assertBool "#4" =<< liftM not (member 4 ps)
-
 
