@@ -36,6 +36,6 @@ pgm = do
    s <- asks sock
    _ <- liftIO $ do
       r <- atomically $ takeTMVar ch
-      send s r
+      sendAll s r
    pgm
 
