@@ -1,10 +1,8 @@
 -- | Peer proceeses
 {-# LANGUAGE ScopedTypeVariables #-}
 module Process.Peer (
-    -- * Types
-      PeerMessage(..)
     -- * Interface
-    , Process.Peer.start
+      Process.Peer.start
     -- * Tests
     , Process.Peer.testSuite
     )
@@ -68,23 +66,19 @@ start s caps pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- newTChanIO
     senderMV <- newEmptyTMVarIO
     receiverC <- newTChanIO
-    sendBWC <- newTChanIO
     return [Worker $ Sender.start s senderMV,
-            Worker $ SenderQ.start caps queueC senderMV sendBWC fsC,
+            Worker $ SenderQ.start caps queueC senderMV receiverC fsC,
             Worker $ Receiver.start s receiverC,
             Worker $ peerP caps pMgrC rtv pieceMgrC pm nPieces
-                                queueC receiverC sendBWC stv ih]
+                                queueC receiverC stv ih]
 
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
-data CF = CF { inCh :: TChan (Message, Integer)
+data CF = CF { inCh :: TChan MsgTy
              , outCh :: TChan SenderQ.SenderQMsg
              , peerMgrCh :: MgrChannel
              , pieceMgrCh :: PieceMgrChannel
-             , peerCh :: PeerChannel
-             , sendBWCh :: BandwidthChannel
-             , timerCh :: TChan ()
              , statTV :: TVar [PStat]
              , rateTV :: ChokeMgr.RateTVar
              , pcInfoHash :: InfoHash
@@ -227,19 +221,16 @@ errorExtendedMsg _ _ = do
     stopP
 
 peerP :: [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgrChannel -> PieceMap -> Int
-         -> TChan SenderQ.SenderQMsg -> TChan (Message, Integer) -> BandwidthChannel
-         -> TVar [PStat] -> InfoHash
+         -> TChan SenderQ.SenderQMsg -> TChan MsgTy -> TVar [PStat] -> InfoHash
          -> SupervisorChannel -> IO ThreadId
-peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound sendBWC stv ih supC = do
-    ch <- newTChanIO
-    tch <- newTChanIO
+peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     ct <- getCurrentTime
     pdtmv <- newEmptyTMVarIO
     intmv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
     let cs = configCapabilities caps
-    spawnP (CF inBound outBound pMgrC pieceMgrC ch sendBWC tch stv rtv ih pm
+    spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
                     pdtmv intmv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False 0)
                        ({-# SCC "PeerControl" #-}
@@ -252,15 +243,14 @@ configCapabilities caps =
 startup :: Int -> Process CF ST ()
 startup nPieces = do
     tid <- liftIO $ myThreadId
-    ch <- asks peerCh
     pmc <- asks peerMgrCh
     ih <- asks pcInfoHash
-    liftIO . atomically $ writeTChan pmc $ Connect ih tid ch
+    ich <- asks inCh
+    liftIO . atomically $ writeTChan pmc $ Connect ih tid ich
     pieces <- getPiecesDone
     outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
     -- Install the StatusP timer
-    c <- asks timerCh
-    _ <- registerSTM 5 c ()
+    _ <- registerSTM 5 ich TimerTick
     eventLoop
 
 cleanup :: Process CF ST ()
@@ -271,35 +261,22 @@ cleanup = do
     msgPieceMgr (PeerUnhave pieces)
     liftIO . atomically $ writeTChan ch2 (Disconnect t)
 
-readOp :: Process CF ST Operation
-readOp = do
+readInCh :: Process CF ST MsgTy
+readInCh = do
     inb <- asks inCh
-    chk <- asks peerCh
-    tch <- asks timerCh
-    bwc <- asks sendBWCh
-    liftIO . atomically $
-       (readTChan inb >>= return . PeerMsgEvt) `orElse`
-       (readTChan chk >>= return . ChokeMgrEvt) `orElse`
-       (readTChan tch >>  return TimerEvent) `orElse`
-       (readTChan bwc >>= return . UpRateEvent)
+    liftIO . atomically $ readTChan inb
 
 eventLoop :: Process CF ST ()
 eventLoop = do
-    op <- readOp
-    case op of
-        PeerMsgEvt (m, sz) -> peerMsg m sz
-        ChokeMgrEvt m      -> chokeMgrMsg m
-        UpRateEvent up     -> do s <- get
-                                 u <- return $ RC.update up $ upRate s
-                                 put $! s { upRate = u }
-        TimerEvent         -> timerTick
+    ty <- readInCh
+    case ty of
+        FromPeer (msg, sz) -> peerMsg msg sz
+        TimerTick       -> timerTick
+        FromSenderQ l   -> (do s <- get
+                               let !u = RC.update l $ upRate s
+                               put $! s { upRate = u})
+        FromChokeMgr m  -> chokeMgrMsg m
     eventLoop
-
-data Operation = PeerMsgEvt (Message, Integer)
-               | ChokeMgrEvt PeerMessage
-               | TimerEvent
-               | UpRateEvent Integer
-
 
 -- | Return a list of pieces which are currently done by us
 getPiecesDone :: Process CF ST [PieceNum]
@@ -309,7 +286,7 @@ getPiecesDone = do
     liftIO $ do atomically $ takeTMVar c
 
 -- | Process an event from the Choke Manager
-chokeMgrMsg :: PeerMessage -> Process CF ST ()
+chokeMgrMsg :: PeerChokeMsg -> Process CF ST ()
 chokeMgrMsg msg = do
    case msg of
        PieceCompleted pn -> do
@@ -360,8 +337,8 @@ timerTick :: Process CF ST ()
 timerTick = do
    mTid <- liftIO myThreadId
    checkKeepAlive
-   tch <- asks timerCh
-   _ <- registerSTM 5 tch ()
+   inC <- asks inCh
+   _ <- registerSTM 5 inC TimerTick
    -- Tell the ChokeMgr about our progress
    ur <- gets upRate
    dr <- gets downRate
