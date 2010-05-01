@@ -1,5 +1,11 @@
 -- | Combinatorrent version
-module Version (version) where
+module Version (protoVersion, version) where
+
+-- | The current version of the Combinatorrent protocol string. This is bumped
+--   whenever we make a radical change to the protocol communication or fix a grave bug.
+--   It provides a way for trackers to disallow versions of the client which are misbehaving.
+protoVersion :: String
+protoVersion = "d001"
 
 githead :: String
 githead = "@GITHEAD@"
