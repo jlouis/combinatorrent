@@ -90,11 +90,11 @@ data ST = ST {
         torrentInfo :: TorrentInfo
       , peerId :: PeerId
       , state :: TrackerEvent
-      , localPort :: S.PortNumber
+      , localPort :: Word16
       , nextTick :: Integer
       }
 
-start :: InfoHash -> TorrentInfo -> PeerId -> S.PortNumber
+start :: InfoHash -> TorrentInfo -> PeerId -> Word16
       -> Status.StatusChannel -> TrackerChannel -> PeerMgr.PeerMgrChannel
       -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
@@ -286,8 +286,7 @@ buildRequestURL ss = do ti <- gets torrentInfo
                       (trackerfyEvent $ state s)
           prt :: Process CF ST Integer
           prt = do lp <- gets localPort
-                   case lp of
-                     PortNum pnum -> return $ fromIntegral pnum
+                   return $! fromIntegral lp
           trackerfyEvent ev =
                 case ev of
                     Running   -> []

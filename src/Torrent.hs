@@ -34,9 +34,8 @@ import Data.List
 import qualified Data.Foldable as F
 import qualified Data.ByteString as B
 import qualified Data.Map as M
+import Data.Word
 
-import Network
-import Network.Socket
 import Numeric
 
 import System.Random
@@ -128,8 +127,8 @@ defaultOptimisticSlots :: Int
 defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
-defaultPort :: PortNumber
-defaultPort = PortNum $ fromInteger 1579
+defaultPort :: Word16
+defaultPort = 1579
 
 -- | Convert a BCode block into its corresponding TorrentInfo block, perhaps
 --   failing in the process.
