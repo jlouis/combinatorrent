@@ -16,7 +16,6 @@ module Torrent (
     , Block(..)
     , Capabilities(..)
     -- * Interface
-    , determineState
     , bytesLeft
     , defaultBlockSize
     , defaultOptimisticSlots
@@ -31,7 +30,6 @@ import Control.DeepSeq
 
 import Data.Array
 import Data.List
-import qualified Data.Foldable as F
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import Data.Word
@@ -88,11 +86,6 @@ type PieceMap = Array PieceNum PieceInfo
 
 -- | The PiecesDoneMap is a map which is true if we have the piece and false otherwise
 type PiecesDoneMap = M.Map PieceNum Bool
-
--- | Given what pieces that are done, return the current state of the client.
-determineState :: PiecesDoneMap -> TorrentState
-determineState pd | F.all (==True) pd = Seeding
-                  | otherwise         = Leeching
 
 -- | Return the amount of bytes left on a torrent given what pieces are done and the
 --   map of the shape of the torrent in question.
