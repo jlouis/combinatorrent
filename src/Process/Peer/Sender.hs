@@ -25,11 +25,9 @@ instance Logging CF where
 -- | The raw sender process, it does nothing but send out what it syncs on.
 start :: Socket -> TMVar L.ByteString -> SupervisorChannel -> IO ThreadId
 start s ch supC = spawnP (CF ch s) () ({-# SCC "Sender" #-}
-                                          catchP pgm
-                                          (do t <- liftIO $ myThreadId
-                                              liftIO . atomically $ writeTChan supC $ IAmDying t
-                                              liftIO $ sClose s))
-
+                                          (cleanupP pgm
+                                            (defaultStopHandler supC)
+                                            (liftIO $ sClose s)))
 pgm :: Process CF () ()
 pgm = do
    ch <- asks chan
