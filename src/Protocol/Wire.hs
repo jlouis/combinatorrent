@@ -336,7 +336,9 @@ receiveHandshake s pid ihTst = do
 constructBitField :: Int -> [PieceNum] -> B.ByteString
 constructBitField sz pieces = B.pack . build $ m
     where m = map (`elem` pieces) [0..sz-1 + pad]
-          pad = 8 - (sz `mod` 8)
+          pad = case sz `mod` 8 of
+                    0 -> 0
+                    n -> 8 - n
           build [] = []
           build l = let (first, rest) = splitAt 8 l
                     in if length first /= 8
