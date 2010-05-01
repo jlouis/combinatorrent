@@ -20,3 +20,4 @@ Main
 /tools/*.svg
 report.html
 /tools/stat_db.backup.txt
+.hpc
