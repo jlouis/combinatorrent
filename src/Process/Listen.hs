@@ -5,10 +5,14 @@ where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (bracketOnError)
 import Control.Monad.Reader
 
-import Network
-import Network.Socket as S
+import Data.Word
+
+import Network hiding (accept)
+import Network.Socket
+import Network.BSD
 
 import Process
 import Process.PeerMgr hiding (start)
@@ -19,23 +23,29 @@ data CF = CF { peerMgrCh :: PeerMgrChannel }
 instance Logging CF where
     logName _ = "Process.Listen"
 
-start :: PortNumber -> PeerMgrChannel -> SupervisorChannel -> IO ThreadId
+start :: Word16 -> PeerMgrChannel -> SupervisorChannel -> IO ThreadId
 start port peerMgrC supC = do
     spawnP (CF peerMgrC) () ({-# SCC "Listen" #-} catchP (openListen port >>= eventLoop)
                         (defaultStopHandler supC)) -- TODO: Close socket resource!
 
-openListen :: PortNumber -> Process CF () Socket
+openListen :: Word16 -> Process CF () Socket
 openListen port = liftIO $ do
-    s <- S.socket S.AF_INET S.Stream S.defaultProtocol
-    S.bindSocket s (S.SockAddrInet port S.iNADDR_ANY)
-    S.listen s 10
-    return s
+    proto <- getProtocolNumber "tcp"
+    bracketOnError
+        (socket AF_INET Stream proto)
+        (sClose)
+        (\sock -> do
+            setSocketOption sock ReuseAddr 1
+            bindSocket sock (SockAddrInet (toEnum $ fromIntegral port) iNADDR_ANY)
+            listen sock maxListenQueue
+            return sock
+        )
 
 eventLoop :: Socket -> Process CF () ()
 eventLoop sockFd = do
     c <- asks peerMgrCh
     liftIO $ do
-        conn <- S.accept sockFd
+        conn <- accept sockFd
         atomically $ writeTChan c (NewIncoming conn)
     eventLoop sockFd
 

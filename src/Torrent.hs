@@ -21,7 +21,6 @@ module Torrent (
     , defaultBlockSize
     , defaultOptimisticSlots
     , defaultPort
-    , haskellTorrentVersion
     , mkPeerId
     , mkTorrentInfo
     )
@@ -35,9 +34,8 @@ import Data.List
 import qualified Data.Foldable as F
 import qualified Data.ByteString as B
 import qualified Data.Map as M
+import Data.Word
 
-import Network
-import Network.Socket
 import Numeric
 
 import System.Random
@@ -45,6 +43,7 @@ import Test.QuickCheck
 
 import Protocol.BCode
 import Digest
+import Version
 
 -- | The type of Infohashes as used in torrents. These are identifiers
 --   of torrents
@@ -128,14 +127,8 @@ defaultOptimisticSlots :: Int
 defaultOptimisticSlots = 2
 
 -- | Default port to communicate on
-defaultPort :: PortNumber
-defaultPort = PortNum $ fromInteger 1579
-
--- | The current version of the Combinatorrent protocol string. This is bumped
---   whenever we make a radical change to the protocol communication or fix a grave bug.
---   It provides a way for trackers to disallow versions of the client which are misbehaving.
-haskellTorrentVersion :: String
-haskellTorrentVersion = "d001"
+defaultPort :: Word16
+defaultPort = 1579
 
 -- | Convert a BCode block into its corresponding TorrentInfo block, perhaps
 --   failing in the process.
@@ -158,4 +151,4 @@ mkPeerId gen = header ++ take (20 - length header) ranString
         randomList n = take n . unfoldr (Just . random)
         rs = randomList 10 gen
         ranString = concatMap (\i -> showHex (abs i) "") rs
-        header = "-HT" ++ haskellTorrentVersion ++ "-"
+        header = "-CT" ++ protoVersion ++ "-"
