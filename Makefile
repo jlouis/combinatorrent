@@ -37,5 +37,5 @@ hlint:
 	hlint -r src
 
 tags:
-	hasktags --both $$(find src -type f -name '*.*hs')
+	hothasktags $$(find src -type f -name '*.*hs') > $@
 

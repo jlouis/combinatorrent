@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Process.PieceMgr
     ( PieceMgrMsg(..)
     , PieceMgrChannel

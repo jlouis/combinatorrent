@@ -1,6 +1,7 @@
 -- | Core Process code
 {-# LANGUAGE ExistentialQuantification, FlexibleInstances,
              GeneralizedNewtypeDeriving,
+             ScopedTypeVariables,
              MultiParamTypeClasses, CPP #-}
 -- required for deriving Typeable
 {-# OPTIONS_GHC -fglasgow-exts #-}
@@ -42,9 +43,7 @@ import System.Log.Logger
 --   channels, and the state the internal process state. It is implemented by means of a transformer
 --   stack on top of IO.
 newtype Process a b c = Process (ReaderT a (StateT b IO) c)
-#ifndef __HADDOCK__
   deriving (Functor, Monad, MonadIO, MonadState b, MonadReader a)
-#endif
 
 data StopException = StopException
   deriving (Show, Typeable)
