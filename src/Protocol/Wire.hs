@@ -69,7 +69,7 @@ data Message = KeepAlive
              | Suggest PieceNum
              | RejectRequest PieceNum Block
              | AllowedFast PieceNum
-             | ExtendedMsg Int B.ByteString
+             | ExtendedMsg Word8 B.ByteString
   deriving (Eq, Show)
 
 msgSize :: Message -> Int
@@ -89,7 +89,7 @@ msgSize HaveNone            = 1
 msgSize (Suggest _)         = 5
 msgSize (RejectRequest _ _) = 13
 msgSize (AllowedFast _)     = 5
-msgSize (ExtendedMsg _ bs)  = B.length bs + 5
+msgSize (ExtendedMsg _ bs)  = B.length bs + 2
 
 instance Arbitrary Message where
     arbitrary = oneof [return KeepAlive, return Choke, return Unchoke, return Interested,
@@ -101,7 +101,7 @@ instance Arbitrary Message where
                        BitField <$> arbitrary,
                        Request <$> pos <*> arbitrary,
                        Piece <$> pos <*> pos <*> arbitrary,
-                       ExtendedMsg <$> pos <*> arbitrary,
+                       ExtendedMsg <$> arbitrary <*> arbitrary,
                        Cancel <$> pos <*> arbitrary,
                        Port <$> choose (0,16383)]
         where
@@ -149,7 +149,7 @@ instance Serialize Message where
     put (Port p)        = p8 9 *> (putWord16be . fromIntegral $ p)
     put (Suggest pn)    = p8 0x0D *> p32be pn
     put (ExtendedMsg idx bs)
-                        = p8 20 *> p32be idx *> putByteString bs
+                        = p8 20 *> p8 (fromIntegral idx) *> putByteString bs
     put HaveAll         = p8 0x0E
     put HaveNone        = p8 0x0F
     put (RejectRequest pn (Block os sz))
@@ -194,7 +194,7 @@ getAPMsg l = do
         0x0F -> return HaveNone
         0x10 -> (RejectRequest <$> apW32be <*> (Block <$> apW32be <*> apW32be))
         0x11 -> (AllowedFast <$> apW32be)
-        20 -> (ExtendedMsg <$> apW32be <*> A.take (l - 5))
+        20 -> (ExtendedMsg <$> A.anyWord8 <*> A.take (l - 2))
         k  -> fail $ "Illegal parse, code: " ++ show k
 
 apW32be :: Parser Int
@@ -233,7 +233,7 @@ getHaveAll       = byte 0x0E *> return HaveAll
 getHaveNone      = byte 0x0F *> return HaveNone
 getRejectRequest = byte 0x10 *> (RejectRequest <$> gw32 <*> (Block <$> gw32 <*> gw32))
 getAllowedFast   = byte 0x11 *> (AllowedFast <$> gw32)
-getExtendedMsg   = byte 20 *> (ExtendedMsg <$> gw32 <*> (remaining >>= getByteString))
+getExtendedMsg   = byte 20 *> (ExtendedMsg <$> getWord8 <*> (remaining >>= getByteString))
 getKA      = do
     empty <- isEmpty
     if empty
