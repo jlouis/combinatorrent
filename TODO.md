@@ -20,8 +20,6 @@ wish-list.
      When doing this, only prune pieces which are done and checked.
    - Consider letting the supervisors support monitoring of processes. Use
      this to reimplement parts of the PeerMgr code.
-   - Improve on the command line parser. We will certainly need full-fledged
-     CL parsing at some point.
    - Improve synchronization when the supervisor tree is closing down.
      Currently the problem is that the supervisor tree will close down by
      asynchronous messages, so the sync on stopping tree will not wait until
@@ -38,16 +36,11 @@ wish-list.
    - Should the PieceManager know about the InfoHash? We could run a version
      without this knowledge.
 
-Planned for the next release
-----------------------------
-
-
 Items for later (no particular order)
 -------------------------------------
 
    - Reduce CPU load. Alternative representations of various data structures
      are needed.
-   - Play with the code coverage in GHC.
    - Add prioritization support of multiTorrents
    - Design, build and improve a graphic UI.
    - Design, build and improve a protocol for communicating with the client.
