@@ -158,11 +158,15 @@ testIntersect = do
     evPS <- fromList 100 evens
     oddPS <- fromList 100 odds
     is1 <- intersection evPS oddPS
+    is1' <- intersects evPS oddPS
     assertBool "for intersection" (Data.List.null is1)
+    assertBool "for intersects" (not is1')
     ps1 <- fromList 10 [1,2,3,4,9]
-    ps2 <- fromList 10 [0,2,5,4,8 ]
+    ps2 <- fromList 10 [2,5,4,8,9]
     is2 <- intersection ps1 ps2
-    assertBool "for simple intersection" (sort is2 == [2,4])
+    is2' <- intersects ps1 ps2
+    assertBool "for simple intersection" (sort is2 == [2,4,9])
+    assertBool "for simple intersects" is2'
 
 testMember :: Assertion
 testMember = do
