@@ -50,7 +50,7 @@ start fp chan supC = do
 processDirectory :: Process CF ST ()
 processDirectory = do
     watchDir <- asks dirToWatch
-    files <- liftIO $ getDirectoryContents watchDir
+    files <- liftIO $ map (watchDir </>) `fmap` getDirectoryContents watchDir
     let torrents = S.fromList $ filter (\fp -> (== ".torrent") $ snd . splitExtension $ fp) files
     running <- get
     let (added, removed) = (S.toList $ S.difference torrents running,
