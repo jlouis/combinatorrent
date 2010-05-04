@@ -8,6 +8,7 @@ module Data.PieceSet
     , Data.PieceSet.null
     , insert
     , intersection
+    , intersects
     , member
     , fromList
     , toList
@@ -86,6 +87,15 @@ intersection (PieceSet arr1) (PieceSet arr2) = liftIO $ do
             m <- readArray arr2 i
             return $ if m then (i : ls) else ls
 
+intersects :: MonadIO m => PieceSet -> PieceSet -> m Bool
+intersects (PieceSet arr1) (PieceSet arr2) = liftIO $ do
+    (l, u) <- getBounds arr1
+    let walk x | x > u = return False
+               | otherwise = do
+                    a <- readArray arr1 x
+                    b <- readArray arr2 x
+                    if a && b then return True else walk (x+1)
+    walk l
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
 fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO $ do
