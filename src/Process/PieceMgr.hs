@@ -511,11 +511,11 @@ assertST = {-# SCC "assertST" #-} do
         iprog   <- M.keys <$> gets inProgress
         pdownis <- anyM (flip PS.member pending) down
         donedownis <- anyM (flip PS.member done) down
-        pdis <- PS.intersection pending done
+        pdis <- PS.intersects pending done
         piprogis <- anyM (flip PS.member pending) iprog
         doneprogis <- anyM (flip PS.member done) iprog
 
-        when (not $ null pdis)
+        when pdis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
