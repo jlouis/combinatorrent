@@ -47,6 +47,7 @@ import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
+import qualified Protocol.BCode as BCode (BCode, encode)
 import Torrent
 
 ------------------------------------------------------------
@@ -103,6 +104,10 @@ instance Arbitrary Message where
                        Piece <$> pos <*> pos <*> arbitrary,
                        ExtendedMsg <$> arbitrary <*> arbitrary,
                        Cancel <$> pos <*> arbitrary,
+                       let bc :: Gen B.ByteString
+                           bc = do b <- arbitrary :: Gen BCode.BCode
+                                   return $ BCode.encode b
+                       in ExtendedMsg 0 <$> bc,
                        Port <$> choose (0,16383)]
         where
             pos :: Gen Int
@@ -358,7 +363,8 @@ constructBitField sz pieces = B.pack . build $ m
 -- -- TESTS
 testSuite :: Test
 testSuite = testGroup "Protocol/Wire"
-  [ testProperty "QC encode-decode/id" propEncodeDecodeId]
+  [ testProperty "QC encode-decode/id" propEncodeDecodeId
+  , testProperty "QC encode-decode/id - attoparsec" propEncodeDecodeIdAP ]
 
 
 propEncodeDecodeId :: Message -> Bool
@@ -368,4 +374,11 @@ propEncodeDecodeId m =
     in
         Right m == decoded
 
+propEncodeDecodeIdAP :: Message -> Bool
+propEncodeDecodeIdAP m =
+    let encoded = encodePacket m
+        decoded = A.parse getMsg $ B.concat $ L.toChunks encoded
+    in case decoded of
+         A.Done r m2 -> B.null r && m == m2
+         _           -> False
 
