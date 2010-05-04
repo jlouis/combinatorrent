@@ -185,7 +185,7 @@ fastExtension = ExtensionConfig
                     (ljust ignoreSuggest)
                     (ljust ignoreAllowedFast)
                     (ljust rejectMsg)
-                    (ljust extendedMsg)
+                    mempty
                     (ljust requestFastMsg)
                     (ljust fastChokeMsg)
                     (ljust fastCancelBlock)
@@ -200,7 +200,7 @@ extendedMsgExtension = ExtensionConfig
                     mempty
                     mempty
                     mempty
-                    mempty
+                    (ljust extendedMsg)
                     mempty
                     mempty
                     mempty
@@ -213,7 +213,7 @@ noExtendedMsg = return () -- Deliberately ignore the extended message
 outputExtendedMsg :: Process CF ST ()
 outputExtendedMsg = outChan $ SenderQ.SenderQM $ ExtendedMsg 0 em
   where em = BCode.encode (BCode.extendedMsg (fromIntegral defaultPort)
-                                             Version.version
+                                             ("Combinatorrent " ++ Version.version)
                                              250)
         -- 250 is what most other clients default to.
 
@@ -271,9 +271,8 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
 
 configCapabilities :: [Capabilities] -> ExtensionConfig
 configCapabilities caps =
-    mconcat [mempty,
-             if Fast `elem` caps then fastExtension else mempty,
-             if Extended `elem` caps then extendedMsgExtension else mempty]
+    mconcat [ if Fast `elem` caps then fastExtension else mempty,
+              if Extended `elem` caps then extendedMsgExtension else mempty]
 
 startup :: Int -> Process CF ST ()
 startup nPieces = do

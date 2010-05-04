@@ -34,7 +34,7 @@ Currently haskell-torrent supports the following BEPs (See the
 [BEP Process](http://www.bittorrent.org/beps/bep_0000.html) document for an
 explanation of these)
 
-   - 0003, 0004, 0020,
+   - 0003, 0004, 0006, 0010, 0020,
 
 Combinatorrent implicitly supports these extensions
 
@@ -56,7 +56,7 @@ Partially supported extensions:
 
 Combinatorrent is not supporting these BEPs, but strives to do so one day:
 
-   - 0005, 0006, 0009, 0010, 0012, 0015, 0016, 0017, 0018, 0019, 0021, 0022,
+   - 0005, 0009, 0012, 0015, 0016, 0017, 0018, 0019, 0021, 0022,
      0024, 0026, 0028, 0029, 0030, 0031, 0032
 
 Debugging
