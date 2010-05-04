@@ -8,6 +8,7 @@ module Data.PieceSet
     , Data.PieceSet.null
     , insert
     , intersection
+    , intersects
     , member
     , fromList
     , toList
@@ -58,9 +59,11 @@ size :: MonadIO m => PieceSet -> m Int
 size (PieceSet arr) = {-# SCC "Data.PieceSet/size" #-}
     liftIO $ do
         (l, u) <- getBounds arr
-        walk [l..u] 0
- where walk [] n       = return n
-       walk (x : xs) n = readArray arr x >>= \p -> if p then walk xs (n+1) else walk xs n
+        let walk x acc | x > u     = return acc
+                       | otherwise =
+                         readArray arr x >>= \p ->
+                                if p then walk (x+1) (acc+1) else walk (x+1) acc
+        walk l 0
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
 member n (PieceSet arr) = {-# SCC "Data.PieceSet/member" #-}
@@ -84,6 +87,15 @@ intersection (PieceSet arr1) (PieceSet arr2) = liftIO $ do
             m <- readArray arr2 i
             return $ if m then (i : ls) else ls
 
+intersects :: MonadIO m => PieceSet -> PieceSet -> m Bool
+intersects (PieceSet arr1) (PieceSet arr2) = liftIO $ do
+    (l, u) <- getBounds arr1
+    let walk x | x > u = return False
+               | otherwise = do
+                    a <- readArray arr1 x
+                    b <- readArray arr2 x
+                    if a && b then return True else walk (x+1)
+    walk l
 
 fromList :: MonadIO m => Int -> [Int] -> m PieceSet
 fromList n elems = {-# SCC "Data.PieceSet/fromList" #-} liftIO $ do
@@ -146,11 +158,15 @@ testIntersect = do
     evPS <- fromList 100 evens
     oddPS <- fromList 100 odds
     is1 <- intersection evPS oddPS
+    is1' <- intersects evPS oddPS
     assertBool "for intersection" (Data.List.null is1)
+    assertBool "for intersects" (not is1')
     ps1 <- fromList 10 [1,2,3,4,9]
-    ps2 <- fromList 10 [0,2,5,4,8 ]
+    ps2 <- fromList 10 [2,5,4,8,9]
     is2 <- intersection ps1 ps2
-    assertBool "for simple intersection" (sort is2 == [2,4])
+    is2' <- intersects ps1 ps2
+    assertBool "for simple intersection" (sort is2 == [2,4,9])
+    assertBool "for simple intersects" is2'
 
 testMember :: Assertion
 testMember = do

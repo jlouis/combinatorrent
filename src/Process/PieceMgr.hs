@@ -223,14 +223,14 @@ storeBlock pn blk d = do
 
 askInterested :: PS.PieceSet -> Process CF ST Bool
 askInterested pieces = do
-    inProg <- M.keys <$> gets inProgress
-    amongProg <- filterM (flip PS.member pieces) inProg
-    if (not $ null amongProg)
+    amongProg <- gets inProgress >>=
+                    anyM (flip PS.member pieces) . M.keys
+    if amongProg
         then return True
         else do
             pend   <- gets pendingPieces
-            intsct <- PS.intersection pieces pend
-            return (not $ null intsct)
+            intsct <- PS.intersects pieces pend
+            return intsct
 
 peerHave :: [PieceNum] -> Process CF ST ()
 peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
@@ -511,11 +511,11 @@ assertST = {-# SCC "assertST" #-} do
         iprog   <- M.keys <$> gets inProgress
         pdownis <- anyM (flip PS.member pending) down
         donedownis <- anyM (flip PS.member done) down
-        pdis <- PS.intersection pending done
+        pdis <- PS.intersects pending done
         piprogis <- anyM (flip PS.member pending) iprog
         doneprogis <- anyM (flip PS.member done) iprog
 
-        when (not $ null pdis)
+        when pdis
            (do trb <- gets traceBuffer
                liftIO $ print trb
                return $ assert False ())
