@@ -58,9 +58,11 @@ size :: MonadIO m => PieceSet -> m Int
 size (PieceSet arr) = {-# SCC "Data.PieceSet/size" #-}
     liftIO $ do
         (l, u) <- getBounds arr
-        walk [l..u] 0
- where walk [] n       = return n
-       walk (x : xs) n = readArray arr x >>= \p -> if p then walk xs (n+1) else walk xs n
+        let walk x acc | x > u     = return acc
+                       | otherwise =
+                         readArray arr x >>= \p ->
+                                if p then walk (x+1) (acc+1) else walk (x+1) acc
+        walk l 0
 
 member :: MonadIO m => Int -> PieceSet -> m Bool
 member n (PieceSet arr) = {-# SCC "Data.PieceSet/member" #-}
