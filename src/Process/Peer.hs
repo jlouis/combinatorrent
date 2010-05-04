@@ -219,7 +219,7 @@ noExtendedMsg = return () -- Deliberately ignore the extended message
 outputExtendedMsg :: Process CF ST ()
 outputExtendedMsg = outChan $ SenderQ.SenderQM $ ExtendedMsg 0 em
   where em = BCode.encode (BCode.extendedMsg (fromIntegral defaultPort)
-                                             Version.version
+                                             ("Combinatorrent " ++ Version.version)
                                              250)
         -- 250 is what most other clients default to.
 
