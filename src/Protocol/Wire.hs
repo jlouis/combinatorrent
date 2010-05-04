@@ -118,11 +118,6 @@ instance Arbitrary Message where
 protocolHeader :: String
 protocolHeader = "BitTorrent protocol"
 
-extensionBasis :: Word64
-extensionBasis =
-    (flip setBit 2) -- Fast extension
-    0
-
 p8 :: Word8 -> Put
 p8 = putWord8
 
@@ -298,9 +293,16 @@ headerParser ihTst = do
     pid <- getLazyByteString 20
     return (decodeCapabilities caps, pid, ihR)
 
+extensionBasis :: Word64
+extensionBasis =
+    (flip setBit 2) -- Fast extension
+    . (flip setBit 20) -- Extended messaging support
+    $ 0
+
 decodeCapabilities :: Word64 -> [Capabilities]
 decodeCapabilities w = catMaybes
-    [ if testBit w 2 then Just Fast else Nothing ]
+    [ if testBit w 2 then Just Fast else Nothing,
+      if testBit w 20 then Just Extended else Nothing ]
 
 -- | Initiate a handshake on a socket
 initiateHandshake :: Socket -> PeerId -> InfoHash
