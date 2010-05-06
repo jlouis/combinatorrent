@@ -1,7 +1,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Channels
     ( Peer(..)
-    , PeerMessage(..)
+    , PeerChokeMsg(..)
+    , MsgTy(..)
     , PeerChannel
     , MgrMessage(..)
     , MgrChannel
@@ -17,16 +18,22 @@ import Control.DeepSeq
 
 import Network.Socket
 
+import Protocol.Wire
 import Torrent
 
 data Peer = Peer SockAddr
 
-data PeerMessage = ChokePeer
-                 | UnchokePeer
-                 | PieceCompleted PieceNum
-                 | CancelBlock PieceNum Block
+data MsgTy = FromPeer (Message, Integer)
+           | FromSenderQ Integer -- Always UpRate events
+           | FromChokeMgr PeerChokeMsg
+           | TimerTick
 
-type PeerChannel = TChan PeerMessage
+data PeerChokeMsg = ChokePeer
+                  | UnchokePeer
+                  | PieceCompleted PieceNum
+                  | CancelBlock PieceNum Block
+
+type PeerChannel = TChan MsgTy
 
 instance NFData PeerChannel where
     rnf pc = pc `seq` ()

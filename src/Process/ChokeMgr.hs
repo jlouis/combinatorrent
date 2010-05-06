@@ -319,8 +319,8 @@ selectPeers ups downPeers seedPeers = do
 -- | Send a message to the peer process at PeerChannel. Message is sent asynchronously
 --   to the peer in question. If the system is really loaded, this might
 --   actually fail since the order in which messages arrive might be inverted.
-msgPeer :: PeerChannel -> PeerMessage -> ChokeMgrProcess ()
-msgPeer ch = liftIO . atomically . writeTChan ch
+msgPeer :: PeerChannel -> PeerChokeMsg -> ChokeMgrProcess ()
+msgPeer ch = liftIO . atomically . writeTChan ch . FromChokeMgr
 
 -- | This function performs the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set ThreadId -> [Peer] -> ChokeMgrProcess ()
