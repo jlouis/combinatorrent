@@ -12,7 +12,7 @@ conf:
 	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 
 conf-hpc:
-	runghc Setup.lhs configure --flags="hpc" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
+	runghc Setup.lhs configure --ghc-options=-fhpc --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 
 conf-no-opt:
 	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization=0
