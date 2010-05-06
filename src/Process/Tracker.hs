@@ -1,11 +1,12 @@
--- | The TrackerP module is responsible for keeping in touch with the Tracker of a torrent.
---   The tracker is contacted periodically, and we exchange information with it. Specifically,
---   we tell the tracker how much we have downloaded, uploaded and what is left. We also
---   tell it about our current state (i.e., are we a seeder or a leecher?).
+-- | The TrackerP module is responsible for keeping in touch with the Tracker
+-- of a torrent.  The tracker is contacted periodically, and we exchange
+-- information with it. Specifically, we tell the tracker how much we have
+-- downloaded, uploaded and what is left. We also tell it about our current
+-- state (i.e., are we a seeder or a leecher?).
 --
---   The tracker responds to us with a new set of Peers and general information about the
---   torrent in question. It may also respond with an error in which case we should present
---   it to the user.
+-- The tracker responds to us with a new set of Peers and general information
+-- about the torrent in question. It may also respond with an error in which
+-- case we should present it to the user.
 --
 module Process.Tracker
     ( start
@@ -19,17 +20,13 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import Data.Bits
-import Data.Char (ord, chr)
-import Data.List (intersperse)
+import Data.Char (chr)
 import qualified Data.ByteString as B
 import Data.Word
 
 import Network.Socket as S
 import Network.HTTP hiding (port)
 import Network.URI hiding (unreserved)
-
-import Numeric (showHex)
-
 
 import Protocol.BCode as BCode hiding (encode)
 import Process
@@ -39,8 +36,6 @@ import Torrent
 import qualified Process.Status as Status
 import qualified Process.PeerMgr as PeerMgr
 import qualified Process.Timer as Timer
-
-
 
 -- | The tracker state is used to tell the tracker our current state. In order
 --   to output it correctly, we override the default show instance with the
@@ -103,11 +98,7 @@ start ih ti pid port statusC msgC pc supC =
                         (defaultStopHandler supC)
                         stopEvent)
   where
-    stopEvent :: Process CF ST ()
-    stopEvent = do
-        debugP "Stopping... telling tracker"
-        modify (\s -> s { state = Stopped }) >> talkTracker
-    loop :: Process CF ST ()
+    stopEvent = modify (\s -> s { state = Stopped }) >> talkTracker
     loop = do
           ch <- asks trackerMsgCh
           msg <- liftIO . atomically $ readTChan ch
@@ -141,7 +132,8 @@ pokeTracker :: Process CF ST (Integer, Maybe Integer)
 pokeTracker = do
     v <- liftIO $ newEmptyTMVarIO
     ih <- asks cfInfoHash
-    asks statusPCh >>= (\ch -> liftIO . atomically $ writeTChan ch (Status.RequestStatus ih v))
+    asks statusPCh >>=
+        (\ch -> liftIO . atomically $ writeTChan ch (Status.RequestStatus ih v))
     upDownLeft <- liftIO . atomically $ takeTMVar v
     url <- buildRequestURL upDownLeft
     debugP $ "Request URL: " ++ url
@@ -192,7 +184,8 @@ processResultDict d =
       Nothing -> case BCode.trackerWarning d of
                    Just warn -> ResponseWarning warn
                    Nothing -> case decodeOk of
-                                Nothing -> ResponseDecodeError . toBS $ "Could not decode response properly"
+                                Nothing -> ResponseDecodeError . toBS $
+                                    "Could not decode response properly"
                                 Just rok -> rok
   where decodeOk =
             ResponseOk <$> (decodeIps <$> BCode.trackerPeers d)
@@ -241,6 +234,7 @@ cW128 bs =
         (q3, q4) = B.splitAt 4 r2
     in (cW32 q1, cW32 q2, cW32 q3, cW32 q4)
 
+-- TODO: Do not recurse infinitely here.
 trackerRequest :: URI -> Process CF ST (Either String TrackerResponse)
 trackerRequest uri =
     do resp <- liftIO $ simpleHTTP request
@@ -250,7 +244,7 @@ trackerRequest uri =
              case rspCode r of
                (2,_,_) ->
                    case BCode.decode . toBS . rspBody $ r of
-                     Left pe -> return $ Left (show pe)
+                     Left pe -> return . Left . show $ pe
                      Right bc -> do debugP $ "Response: " ++ BCode.prettyPrint bc
                                     return $ Right $ processResultDict bc
                (3,_,_) ->
@@ -265,28 +259,26 @@ trackerRequest uri =
                            rqHeaders = [],
                            rqBody = ""}
 
--- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
+-- Construct a new request URL. Perhaps this ought to be done with the HTTP
+-- client library
 buildRequestURL :: Status.StatusState -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
-                        params <- concat . hlist <$> buildRequestParams ss
+                        params <- urlEncodeVars <$> buildRequestParams ss
                         return $ concat [fromBS $ announceURL ti, "?", params]
 
 buildRequestParams :: Status.StatusState -> Process CF ST [(String, String)]
 buildRequestParams ss = do
     s <- get
     p <- gets localPort
-    return $ [("info_hash", rfc1738Encode $
-                    map (chr . fromIntegral) . B.unpack . infoHash . torrentInfo $ s),
-              ("peer_id",   rfc1738Encode $ peerId s),
-              ("uploaded", show $ Status.uploaded ss),
-              ("downloaded", show $ Status.downloaded ss),
-              ("left", show $ Status.left ss),
-              ("port", show p),
-              ("compact", "1")] ++
-              (trackerfyEvent $ state s)
-
-hlist :: [(String, String)] -> [String]
-hlist = intersperse "&" . map (\(k,v) -> k ++ "=" ++ v)
+    return $
+      [("info_hash", map (chr . fromIntegral) . B.unpack . infoHash . torrentInfo $ s),
+       ("peer_id", peerId s),
+       ("uploaded", show $ Status.uploaded ss),
+       ("downloaded", show $ Status.downloaded ss),
+       ("left", show $ Status.left ss),
+       ("port", show p),
+       ("compact", "1")] ++
+       (trackerfyEvent $ state s)
 
 trackerfyEvent :: TrackerEvent -> [(String, String)]
 trackerfyEvent ev =
@@ -295,16 +287,3 @@ trackerfyEvent ev =
         Completed -> [("event", "completed")]
         Started   -> [("event", "started")]
         Stopped   -> [("event", "stopped")]
-
--- Carry out URL-encoding of a string. Note that the clients seems to do it the wrong way
---   so we explicitly code it up here in the same wrong way, jlouis.
-rfc1738Encode :: String -> String
-rfc1738Encode = concatMap (\c -> if unreserved c then [c] else encode c)
-    where unreserved = (`elem` chars)
-          -- I killed ~ from this list as the Mainline client doesn't announce it - jlouis
-          chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_./"
-          encode :: Char -> String
-          encode c = '%' : pHex c
-          pHex c =
-              let p = (showHex . ord $ c) ""
-              in if length p == 1 then '0' : p else p
