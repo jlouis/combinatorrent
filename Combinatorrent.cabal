@@ -1,6 +1,6 @@
 name: Combinatorrent
 category: Network
-version: 0.3.1
+version: 0.3.2
 category: Network
 description:   Combinatorrent provides a BitTorrent client, based on STM
                for concurrency. This is an early preview release which is capable of
@@ -27,10 +27,6 @@ data-files: AUTHORS, README.md
 
 flag debug
   description: Enable debug support
-  default:     False
-
-flag hpc
-  description: Enable code coverage
   default:     False
 
 flag threadscope
@@ -90,9 +86,6 @@ executable Combinatorrent
 
   if !flag(debug)
       cpp-options: "-DNDEBUG"
-
-  if flag(hpc)
-      ghc-options: -fhpc
 
   if flag(threadscope)
       ghc-options: -eventlog
