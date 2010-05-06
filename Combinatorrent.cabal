@@ -29,10 +29,6 @@ flag debug
   description: Enable debug support
   default:     False
 
-flag hpc
-  description: Enable code coverage
-  default:     False
-
 flag threadscope
   description: Enable the eventlog necessary for ThreadScope
   default: False
@@ -90,9 +86,6 @@ executable Combinatorrent
 
   if !flag(debug)
       cpp-options: "-DNDEBUG"
-
-  if flag(hpc)
-      ghc-options: -fhpc
 
   if flag(threadscope)
       ghc-options: -eventlog
