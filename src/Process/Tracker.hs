@@ -268,31 +268,33 @@ trackerRequest uri =
 -- Construct a new request URL. Perhaps this ought to be done with the HTTP client library
 buildRequestURL :: Status.StatusState -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
-                        hdrs <- headers
-                        let hl = concat $ hlist hdrs
-                        return $ concat [fromBS $ announceURL ti, "?", hl]
-    where hlist x = intersperse "&" $ map (\(k,v) -> k ++ "=" ++ v) x
-          headers = do
-            s <- get
-            p <- prt
-            return $ [("info_hash", rfc1738Encode $
-                                map (chr . fromIntegral) . B.unpack . infoHash . torrentInfo $ s),
-                      ("peer_id",   rfc1738Encode $ peerId s),
-                      ("uploaded", show $ Status.uploaded ss),
-                      ("downloaded", show $ Status.downloaded ss),
-                      ("left", show $ Status.left ss),
-                      ("port", show p),
-                      ("compact", "1")] ++
-                      (trackerfyEvent $ state s)
-          prt :: Process CF ST Integer
-          prt = do lp <- gets localPort
-                   return $! fromIntegral lp
-          trackerfyEvent ev =
-                case ev of
-                    Running   -> []
-                    Completed -> [("event", "completed")]
-                    Started   -> [("event", "started")]
-                    Stopped   -> [("event", "stopped")]
+                        params <- concat . hlist <$> buildRequestParams ss
+                        return $ concat [fromBS $ announceURL ti, "?", params]
+
+buildRequestParams :: Status.StatusState -> Process CF ST [(String, String)]
+buildRequestParams ss = do
+    s <- get
+    p <- gets localPort
+    return $ [("info_hash", rfc1738Encode $
+                    map (chr . fromIntegral) . B.unpack . infoHash . torrentInfo $ s),
+              ("peer_id",   rfc1738Encode $ peerId s),
+              ("uploaded", show $ Status.uploaded ss),
+              ("downloaded", show $ Status.downloaded ss),
+              ("left", show $ Status.left ss),
+              ("port", show p),
+              ("compact", "1")] ++
+              (trackerfyEvent $ state s)
+
+hlist :: [(String, String)] -> [String]
+hlist = intersperse "&" . map (\(k,v) -> k ++ "=" ++ v)
+
+trackerfyEvent :: TrackerEvent -> [(String, String)]
+trackerfyEvent ev =
+    case ev of
+        Running   -> []
+        Completed -> [("event", "completed")]
+        Started   -> [("event", "started")]
+        Stopped   -> [("event", "stopped")]
 
 -- Carry out URL-encoding of a string. Note that the clients seems to do it the wrong way
 --   so we explicitly code it up here in the same wrong way, jlouis.
