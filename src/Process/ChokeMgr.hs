@@ -37,12 +37,18 @@ import Torrent hiding (infoHash)
 ----------------------------------------------------------------------
 
 -- | Messages to the Choke Manager
-data ChokeMgrMsg = Tick                                  -- ^ Request that we run another round
-                 | RemovePeer ThreadId                   -- ^ Request that this peer is removed
-                 | AddPeer InfoHash ThreadId PeerChannel -- ^ Request that this peer is added
-                 | PieceDone InfoHash PieceNum           -- ^ Note that a given piece is done
-                 | BlockComplete InfoHash PieceNum Block -- ^ Note that a block is complete (endgame)
-                 | TorrentComplete InfoHash              -- ^ Note that the torrent in question is complete
+data ChokeMgrMsg = Tick
+                   -- ^ Request that we run another round
+                 | RemovePeer ThreadId
+                   -- ^ Request that this peer is removed
+                 | AddPeer InfoHash ThreadId PeerChannel
+                   -- ^ Request that this peer is added
+                 | PieceDone InfoHash PieceNum
+                   -- ^ Note that a given piece is done
+                 | BlockComplete InfoHash PieceNum Block
+                   -- ^ Note that a block is complete (endgame)
+                 | TorrentComplete InfoHash
+                   -- ^ Note that the torrent in question is complete
 
 instance NFData ChokeMgrMsg
 
@@ -132,6 +138,7 @@ data PRate  = PRate { pUpRate   :: Double,
 data PState = PState { pChokingUs :: Bool -- ^ True if the peer is choking us
                      , pInterestedInUs :: Bool -- ^ Reflection from Peer DB
                      , pIsASeeder :: Bool -- ^ True if the peer is a seeder
+                     , pIsSnubbed :: Bool -- ^ True if peer snubs us
                      }
   deriving Show
 
@@ -160,7 +167,8 @@ updateDB = do
                                                    pDownRate = peerDownRate pri },
                                            PState { pInterestedInUs = peerInterested pri,
                                                     pIsASeeder      = peerSeeding pri,
-                                                    pChokingUs      = peerChokingUs pri }) old
+                                                    pChokingUs      = peerChokingUs pri,
+                                                    pIsSnubbed      = peerSnubs pri}) old
                         nm m = foldl f m $ reverse updates
                     in do
                         debugP $ "Rate updates since last round: " ++ show updates
@@ -214,17 +222,21 @@ rechoke = do
     electedPeers <- selectPeers us down seed
     performChokingUnchoking electedPeers chn
 
--- | Function to split peers into those where we are seeding and those where we are leeching.
---   also prunes the list for peers which are not interesting.
+-- | Function to split peers into those where we are seeding and those where we
+--   are leeching.  also prunes the list for peers which are not interesting.
 --   TODO: Snubbed peers
 splitSeedLeech :: S.Set InfoHash -> RateMap -> [Peer] -> ([Peer], [Peer])
-splitSeedLeech seeders rm ps = partition (\p -> S.member (pInfoHash p) seeders) $ filter picker ps
+splitSeedLeech seeders rm ps =
+        partition (\p -> S.member (pInfoHash p) seeders) $ filter picker ps
   where
     -- TODO: pIsASeeder is always false at the moment
     picker :: Peer -> Bool
     picker p = case M.lookup (pThreadId p) rm of
                  Nothing -> False -- Don't know anything about the peer yet
-                 Just (_, st) -> not (pIsASeeder st) && (pInterestedInUs st)
+                 Just (_, st) ->
+                    not (pIsASeeder st) &&
+                    (pInterestedInUs st) &&
+                    not (pIsSnubbed st)
 
 -- | Comparison with inverse ordering
 compareInv :: Ord a => a -> a -> Ordering
@@ -304,7 +316,7 @@ assignUploadSlots slots numDownPeers numSeedPeers =
 selectPeers :: Int -> [Peer] -> [Peer] -> ChokeMgrProcess (S.Set ThreadId)
 selectPeers ups downPeers seedPeers = do
         rm <- gets rateMap
-        let selector p = maybe (p, (PRate 0.0 0.0, PState True False False)) (p,)
+        let selector p = maybe (p, (PRate 0.0 0.0, PState True False False False)) (p,)
                             (M.lookup (pThreadId p) rm)
             dp = map selector downPeers
             sp = map selector seedPeers
