@@ -49,11 +49,12 @@ instance NFData ChokeMgrMsg
 
 type ChokeMgrChannel = TChan ChokeMgrMsg
 data PeerRateInfo = PRI {
-        peerUpRate   :: Double,
-        peerDownRate :: Double,
+        peerUpRate     :: Double,
+        peerDownRate   :: Double,
         peerInterested :: Bool,
-        peerSeeding  :: Bool,
-        peerChokingUs :: Bool }
+        peerSeeding    :: Bool,
+        peerSnubs      :: Bool,
+        peerChokingUs  :: Bool }
     deriving Show
 
 type RateTVar = TVar [(ThreadId, PeerRateInfo)]
