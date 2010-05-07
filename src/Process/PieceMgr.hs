@@ -176,7 +176,7 @@ rpcMessage = do
       GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
           do blocks <- grabBlocks n eligible
              liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
-      StoreBlock pn blk d -> {-# SCC "StoreBlock" #-}
+      StoreBlock pn blk d ->
           storeBlock pn blk d
       PutbackBlocks blks -> {-# SCC "PutbackBlocks" #-}
           mapM_ putbackBlock blks
@@ -190,36 +190,39 @@ rpcMessage = do
          liftIO . atomically $ do putTMVar retC intr -- And this neither too!
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
-storeBlock pn blk d = do
+storeBlock pn blk d = {-# SCC "storeBlock" #-} do
    debugP $ "Storing block: " ++ show (pn, blk)
    fch <- asks fspCh
-   liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
+   {-# SCC "writeBlock" #-} liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
    dld <- gets downloading
    let ndl = dld \\ [(pn, blk)]
-   dld `deepseq` modify (\s -> s { downloading = ndl })
+   {-# SCC "ndl" #-} dld `deepseq` modify (\s -> s { downloading = ndl })
    endgameBroadcast pn blk
    done <- updateProgress pn blk
-   when done
-       (do assertPieceComplete pn
-           pend <- gets pendingPieces
-           iprog <- gets inProgress
-           pendSz <- PS.size pend
-           infoP $ "Piece #" ++ show pn
-                     ++ " completed, there are "
-                     ++ (show pendSz) ++ " pending "
-                     ++ (show $ M.size iprog) ++ " in progress"
-           l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
-           ih <- asks pMgrInfoHash
-           c <- asks statusCh
-           liftIO . atomically $ writeTChan c (CompletedPiece ih l)
-           pieceOk <- checkPiece pn
-           case pieceOk of
-             Nothing ->
-                    do fail "PieceMgrP: Piece Nonexisting!"
-             Just True -> do completePiece pn
-                             markDone pn
-                             checkFullCompletion
-             Just False -> putbackPiece pn)
+   when done (pieceDone pn)
+
+pieceDone :: PieceNum -> Process CF ST ()
+pieceDone pn = {-# SCC "pieceDone" #-} do
+    assertPieceComplete pn
+    pend <- gets pendingPieces
+    iprog <- gets inProgress
+    pendSz <- PS.size pend
+    infoP $ "Piece #" ++ show pn
+              ++ " completed, there are "
+              ++ (show pendSz) ++ " pending "
+              ++ (show $ M.size iprog) ++ " in progress"
+    l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
+    ih <- asks pMgrInfoHash
+    c <- asks statusCh
+    liftIO . atomically $ writeTChan c (CompletedPiece ih l)
+    pieceOk <- checkPiece pn
+    case pieceOk of
+      Nothing ->
+             do fail "PieceMgrP: Piece Nonexisting!"
+      Just True -> do completePiece pn
+                      markDone pn
+                      checkFullCompletion
+      Just False -> putbackPiece pn
 
 askInterested :: PS.PieceSet -> Process CF ST Bool
 askInterested pieces = do
@@ -239,7 +242,7 @@ peerUnhave :: [PieceNum] -> Process CF ST ()
 peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
 
 endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
-endgameBroadcast pn blk = do
+endgameBroadcast pn blk = {-# SCC "endgameBroadCast" #-} do
     ih <- asks pMgrInfoHash
     gets endGaming >>=
       flip when
@@ -351,7 +354,7 @@ assertPieceComplete pn = do
 --   where @complete@ is @True@ if the piece is percieved to be complete and @False@
 --   otherwise.
 updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
-updateProgress pn blk = do
+updateProgress pn blk = {-# SCC "updateProgress" #-} do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
       Nothing -> do warningP "updateProgress can't find progress block, error?"
@@ -363,7 +366,7 @@ updateProgress pn blk = do
                                  -- Will happen without FAST extension
                                  -- at times
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
-  where checkComplete pg = do
+  where checkComplete pg = {-# SCC "checkComplete" #-} do
             ip <- gets inProgress
             ip' <- liftIO . evaluate $ M.adjust (const pg) pn ip
             modify (\db -> db { inProgress = ip' })
