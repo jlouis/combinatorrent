@@ -226,17 +226,15 @@ rechoke = do
 --   are leeching.  also prunes the list for peers which are not interesting.
 --   TODO: Snubbed peers
 splitSeedLeech :: S.Set InfoHash -> RateMap -> [Peer] -> ([Peer], [Peer])
-splitSeedLeech seeders rm ps =
-        partition (\p -> S.member (pInfoHash p) seeders) $ filter picker ps
+splitSeedLeech seeders rm ps = foldl' splitter ([], []) ps
   where
-    -- TODO: pIsASeeder is always false at the moment
-    picker :: Peer -> Bool
-    picker p = case M.lookup (pThreadId p) rm of
-                 Nothing -> False -- Don't know anything about the peer yet
-                 Just (_, st) ->
-                    not (pIsASeeder st) &&
-                    (pInterestedInUs st) &&
-                    not (pIsSnubbed st)
+    splitter (seeds, leeching) p =
+        case M.lookup (pThreadId p) rm of
+            Nothing -> (seeds, leeching) -- Know nothing on the peer yet
+            Just (_, st) | pIsASeeder st || not (pInterestedInUs st) -> (seeds, leeching)
+                         | S.member (pInfoHash p) seeders            -> (p : seeds, leeching)
+                         | pIsSnubbed st                             -> (seeds, leeching)
+                         | otherwise                                 -> (seeds, p : leeching)
 
 -- | Comparison with inverse ordering
 compareInv :: Ord a => a -> a -> Ordering
