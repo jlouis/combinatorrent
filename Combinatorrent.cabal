@@ -29,6 +29,10 @@ flag debug
   description: Enable debug support
   default:     False
 
+flag threaded
+  description: Build with threaded runtime
+  default:     False
+
 flag threadscope
   description: Enable the eventlog necessary for ThreadScope
   default: False
@@ -80,9 +84,12 @@ executable Combinatorrent
     test-framework-quickcheck2,
     time
 
-  ghc-options: -Wall -fno-warn-orphans -threaded
+  ghc-options: -Wall -fno-warn-orphans
   if impl(ghc >= 6.13.0)
       ghc-options: -rtsopts
+
+  if flag(threaded)
+      ghc-options: -threaded
 
   if !flag(debug)
       cpp-options: "-DNDEBUG"
