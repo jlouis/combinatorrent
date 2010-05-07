@@ -68,7 +68,7 @@ instance NFData TorrentState
 ----------------------------------------------------------------------
 -- Capabilities
 
-data Capabilities = Fast
+data Capabilities = Fast | Extended
   deriving (Show, Eq)
 
 -- PIECES

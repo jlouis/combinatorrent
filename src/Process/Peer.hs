@@ -50,7 +50,11 @@ import qualified Process.ChokeMgr as ChokeMgr (RateTVar, PeerRateInfo(..))
 import Process.Timer
 import Supervisor
 import Torrent
+import qualified Protocol.BCode as BCode (decode, encode,
+                                          extendedP, extendedV,
+                                          extendedMsg, extendedRReq)
 import Protocol.Wire
+import Version
 
 import qualified Process.Peer.Sender as Sender
 import qualified Process.Peer.SenderQ as SenderQ
@@ -112,16 +116,17 @@ data ExtensionConfig = ExtensionConfig
         , handleSuggest :: Last (PieceNum -> Process CF ST ())
         , handleAllowedFast :: Last (PieceNum -> Process CF ST ())
         , handleRejectRequest :: Last (PieceNum -> Block -> Process CF ST ())
-        , handleExtendedMsg :: Last (Int -> B.ByteString -> Process CF ST ())
+        , handleExtendedMsg :: Last (Word8 -> B.ByteString -> Process CF ST ())
         , handleRequestMsg :: Last (PieceNum -> Block -> Process CF ST ())
         , handleChokeMsg   :: Last (Process CF ST ())
         , handleCancelMsg  :: Last (PieceNum -> Block -> Process CF ST ())
         , handlePieceMsg   :: Last (PieceNum -> Int -> B.ByteString -> Process CF ST ())
+        , sendExtendedMsg  :: Last (Process CF ST ())
         }
 
 emptyExtensionConfig :: ExtensionConfig
 emptyExtensionConfig = ExtensionConfig
-    mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty
+    mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty
 
 appendEConfig :: ExtensionConfig -> ExtensionConfig -> ExtensionConfig
 appendEConfig a b =
@@ -137,6 +142,7 @@ appendEConfig a b =
       , handleChokeMsg      = app handleChokeMsg a b
       , handleCancelMsg     = app handleCancelMsg a b
       , handlePieceMsg      = app handlePieceMsg a b
+      , sendExtendedMsg     = app sendExtendedMsg a b
     }
  where app f = mappend `on` f
 
@@ -169,6 +175,7 @@ extensionBase = ExtensionConfig
                  (ljust chokeMsg)
                  (ljust cancelBlock)
                  (ljust pieceMsg)
+                 (ljust noExtendedMsg)
 
 fastExtension :: ExtensionConfig
 fastExtension = ExtensionConfig
@@ -183,6 +190,32 @@ fastExtension = ExtensionConfig
                     (ljust fastChokeMsg)
                     (ljust fastCancelBlock)
                     (ljust fastPieceMsg)
+                    mempty
+
+extendedMsgExtension :: ExtensionConfig
+extendedMsgExtension = ExtensionConfig
+                    mempty
+                    mempty
+                    mempty
+                    mempty
+                    mempty
+                    mempty
+                    (ljust extendedMsg)
+                    mempty
+                    mempty
+                    mempty
+                    mempty
+                    (ljust outputExtendedMsg)
+
+noExtendedMsg :: Process CF ST ()
+noExtendedMsg = return () -- Deliberately ignore the extended message
+
+outputExtendedMsg :: Process CF ST ()
+outputExtendedMsg = outChan $ SenderQ.SenderQM $ ExtendedMsg 0 em
+  where em = BCode.encode (BCode.extendedMsg (fromIntegral defaultPort)
+                                             ("Combinatorrent " ++ Version.version)
+                                             250)
+        -- 250 is what most other clients default to.
 
 ignoreSuggest :: PieceNum -> Process CF ST ()
 ignoreSuggest _ = debugP "Ignoring SUGGEST message"
@@ -215,7 +248,7 @@ errorRejectRequest _ _ = do
     errorP "Received a REJECT REQUEST, but the extension is not enabled"
     stopP
 
-errorExtendedMsg :: Int -> B.ByteString -> Process CF ST ()
+errorExtendedMsg :: Word8 -> B.ByteString -> Process CF ST ()
 errorExtendedMsg _ _ = do
     errorP "Received an EXTENDED MESSAGE, but the extension is not enabled"
     stopP
@@ -238,7 +271,8 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
 
 configCapabilities :: [Capabilities] -> ExtensionConfig
 configCapabilities caps =
-    mconcat [mempty, if Fast `elem` caps then fastExtension else mempty]
+    mconcat [ if Fast `elem` caps then fastExtension else mempty,
+              if Extended `elem` caps then extendedMsgExtension else mempty]
 
 startup :: Int -> Process CF ST ()
 startup nPieces = do
@@ -249,6 +283,8 @@ startup nPieces = do
     liftIO . atomically $ writeTChan pmc $ Connect ih tid ich
     pieces <- getPiecesDone
     outChan $ SenderQ.SenderQM $ BitField (constructBitField nPieces pieces)
+    -- eventually handle extended messaging
+    asks extConf >>= fromLJ sendExtendedMsg
     -- Install the StatusP timer
     _ <- registerSTM 5 ich TimerTick
     eventLoop
@@ -308,6 +344,28 @@ chokeMgrMsg msg = do
        CancelBlock pn blk -> do
             cf <- asks extConf
             fromLJ handleCancelMsg cf pn blk
+
+data ExtendedInfo = ExtendedInfo {
+        _extP :: Maybe Word16
+      , _extV :: Maybe String
+      , _extReqq :: Maybe Integer
+      }
+  deriving Show
+
+extendedMsg :: Word8 -> B.ByteString -> Process CF ST ()
+extendedMsg 0 bs =
+    case BCode.decode bs of
+        Left _err -> do infoP "Peer sent wrong BCoded dictionary extended msg"
+                        stopP
+        Right bc ->
+            let inf = ExtendedInfo
+                       (BCode.extendedP bc)
+                       (BCode.extendedV bc)
+                       (BCode.extendedRReq bc)
+            in do infoP $ "Peer Extended handshake: " ++ show inf
+                  infoP $ show bc
+extendedMsg _ _ = do errorP "Unknown extended message type received"
+                     stopP
 
 cancelBlock :: PieceNum -> Block -> Process CF ST ()
 cancelBlock pn blk = do

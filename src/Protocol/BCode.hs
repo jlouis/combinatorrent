@@ -30,6 +30,11 @@ module Protocol.BCode
               trackerError,
               toBS,
               fromBS,
+              -- Extended handshake
+              extendedP,
+              extendedV,
+              extendedRReq,
+              extendedMsg,
               --Tests
               testSuite)
 where
@@ -311,6 +316,29 @@ infoFiles bc = let mbFpath = fromBS `fmap` infoName bc
                         Just files
                     _ ->
                         Nothing
+
+---------------------------------------------------------------------
+-- Extended message handshake
+--
+
+extendedP :: BCode -> Maybe Word16
+extendedP = fmap fromIntegral . searchInt "p"
+
+extendedV :: BCode -> Maybe String
+extendedV = fmap ( fmap (chr . fromIntegral) ) . fmap B.unpack . searchStr "v"
+
+extendedRReq :: BCode -> Maybe Integer
+extendedRReq = searchInt "rreq"
+
+extendedMsg :: Integer -> String -> Integer -> BCode
+extendedMsg p v rreq = BDict $ M.fromList [(toBS "m",    BDict M.empty)
+                                          ,(toBS "p",    BInt p)
+                                          ,(toBS "v",    BString $ toBS v)
+                                          ,(toBS "rreq", BInt rreq)]
+
+---------------------------------------------------------------------
+-- Pretty printing
+--
 
 pp :: BCode -> Doc
 pp bc =
