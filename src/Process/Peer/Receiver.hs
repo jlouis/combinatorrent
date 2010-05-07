@@ -39,16 +39,19 @@ readSend = do
     c <- asks rpMsgCh
     bs <- liftIO $ recv s 2048
     when (B.length bs == 0) stopP
-    loop s c (A.parse getMsg bs)
-  where loop s c (A.Done r msg) = do
+    loop 2048 s c (A.parse getMsg bs)
+  where loop l s c (A.Done r msg) = do
             liftIO . atomically $ writeTChan c (FromPeer (msg, fromIntegral $ msgSize msg))
-            loop s c (A.parse getMsg r)
-        loop s c (prt@(A.Partial _)) = do
-            bs <- liftIO $ recv s 4096
-            when (B.length bs == 0) stopP
-            loop s c (A.feed prt bs)
-        loop _ _ (A.Fail _ ctx err) =
+            loop l s c (A.parse getMsg r)
+        loop l s c (prt@(A.Partial _)) = do
+            bs <- liftIO $ recv s l
+            let k = B.length bs
+            when (l == 0) stopP
+            loop (nextSize l k) s c (A.feed prt bs)
+        loop _ _ _ (A.Fail _ ctx err) =
                     do warningP $ "Incorrect parse in receiver, context: "
                                         ++ show ctx ++ ", " ++ show err
                        stopP
-
+        nextSize l k | l == k = l*2
+                     | l > (3*k) = if l > 2048 then l `div` 2 else 2048
+                     | otherwise = l
