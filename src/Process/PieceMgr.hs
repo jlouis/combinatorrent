@@ -52,7 +52,7 @@ data ST = ST
     , donePiece     :: !PS.PieceSet -- ^ Pieces that are done
     , donePush      :: ![ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
     , inProgress    :: !(M.Map PieceNum InProgressPiece) -- ^ Pieces in progress
-    , downloading   :: ![(PieceNum, Block)]    -- ^ Blocks we are currently downloading
+    , downloading   :: !(S.Set (PieceNum, Block)) -- ^ Blocks we are currently downloading
     , infoMap       :: !PieceMap   -- ^ Information about pieces
     , endGaming     :: !Bool       -- ^ If we have done any endgame work this is true
     , histogram     :: !PendS.PendingSet -- ^ Track the rarity of pieces
@@ -70,7 +70,7 @@ sizeReport = do
          , ("Done"   , p2sz)
          , ("DonePush", length dpush)
          , ("InProgress", M.size progress)
-         , ("Downloading", length down)
+         , ("Downloading", S.size down)
          , ("Histo", PendS.size histo) ]
 
 -- | The InProgressPiece data type describes pieces in progress of being downloaded.
@@ -176,7 +176,7 @@ rpcMessage = do
       GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
           do blocks <- grabBlocks n eligible
              liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
-      StoreBlock pn blk d -> {-# SCC "StoreBlock" #-}
+      StoreBlock pn blk d ->
           storeBlock pn blk d
       PutbackBlocks blks -> {-# SCC "PutbackBlocks" #-}
           mapM_ putbackBlock blks
@@ -190,36 +190,40 @@ rpcMessage = do
          liftIO . atomically $ do putTMVar retC intr -- And this neither too!
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
-storeBlock pn blk d = do
-   debugP $ "Storing block: " ++ show (pn, blk)
-   fch <- asks fspCh
-   liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
-   dld <- gets downloading
-   let ndl = dld \\ [(pn, blk)]
-   dld `deepseq` modify (\s -> s { downloading = ndl })
-   endgameBroadcast pn blk
-   done <- updateProgress pn blk
-   when done
-       (do assertPieceComplete pn
-           pend <- gets pendingPieces
-           iprog <- gets inProgress
-           pendSz <- PS.size pend
-           infoP $ "Piece #" ++ show pn
-                     ++ " completed, there are "
-                     ++ (show pendSz) ++ " pending "
-                     ++ (show $ M.size iprog) ++ " in progress"
-           l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
-           ih <- asks pMgrInfoHash
-           c <- asks statusCh
-           liftIO . atomically $ writeTChan c (CompletedPiece ih l)
-           pieceOk <- checkPiece pn
-           case pieceOk of
-             Nothing ->
-                    do fail "PieceMgrP: Piece Nonexisting!"
-             Just True -> do completePiece pn
-                             markDone pn
-                             checkFullCompletion
-             Just False -> putbackPiece pn)
+storeBlock pn blk d = {-# SCC "storeBlock" #-} do
+     writeFS
+     dld <- gets downloading
+     let !ndl = S.delete (pn, blk) dld
+     {-# SCC "ndl" #-} modify (\s -> s { downloading = ndl })
+     endgameBroadcast pn blk
+     done <- updateProgress pn blk
+     when done (pieceDone pn)
+  where writeFS = {-# SCC "writeFS" #-} do
+                fch <- asks fspCh
+                liftIO . atomically $ writeTChan fch $ WriteBlock pn blk d
+
+pieceDone :: PieceNum -> Process CF ST ()
+pieceDone pn = {-# SCC "pieceDone" #-} do
+    assertPieceComplete pn
+    pend <- gets pendingPieces
+    iprog <- gets inProgress
+    pendSz <- PS.size pend
+    infoP $ "Piece #" ++ show pn
+              ++ " completed, there are "
+              ++ (show pendSz) ++ " pending "
+              ++ (show $ M.size iprog) ++ " in progress"
+    l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
+    ih <- asks pMgrInfoHash
+    c <- asks statusCh
+    liftIO . atomically $ writeTChan c (CompletedPiece ih l)
+    pieceOk <- checkPiece pn
+    case pieceOk of
+      Nothing ->
+             do fail "PieceMgrP: Piece Nonexisting!"
+      Just True -> do completePiece pn
+                      markDone pn
+                      checkFullCompletion
+      Just False -> putbackPiece pn
 
 askInterested :: PS.PieceSet -> Process CF ST Bool
 askInterested pieces = do
@@ -239,7 +243,7 @@ peerUnhave :: [PieceNum] -> Process CF ST ()
 peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
 
 endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
-endgameBroadcast pn blk = do
+endgameBroadcast pn blk = {-# SCC "endgameBroadCast" #-} do
     ih <- asks pMgrInfoHash
     gets endGaming >>=
       flip when
@@ -267,7 +271,7 @@ createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m ST
 createPieceDb mmap pmap = do
     pending <- filt (==False)
     done    <- filt (==True)
-    return $ ST pending done [] M.empty [] pmap False PendS.empty 0 (Tracer.new 25)
+    return $ ST pending done [] M.empty S.empty pmap False PendS.empty 0 (Tracer.new 25)
   where
     filt f  = PS.fromList (succ . snd . bounds $ pmap) . M.keys $ M.filter f mmap
 
@@ -307,7 +311,7 @@ putbackBlock (pn, blk) = do
     doneMember <- PS.member pn done
     unless (doneMember) -- Happens at endgame, stray block
       $ modify (\db -> db { inProgress = ndb (inProgress db)
-                          , downloading = downloading db \\ [(pn, blk)]})
+                          , downloading = S.delete (pn, blk) $ downloading db })
   where ndb db = M.alter f pn db
         -- In endgame, the first will never happen. If it is done, the doneMember
         -- check above should take care of the problem. If the block has been downloaded
@@ -344,14 +348,14 @@ assertPieceComplete pn = do
         checkContents os l blks = case foldl checkBlock (os, l, True) blks of
                                     (_, 0, True) -> True
                                     _            -> False
-        assertAllDownloaded blocks p = all (\(p', _) -> p /= p') blocks
+        assertAllDownloaded blocks p = all (\(p', _) -> p /= p') $ S.toList blocks
 
 -- | Update the progress on a Piece. When we get a block from the piece, we will
 --   track this in the Piece Database. This function returns @complete@
 --   where @complete@ is @True@ if the piece is percieved to be complete and @False@
 --   otherwise.
 updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
-updateProgress pn blk = do
+updateProgress pn blk = {-# SCC "updateProgress" #-} do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
       Nothing -> do warningP "updateProgress can't find progress block, error?"
@@ -363,7 +367,7 @@ updateProgress pn blk = do
                                  -- Will happen without FAST extension
                                  -- at times
                else checkComplete pg { ipHaveBlocks = S.insert blk blkSet }
-  where checkComplete pg = do
+  where checkComplete pg = {-# SCC "checkComplete" #-} do
             ip <- gets inProgress
             ip' <- liftIO . evaluate $ M.adjust (const pg) pn ip
             modify (\db -> db { inProgress = ip' })
@@ -396,7 +400,7 @@ grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
                 return $ Endgame blks
         else do s <- get
                 let !dld = downloading s
-                put $! s { downloading = blocks ++ dld }
+                put $! s { downloading = foldl' (flip S.insert) dld blocks }
                 return $ Leech blocks
 
 -- Grabbing blocks is a state machine implemented by tail calls
@@ -464,7 +468,7 @@ tryGrabPending n ps captured = {-# SCC "tryGrabPending" #-} do
 grabEndGame :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
 grabEndGame n ps = {-# SCC "grabEndGame" #-} do
     -- In endgame we are allowed to grab from the downloaders
-    dls <- filterM (\(p, _) -> PS.member p ps) =<< gets downloading
+    dls <- filterM (\(p, _) -> PS.member p ps) =<< (S.toList <$> gets downloading)
     take n . shuffle' dls (length dls) <$> liftIO newStdGen
 
 -- | Pick a random element among a finite list af them.
@@ -507,7 +511,7 @@ assertST = {-# SCC "assertST" #-} do
     assertSets = do
         pending <- gets pendingPieces
         done    <- gets donePiece
-        down    <- map fst <$> gets downloading
+        down    <- map fst . S.toList <$> gets downloading
         iprog   <- M.keys <$> gets inProgress
         pdownis <- anyM (flip PS.member pending) down
         donedownis <- anyM (flip PS.member done) down
@@ -549,7 +553,7 @@ assertST = {-# SCC "assertST" #-} do
             (fail $ "Piece in progress " ++ show pn
                     ++ " has downloaded more blocks than the piece has")
     assertDownloading = do
-        down <- gets downloading
+        down <- S.toList <$> gets downloading
         mapM_ checkDownloading down
     checkDownloading (pn, blk) = do
         prog <- gets inProgress
