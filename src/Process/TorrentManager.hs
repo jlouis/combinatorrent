@@ -87,9 +87,20 @@ readTorrent fp = do
                      stopP
       Right bc -> return bc
 
-startTorrent :: FilePath -> Process CF ST ThreadId
+startTorrent :: FilePath -> Process CF ST (Maybe ThreadId)
 startTorrent fp = do
     bc <- readTorrent fp
+    ti <- liftIO $ mkTorrentInfo bc
+    sts <- do v <- liftIO newEmptyTMVarIO
+              statusC <- asks tStatusCh
+              liftIO . atomically $ writeTChan statusC (Status.RequestAllTorrents v)
+              liftIO . atomically $ takeTMVar v
+    case lookup (infoHash ti) sts of
+      Nothing -> Just `fmap` startTorrent' fp bc ti
+      Just x  -> return Nothing
+
+startTorrent' :: [Char] -> BCode -> TorrentInfo -> Process CF ST ThreadId
+startTorrent' fp bc ti = do
     fspC     <- liftIO newTChanIO
     trackerC <- liftIO newTChanIO
     supC     <- liftIO newTChanIO
@@ -101,7 +112,6 @@ startTorrent fp = do
     pmC     <- asks tPeerMgrCh
     (handles, haveMap, pieceMap) <- liftIO $ openAndCheckFile bc
     let left = bytesLeft haveMap pieceMap
-    ti <- liftIO $ mkTorrentInfo bc
     pieceDb <- PieceMgr.createPieceDb haveMap pieceMap
     (tid, _) <- liftIO $ allForOne ("TorrentSup - " ++ fp)
                      [ Worker $ FSP.start handles pieceMap fspC
