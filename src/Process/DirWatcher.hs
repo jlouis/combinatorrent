@@ -20,10 +20,12 @@ import System.FilePath
 import Prelude hiding (log)
 import Process
 import Process.TorrentManager hiding (start)
+import Process.Timer
 import Supervisor
 
 
 data CF = CF { reportCh :: TorrentMgrChan -- ^ Channel for reporting directory changes
+             , tickCh   :: TChan ()
              , dirToWatch :: FilePath }
 
 type ST = S.Set FilePath
@@ -36,15 +38,16 @@ start :: FilePath -- ^ Path to watch
       -> SupervisorChannel
       -> IO ThreadId
 start fp chan supC = do
-    spawnP (CF chan fp) S.empty
+    tickC <- newTChanIO
+    _ <- registerSTM 10 tickC ()
+    spawnP (CF chan tickC fp) S.empty
             ({-# SCC "DirWatcher" #-}
                 catchP pgm (defaultStopHandler supC))
   where pgm = do
-        q <- liftIO $ registerDelay (5 * 1000000)
-        liftIO . atomically $ do
-            b <- readTVar q
-            if b then return () else retry
+        tc <- asks tickCh
+        () <- liftIO . atomically $ do readTChan tc
         processDirectory
+        _ <- registerSTM 10 tc ()
         pgm
 
 processDirectory :: Process CF ST ()

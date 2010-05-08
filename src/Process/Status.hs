@@ -33,6 +33,7 @@ import Prelude hiding (log)
 
 import Channels
 import Process
+import Process.Timer
 import Supervisor
 import Torrent
 import Version
@@ -46,6 +47,7 @@ data StatusMsg = TrackerStat { trackInfoHash :: InfoHash
                | TorrentCompleted InfoHash
                | RequestStatus InfoHash (TMVar StatusState)
                | RequestAllTorrents (TMVar [(InfoHash, StatusState)])
+               | StatusTimerTick
 
 data PStat = PStat { pInfoHash :: InfoHash
                    , pUploaded :: Integer
@@ -94,6 +96,7 @@ instance Show StatusState where
 start :: Maybe FilePath -> StatusChannel -> TVar [PStat] -> SupervisorChannel -> IO ThreadId
 start fp statusC tv supC = do
     r <- newIORef (0,0)
+    _ <- registerSTM 5 statusC StatusTimerTick
     spawnP (CF statusC tv) M.empty
         ({-# SCC "Status" #-} cleanupP (pgm r) (defaultStopHandler supC) (cleanup r))
   where
@@ -104,16 +107,9 @@ start fp statusC tv supC = do
             Just fpath -> liftIO $ writeFile fpath (show . gatherStats $ st)
     pgm r = do
         fetchUpdates r
-        d <- liftIO $ registerDelay (5 * 1000000)
         ch <- asks statusCh
-        x <- liftIO . atomically $ do
-            q <- readTVar d
-            if q
-                then return Nothing
-                else return . Just =<< readTChan ch
-        case x of
-            Nothing -> return ()
-            Just msg -> recvMsg msg
+        x <- liftIO . atomically $ readTChan ch
+        recvMsg x
         pgm r
 
 newMap :: Integer -> TrackerChannel -> StatusState
@@ -145,6 +141,8 @@ recvMsg msg =
             assert (left ns == 0) (return ())
             liftIO . atomically $ writeTChan (trackerMsgCh ns) Complete
             modify (\s -> M.insert ih (ns { state = Seeding}) s)
+        StatusTimerTick -> do ch <- asks statusCh
+                              registerSTM 5 ch StatusTimerTick >> return ()
 
 
 fetchUpdates :: IORef (Integer, Integer) -> Process CF ST ()
