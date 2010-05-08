@@ -106,7 +106,8 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              , upRate         :: !Rate -- ^ Upload rate towards the peer (estimated)
              , downRate       :: !Rate -- ^ Download rate from the peer (estimated)
              , runningEndgame :: !Bool -- ^ True if we are in endgame
-             , lastMessage    :: !Int
+             , lastMsg        :: !Int  -- ^ Ticks from last Message
+             , lastPieceMsg   :: !Int  -- ^ Ticks from last Piece Message
              }
 
 data ExtensionConfig = ExtensionConfig
@@ -265,7 +266,8 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     let cs = configCapabilities caps
     spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
                     pdtmv intmv gbtmv cs)
-           (ST True False S.empty True False pieceSet nPieces (RC.new ct) (RC.new ct) False 0)
+           (ST True False S.empty True False pieceSet nPieces
+                    (RC.new ct) (RC.new ct) False 0 0)
                        ({-# SCC "PeerControl" #-}
                             cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
@@ -381,11 +383,22 @@ fastCancelBlock pn blk = do
 
 checkKeepAlive :: Process CF ST ()
 checkKeepAlive = do
-    lm <- gets lastMessage
+    lm <- gets lastMsg
     if lm >= 24
         then do outChan $ SenderQ.SenderQM KeepAlive
-        else let inc = succ lm
-             in inc `seq` modify (\st -> st { lastMessage = inc })
+        else let !inc = succ lm
+             in modify (\st -> st { lastMsg = inc })
+
+isSnubbed :: Process CF ST Bool
+isSnubbed = do
+    -- 6 * 5 seconds is 30
+    lpm <- gets lastPieceMsg
+    if lpm > 6
+        then return True
+        else do
+            let !inc = succ lpm
+            modify (\st -> st { lastPieceMsg = inc })
+            return False
 
 -- A Timer event handles a number of different status updates. One towards the
 -- Choke Manager so it has a information about whom to choke and unchoke - and
@@ -406,6 +419,7 @@ timerTick = do
    infoP $ "Peer has rates up/down: " ++ show up ++ "/" ++ show down
    i <- gets peerInterested
    seed <- isASeeder
+   snub <- isSnubbed
    pchoke <- gets peerChoke
    rtv <- asks rateTV
    liftIO . atomically $ do
@@ -415,6 +429,7 @@ timerTick = do
                                    ChokeMgr.peerDownRate = down,
                                    ChokeMgr.peerInterested = i,
                                    ChokeMgr.peerSeeding = seed,
+                                   ChokeMgr.peerSnubs = snub,
                                    ChokeMgr.peerChokingUs = pchoke }) : q)
    -- Tell the Status Process about our progress
    let (upCnt, nuRate) = RC.extractCount $ nur
@@ -462,6 +477,7 @@ peerMsg msg sz = do
                           fromLJ handleRequestMsg cf pn blk
      Piece n os bs -> do cf <- asks extConf
                          fromLJ handlePieceMsg cf n os bs
+                         modify (\st -> st { lastPieceMsg = 0 })
                          fillBlocks
      Cancel pn blk -> cancelMsg pn blk
      Port _ -> return () -- No DHT yet, silently ignore
@@ -720,7 +736,7 @@ createPeerPieces nPieces =
 -- | Send a message on a chan from the process queue
 outChan :: SenderQ.SenderQMsg -> Process CF ST ()
 outChan qm = do
-    modify (\st -> st { lastMessage = 0 })
+    modify (\st -> st { lastMsg = 0 })
     ch <- asks outCh
     liftIO . atomically $ writeTChan ch qm
 
