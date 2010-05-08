@@ -26,7 +26,7 @@ sparkline<-function(ydata=rnorm(100,500,50),width=1.5,height=0.5,sigfigs=4) {
 stat <- read.csv("stat_db.csv", header=TRUE, sep="\t")
 attach(stat)
 productivity <- (MutCPU / (MutCPU+GCCPU))
-cpunetwork <- (MutCPU / ((Uploaded + Downloaded + 1) / (1024*1024)))
+cpunetwork <- ((MutCPU + GCCPU) / ((Uploaded + Downloaded + 1) / (1024*1024)))
 cpupnetwork <- subset(cpunetwork, Downloaded > (1024 * 1024))
 max_space <- subset(MaxBytesUsed, MaxBytesUsed < (150*1024*1024))
 peak_alloc <- subset(PeakMegabytesAlloc, PeakMegabytesAlloc < 150)
