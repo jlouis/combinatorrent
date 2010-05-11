@@ -308,12 +308,13 @@ eventLoop :: Process CF ST ()
 eventLoop = do
     ty <- readInCh
     case ty of
-        FromPeer (msg, sz) -> peerMsg msg sz
-        TimerTick       -> timerTick
-        FromSenderQ l   -> (do s <- get
+        FromPeer (msg, sz) -> {-# SCC "peerMsg" #-} peerMsg msg sz
+        TimerTick       -> {-# SCC "timerTick" #-} timerTick
+        FromSenderQ l   -> {-# SCC "fromSender" #-}
+                           (do s <- get
                                let !u = RC.update l $ upRate s
                                put $! s { upRate = u})
-        FromChokeMgr m  -> chokeMgrMsg m
+        FromChokeMgr m  -> {-# SCC "chokeMgrMsg" #-} chokeMgrMsg m
     eventLoop
 
 -- | Return a list of pieces which are currently done by us

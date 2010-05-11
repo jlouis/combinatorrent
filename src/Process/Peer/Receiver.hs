@@ -56,22 +56,25 @@ loopHeader bs = {-# SCC "loopHeader" #-}
                   ll = readW32 l
               in if ll == 0
                     then loopHeader r -- KeepAlive
-                    else loopMsg r (readW32 l)
+                    else loopMsg [r] (fromIntegral (L.length r)) (readW32 l)
          else do
             inp <- demandInput 2048
             loopHeader (L.concat [bs, inp]) -- We bet on this get called rarely
 
-loopMsg :: L.ByteString -> Int -> Process CF Socket ()
-loopMsg lbs l = {-# SCC "loopMsg" #-} do
-    let bs_l = fromIntegral $ L.length lbs
-    if bs_l >= l
-        then do let (u, r) = L.splitAt (fromIntegral l) lbs
+loopMsg :: [L.ByteString] -> Int -> Int -> Process CF Socket ()
+loopMsg lbs sz l = {-# SCC "loopMsg" #-} do
+    if sz >= l
+        then do let (u, r) =
+                     L.splitAt (fromIntegral l)
+                                (case lbs of
+                                    [x] -> x
+                                    rest -> (L.concat $ reverse rest))
                 msg <- assert (L.length u == fromIntegral l) parseMsg l u
                 c <- asks rpMsgCh
                 liftIO . atomically $ writeTChan c (FromPeer (msg, fromIntegral l))
                 loopHeader r
-        else do inp <- demandInput (l - bs_l)
-                loopMsg (L.concat [lbs, inp]) l
+        else do inp <- demandInput (l - sz)
+                loopMsg (inp : lbs) (sz + fromIntegral (L.length inp)) l
 
 readW32 :: L.ByteString -> Int
 readW32 lbs = {-# SCC "readW32" #-}
