@@ -485,8 +485,10 @@ createBlock pn = do
          where cBlock = blockPiece defaultBlockSize . fromInteger . len
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
-anyM f l = do r <- mapM f l
-              return (any (==True) r)
+anyM _f [] = return False
+anyM f  (l : ls) = do
+    r <- f l
+    if r then return True else anyM f ls
 
 assertST :: PieceMgrProcess ()
 assertST = {-# SCC "assertST" #-} do
