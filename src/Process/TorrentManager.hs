@@ -97,7 +97,7 @@ startTorrent fp = do
               liftIO . atomically $ takeTMVar v
     case lookup (infoHash ti) sts of
       Nothing -> Just `fmap` startTorrent' fp bc ti
-      Just x  -> return Nothing
+      Just _x  -> return Nothing
 
 startTorrent' :: [Char] -> BCode -> TorrentInfo -> Process CF ST ThreadId
 startTorrent' fp bc ti = do
