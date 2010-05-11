@@ -358,8 +358,7 @@ updateProgress :: PieceNum -> Block -> PieceMgrProcess Bool
 updateProgress pn blk = {-# SCC "updateProgress" #-} do
     ipdb <- gets inProgress
     case M.lookup pn ipdb of
-      Nothing -> do warningP "updateProgress can't find progress block, error?"
-                    return False
+      Nothing -> do return False
       Just pg ->
           let blkSet = ipHaveBlocks pg
           in if blk `S.member` blkSet
