@@ -271,7 +271,7 @@ createPieceDb :: MonadIO m => PiecesDoneMap -> PieceMap -> m ST
 createPieceDb mmap pmap = do
     pending <- filt (==False)
     done    <- filt (==True)
-    return $ ST pending done [] M.empty S.empty pmap False PendS.empty 0 (Tracer.new 25)
+    return $ ST pending done [] M.empty S.empty pmap False PendS.empty 0 (Tracer.new 50)
   where
     filt f  = PS.fromList (succ . snd . bounds $ pmap) . M.keys $ M.filter f mmap
 
@@ -494,7 +494,7 @@ assertST :: PieceMgrProcess ()
 assertST = {-# SCC "assertST" #-} do
     c <- gets assertCount
     if c == 0
-        then do modify (\db -> db { assertCount = 25 })
+        then do modify (\db -> db { assertCount = 50 })
                 assertSets >> assertInProgress >> assertDownloading
                 sizes <- sizeReport
                 debugP sizes
