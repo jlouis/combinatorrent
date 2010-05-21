@@ -40,7 +40,7 @@ data CF = CF { sqIn :: TChan SenderQMsg
              }
 
 data ST = ST { outQueue         :: !(Q.Queue (Either Message (PieceNum, Block)))
-             , bytesTransferred :: !Integer
+             , bytesTransferred :: !Int
              }
 
 instance Logging CF where
