@@ -451,8 +451,8 @@ timerTickStatus nur ndr = {-# SCC "timerTickStatus" #-} do
    liftIO .atomically $ do
        q <- readTVar stv
        writeTVar stv (PStat { pInfoHash = ih
-                            , pUploaded = upCnt
-                            , pDownloaded = downCnt } : q)
+                            , pUploaded = fromIntegral upCnt
+                            , pDownloaded = fromIntegral downCnt } : q)
    modify (\s -> s { upRate = nuRate, downRate = ndRate })
 
 
@@ -474,7 +474,7 @@ unchokeMsg = do
     fillBlocks
 
 -- | Process an Message from the peer in the other end of the socket.
-peerMsg :: Message -> Integer -> Process CF ST ()
+peerMsg :: Message -> Int -> Process CF ST ()
 peerMsg msg sz = do
    modify (\s -> s { downRate = RC.update sz $ downRate s})
    case msg of

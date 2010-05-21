@@ -72,7 +72,7 @@ loopMsg lbs sz l = {-# SCC "loopMsg" #-} do
                 c <- asks rpMsgCh
                 liftIO . atomically $ writeTChan c (FromPeer (msg, fromIntegral l))
                 loopHeader r
-        else do inp <- demandInput (l - sz)
+        else do inp <- demandInput 4096
                 loopMsg (inp : lbs) (sz + fromIntegral (B.length inp)) l
 
 readW32 :: B.ByteString -> Int
