@@ -45,15 +45,16 @@ new t = Rate { rate = 0.0
 
 -- | The call @update n rt@ updates the rate structure @rt@ with @n@ new bytes
 update :: Integer -> Rate -> Rate
-update n rt = rt { bytes = nb, count = nc}
+update n rt = {-# SCC "update" #-}
+        rt { bytes = nb, count = nc}
   where nb = bytes rt + n
         nc = count rt + n
 
 
--- | The call @extractRate t rt@ extracts the current rate from the rate structure and updates the rate
---   structures internal book-keeping
+-- | The call @extractRate t rt@ extracts the current rate from the rate
+-- structure and updates the rate structures internal book-keeping
 extractRate :: UTCTime -> Rate -> (Double, Rate)
-extractRate t rt =
+extractRate t rt = {-# SCC "extractRate" #-}
   let oldWindow :: Double
       oldWindow = realToFrac $ diffUTCTime (lastExt rt) (rateSince rt)
       newWindow :: Double
@@ -77,6 +78,6 @@ extractRate t rt =
 
 -- | The call @extractCount rt@ extract the bytes transferred since last extraction
 extractCount :: Rate -> (Integer, Rate)
-extractCount rt = (crt, rt { count = 0 })
+extractCount rt = {-# SCC "extractCount" #-} (crt, rt { count = 0 })
   where crt = count rt
 
