@@ -1,5 +1,5 @@
 -- | Peer proceeses
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
 module Process.Peer (
     -- * Interface
       Process.Peer.start
