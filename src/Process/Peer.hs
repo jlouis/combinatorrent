@@ -407,11 +407,16 @@ isSnubbed = do
 -- stuff.
 timerTick :: Process CF ST ()
 timerTick = do
-   mTid <- liftIO myThreadId
    checkKeepAlive
    inC <- asks inCh
    _ <- registerSTM 5 inC TimerTick
-   -- Tell the ChokeMgr about our progress
+   (nur, ndr) <- timerTickChokeMgr
+   timerTickStatus nur ndr
+
+-- Tell the ChokeMgr about our progress
+timerTickChokeMgr :: Process CF ST (Rate, Rate)
+timerTickChokeMgr = {-# SCC "timerTickChokeMgr" #-} do
+   mTid <- liftIO myThreadId
    ur <- gets upRate
    dr <- gets downRate
    t <- liftIO $ getCurrentTime
@@ -423,16 +428,22 @@ timerTick = do
    snub <- isSnubbed
    pchoke <- gets peerChoke
    rtv <- asks rateTV
+   let peerInfo = (mTid, ChokeMgr.PRI {
+                   ChokeMgr.peerUpRate = up,
+                   ChokeMgr.peerDownRate = down,
+                   ChokeMgr.peerInterested = i,
+                   ChokeMgr.peerSeeding = seed,
+                   ChokeMgr.peerSnubs = snub,
+                   ChokeMgr.peerChokingUs = pchoke })
    liftIO . atomically $ do
        q <- readTVar rtv
-       writeTVar rtv ((mTid, ChokeMgr.PRI {
-                                   ChokeMgr.peerUpRate = up,
-                                   ChokeMgr.peerDownRate = down,
-                                   ChokeMgr.peerInterested = i,
-                                   ChokeMgr.peerSeeding = seed,
-                                   ChokeMgr.peerSnubs = snub,
-                                   ChokeMgr.peerChokingUs = pchoke }) : q)
-   -- Tell the Status Process about our progress
+       writeTVar rtv (peerInfo : q)
+   return (nur, ndr)
+
+
+-- Tell the Status Process about our progress
+timerTickStatus :: RC.Rate -> RC.Rate -> Process CF ST ()
+timerTickStatus nur ndr = {-# SCC "timerTickStatus" #-} do
    let (upCnt, nuRate) = RC.extractCount $ nur
        (downCnt, ndRate) = RC.extractCount $ ndr
    stv <- asks statTV
