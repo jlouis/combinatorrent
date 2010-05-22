@@ -88,7 +88,6 @@ data CF = CF { inCh :: TChan MsgTy
              , pcInfoHash :: InfoHash
              , pieceMap :: !PieceMap
              , piecesDoneTV :: TMVar [PieceNum]
-             , interestTV :: TMVar Bool
              , haveTV :: TMVar [PieceNum]
              , grabBlockTV :: TMVar Blocks
              , extConf :: ExtensionConfig
@@ -262,13 +261,12 @@ peerP :: [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgrChannel ->
 peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     ct <- getCurrentTime
     pdtmv <- newEmptyTMVarIO
-    intmv <- newEmptyTMVarIO
     havetv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
     let cs = configCapabilities caps
     spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
-                    pdtmv intmv havetv gbtmv cs)
+                    pdtmv havetv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces
                     (RC.new ct) (RC.new ct) False 0 0 S.empty)
                        ({-# SCC "PeerControl" #-}
@@ -326,6 +324,32 @@ getPiecesDone = do
     msgPieceMgr (GetDone c)
     liftIO $ do atomically $ takeTMVar c
 
+trackInterestRemove :: PieceNum -> Process CF ST ()
+trackInterestRemove pn = do
+    im <- gets interestingPieces
+    let !ns = S.delete pn im
+    if S.null ns
+        then do modify (\db -> db { interestingPieces = S.empty,
+                                    weInterested = False })
+                debugP "We are not interested"
+                outChan $ SenderQ.SenderQM NotInterested
+        else modify (\db -> db { interestingPieces = ns })
+
+trackInterestAdd :: [PieceNum] -> Process CF ST ()
+trackInterestAdd pns = do
+    c <- asks haveTV
+    msgPieceMgr (PeerHave pns c)
+    interesting <- liftIO . atomically $ takeTMVar c
+    set <- gets interestingPieces
+    let !ns = upd interesting set
+    if S.null ns
+        then modify (\db -> db { interestingPieces = S.empty })
+        else do modify (\db -> db { interestingPieces = ns,
+                                    weInterested = True })
+                debugP "We are interested"
+                outChan $ SenderQ.SenderQM Interested
+  where upd is set = foldl (flip S.insert) set is
+
 -- | Process an event from the Choke Manager
 chokeMgrMsg :: PeerChokeMsg -> Process CF ST ()
 chokeMgrMsg msg = do
@@ -333,7 +357,7 @@ chokeMgrMsg msg = do
        PieceCompleted pn -> do
             debugP "Telling about Piece Completion"
             outChan $ SenderQ.SenderQM $ Have pn
-            considerInterest
+            trackInterestRemove pn
        ChokePeer -> do choking <- gets weChoke
                        when (not choking)
                             (do t <- liftIO myThreadId
@@ -503,13 +527,6 @@ putbackBlocks = do
     msgPieceMgr (PutbackBlocks (S.toList blks))
     modify (\s -> s { blockQueue = S.empty })
 
-trackHave :: [PieceNum] -> Process CF ST ()
-trackHave pns = do
-    c <- asks haveTV
-    msgPieceMgr (PeerHave pns c)
-    interesting <- liftIO . atomically $ takeTMVar c
-    modify (\db -> db { interestingPieces = upd interesting (interestingPieces db)})
-  where upd is set = foldl (flip S.insert) set is
 
 -- | Process a HAVE message from the peer. Note we also update interest as a side effect
 haveMsg :: PieceNum -> Process CF ST ()
@@ -519,9 +536,8 @@ haveMsg pn = do
     if pn >= lo && pn <= hi
         then do PS.insert pn =<< gets peerPieces
                 debugP $ "Peer has pn: " ++ show pn
-                trackHave [pn]
+                trackInterestAdd [pn]
                 decMissingCounter 1
-                considerInterest
                 fillBlocks
         else do warningP "Unknown Piece"
                 stopP
@@ -555,9 +571,8 @@ bitfieldMsg bf = do
                 pp <- createPeerPieces nPieces bf
                 modify (\s -> s { peerPieces = pp })
                 peerLs <- PS.toList pp
-                trackHave peerLs
+                trackInterestAdd peerLs
                 decMissingCounter (length peerLs)
-                considerInterest
         else do infoP "Got out of band Bitfield request, dying"
                 stopP
 
@@ -570,9 +585,8 @@ haveAllNoneMsg ty a = do
                 pp <- createAllPieces nPieces a
                 modify (\s -> s { peerPieces = pp})
                 peerLs <- PS.toList pp
-                trackHave peerLs
+                trackInterestAdd peerLs
                 decMissingCounter (length peerLs)
-                considerInterest
         else do infoP $ "Got out of band " ++ ty ++ " request, dying"
                 stopP
 
@@ -642,26 +656,6 @@ rejectMsg pn blk = do
 -- | Handle a cancel message from the peer
 cancelMsg :: PieceNum -> Block -> Process CF ST ()
 cancelMsg n blk = outChan $ SenderQ.SenderQCancel n blk
-
--- | Update our interest state based on the pieces the peer has.
---   Obvious optimization: Do less work, there is no need to consider all pieces most of the time
-considerInterest :: Process CF ST ()
-considerInterest = do
-    c <- asks interestTV
-    pcs <- gets peerPieces
-    msgPieceMgr (AskInterested pcs c)
-    interested <- liftIO $ do atomically $ takeTMVar c
-    if interested
-        then do oldI <- gets weInterested
-                when (interested /= oldI)
-                    (do modify (\s -> s { weInterested = True })
-                        debugP "We are interested"
-                        outChan $ SenderQ.SenderQM Interested)
-        else do oldI <- gets weInterested
-                when (interested /= oldI)
-                    (do modify (\s -> s { weInterested = False})
-                        debugP "We are not interested"
-                        outChan $ SenderQ.SenderQM NotInterested)
 
 -- | Try to fill up the block queue at the peer. The reason we pipeline a
 -- number of blocks is to get around the line delay present on the internet.
