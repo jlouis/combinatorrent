@@ -103,8 +103,6 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | AskInterested PS.PieceSet (TMVar Bool)
-                   -- ^ Ask if any of these pieces are interesting
                  | GetDone (TMVar [PieceNum])
                    -- ^ Get the pieces which are already done
                  | PeerHave [PieceNum] (TMVar [PieceNum])
@@ -116,7 +114,6 @@ instance Show PieceMgrMsg where
     show (GrabBlocks x _ _) = "GrabBlocks " ++ show x
     show (StoreBlock pn blk _) = "StoreBlock " ++ show pn ++ " " ++ show blk
     show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
-    show (AskInterested _ _)   = "AskInterested"
     show (GetDone _)           = "GetDone"
     show (PeerHave xs _)       = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
@@ -185,9 +182,6 @@ rpcMessage = do
          liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
       PeerHave idxs c -> peerHave idxs c
       PeerUnhave idxs -> peerUnhave idxs
-      AskInterested pieces retC -> {-# SCC "AskInterested" #-} do
-         intr <- askInterested pieces
-         liftIO . atomically $ do putTMVar retC intr -- And this neither too!
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock pn blk d = {-# SCC "storeBlock" #-} do
@@ -224,17 +218,6 @@ pieceDone pn = {-# SCC "pieceDone" #-} do
                       markDone pn
                       checkFullCompletion
       Just False -> putbackPiece pn
-
-askInterested :: PS.PieceSet -> Process CF ST Bool
-askInterested pieces = do
-    amongProg <- gets inProgress >>=
-                    anyM (flip PS.member pieces) . M.keys
-    if amongProg
-        then return True
-        else do
-            pend   <- gets pendingPieces
-            intsct <- PS.intersects pieces pend
-            return intsct
 
 peerHave :: [PieceNum] -> TMVar [PieceNum] -> Process CF ST ()
 peerHave idxs tmv = do
