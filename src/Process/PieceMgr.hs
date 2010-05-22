@@ -107,7 +107,7 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask if any of these pieces are interesting
                  | GetDone (TMVar [PieceNum])
                    -- ^ Get the pieces which are already done
-                 | PeerHave [PieceNum]
+                 | PeerHave [PieceNum] (TMVar [PieceNum])
                    -- ^ A peer has the given piece(s)
                  | PeerUnhave [PieceNum]
                    -- ^ A peer relinquished the given piece Indexes
@@ -118,7 +118,7 @@ instance Show PieceMgrMsg where
     show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
     show (AskInterested _ _)   = "AskInterested"
     show (GetDone _)           = "GetDone"
-    show (PeerHave xs)         = "PeerHave " ++ show xs
+    show (PeerHave xs _)       = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
 
 type PieceMgrChannel = TChan PieceMgrMsg
@@ -183,7 +183,7 @@ rpcMessage = do
       GetDone c -> {-# SCC "GetDone" #-} do
          done <- PS.toList =<< gets donePiece
          liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
-      PeerHave idxs -> peerHave idxs
+      PeerHave idxs c -> peerHave idxs c
       PeerUnhave idxs -> peerUnhave idxs
       AskInterested pieces retC -> {-# SCC "AskInterested" #-} do
          intr <- askInterested pieces
@@ -236,8 +236,19 @@ askInterested pieces = do
             intsct <- PS.intersects pieces pend
             return intsct
 
-peerHave :: [PieceNum] -> Process CF ST ()
-peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+peerHave :: [PieceNum] -> TMVar [PieceNum] -> Process CF ST ()
+peerHave idxs tmv = do
+    ps <- gets pendingPieces
+    inp <- gets inProgress
+    interesting <- filterM (mem ps inp) idxs
+    liftIO . atomically $ putTMVar tmv interesting
+    modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+  where mem ps inp p = do
+            q <- PS.member p ps
+            if q
+                then return True
+                else return $ M.member p inp
+
 
 peerUnhave :: [PieceNum] -> Process CF ST ()
 peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})

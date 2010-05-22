@@ -89,6 +89,7 @@ data CF = CF { inCh :: TChan MsgTy
              , pieceMap :: !PieceMap
              , piecesDoneTV :: TMVar [PieceNum]
              , interestTV :: TMVar Bool
+             , haveTV :: TMVar [PieceNum]
              , grabBlockTV :: TMVar Blocks
              , extConf :: ExtensionConfig
              }
@@ -261,11 +262,12 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     ct <- getCurrentTime
     pdtmv <- newEmptyTMVarIO
     intmv <- newEmptyTMVarIO
+    havetv <- newEmptyTMVarIO
     gbtmv <- newEmptyTMVarIO
     pieceSet <- PS.new nPieces
     let cs = configCapabilities caps
     spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
-                    pdtmv intmv gbtmv cs)
+                    pdtmv intmv havetv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces
                     (RC.new ct) (RC.new ct) False 0 0)
                        ({-# SCC "PeerControl" #-}
@@ -504,11 +506,13 @@ putbackBlocks = do
 haveMsg :: PieceNum -> Process CF ST ()
 haveMsg pn = do
     pm <- asks pieceMap
+    c <- asks haveTV
     let (lo, hi) = bounds pm
     if pn >= lo && pn <= hi
         then do PS.insert pn =<< gets peerPieces
                 debugP $ "Peer has pn: " ++ show pn
-                msgPieceMgr (PeerHave [pn])
+                msgPieceMgr (PeerHave [pn] c)
+                _ <- liftIO . atomically $ takeTMVar c
                 decMissingCounter 1
                 considerInterest
                 fillBlocks
@@ -544,7 +548,9 @@ bitfieldMsg bf = do
                 pp <- createPeerPieces nPieces bf
                 modify (\s -> s { peerPieces = pp })
                 peerLs <- PS.toList pp
-                msgPieceMgr (PeerHave peerLs)
+                c <- asks haveTV
+                msgPieceMgr (PeerHave peerLs c)
+                _ <- liftIO . atomically $ takeTMVar c
                 decMissingCounter (length peerLs)
                 considerInterest
         else do infoP "Got out of band Bitfield request, dying"
@@ -559,7 +565,9 @@ haveAllNoneMsg ty a = do
                 pp <- createAllPieces nPieces a
                 modify (\s -> s { peerPieces = pp})
                 peerLs <- PS.toList pp
-                msgPieceMgr (PeerHave peerLs)
+                c <- asks haveTV
+                msgPieceMgr (PeerHave peerLs c)
+                _ <- liftIO . atomically $ readTMVar c
                 decMissingCounter (length peerLs)
                 considerInterest
         else do infoP $ "Got out of band " ++ ty ++ " request, dying"
