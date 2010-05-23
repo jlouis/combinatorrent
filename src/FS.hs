@@ -111,15 +111,17 @@ writeBlock handles n blk pm blkData =
     {-# SCC "writeBlock" #-}
     do when lenFail $ fail "Writing block of wrong length"
        pInfo <- pInfoLookup n pm
-       foldM_ (\blkData' (h, offs, size) ->
+       foldM_ (\content (h, offs, size) ->
                    do let size' = fromInteger size
+                          (toStore, rest) = B.splitAt size' content
                       hSeek h AbsoluteSeek offs
-                      B.hPut h $ B.take size' blkData'
+                      B.hPut h $ toStore
                       hFlush h
-                      return $ B.drop size' blkData'
-              ) blkData (projectHandles handles (position pInfo) (fromIntegral $ B.length blkData))
+                      return rest
+              ) blkData (projection (position pInfo) (fromIntegral $ B.length blkData))
        return ()
   where
+    projection = {-# SCC "projectHandles" #-} projectHandles handles
     position :: PieceInfo -> Integer
     position pinfo = (offset pinfo) + fromIntegral (blockOffset blk)
     lenFail = B.length blkData /= blockSize blk
