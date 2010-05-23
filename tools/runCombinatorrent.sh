@@ -13,7 +13,7 @@ POSTPROC=${basedir}/postproc.hs
 DBFILE=${basedir}/stat_db.txt
 STATDIR='/tmp/combinatorrent'
 
-RTSOPTS="+RTS -t${STATDIR}/Combinatorrent.rts_stat --machine-readable -RTS"
+RTSOPTS="+RTS -A3m -t${STATDIR}/Combinatorrent.rts_stat --machine-readable -RTS"
 STATOPTS="-S ${STATDIR}/Combinatorrent.stat"
 
 ct () {
