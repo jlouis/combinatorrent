@@ -2,6 +2,7 @@ module Data.PendingSet
     ( PendingSet
     , Data.PendingSet.empty
     , Data.PendingSet.size
+    , remove
     , have
     , unhave
     , haves
@@ -33,9 +34,13 @@ have pn = PendingSet . alter f pn . unPS
 -- | A Peer does not have a given piece anymore (TODO: Not used in practice)
 unhave :: PieceNum -> PendingSet -> PendingSet
 unhave pn = PendingSet . alter f pn . unPS
-  where f Nothing  =  error "Data.PendingSet.unhave"
+  where f Nothing  =  Nothing
         f (Just 1) = Nothing
         f (Just x) = Just (x-1)
+
+-- | Remove a piece from the histogram. Used when it completes
+remove :: PieceNum -> PendingSet -> PendingSet
+remove pn = PendingSet . delete pn . unPS
 
 -- | Add all pieces in a bitfield
 haves :: [PieceNum] -> PendingSet -> PendingSet
