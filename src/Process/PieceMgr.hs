@@ -39,6 +39,21 @@ import Process
 
 ----------------------------------------------------------------------
 
+-- | The state of a piece. It is either Pending, Done or in Progress.
+-- | The InProgress constructor describes pieces in progress of being downloaded.
+--   we keep track of blocks which are pending as well as blocks which are done. We
+--   also keep track of a count of the blocks. When a block is done, we cons it unto
+--   @ipHaveBlocks@. When @ipHave == ipDone@, we check the piece for correctness. The
+--   field @ipHaveBlocks@ could in principle be omitted, but for now it is kept since
+--   we can use it for asserting implementation correctness. We note that both the
+--   check operations are then O(1) and probably fairly fast.
+data PieceSt = Pending
+             | Done
+             | InProgress { ipDone  :: Int -- ^ Number of blocks when piece is done
+                          , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
+                          , ipPendingBlocks :: [Block] -- ^ Blocks still pending
+                          } deriving Show
+
 -- | The Piece Database tracks the current state of the Torrent with respect to pieces.
 --   In the database, we book-keep what pieces are missing, what are done and what are
 --   currently in the process of being downloaded. The crucial moment is when we think
@@ -48,10 +63,8 @@ import Process
 --   Better implementations for selecting among the pending Pieces is probably crucial
 --   to an effective client, but we keep it simple for now.
 data ST = ST
-    { pendingPieces :: !PS.PieceSet -- ^ Pieces currently pending download
-    , donePiece     :: !PS.PieceSet -- ^ Pieces that are done
-    , donePush      :: ![ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
-    , inProgress    :: !(M.Map PieceNum InProgressPiece) -- ^ Pieces in progress
+    { donePush      :: ![ChokeMgrMsg] -- ^ Pieces that should be pushed to the Choke Mgr.
+    , pieces    :: !(M.Map PieceNum PieceSt) -- ^ Pieces in progress
     , downloading   :: !(S.Set (PieceNum, Block)) -- ^ Blocks we are currently downloading
     , infoMap       :: !PieceMap   -- ^ Information about pieces
     , endGaming     :: !Bool       -- ^ If we have done any endgame work this is true
@@ -72,19 +85,6 @@ sizeReport = do
          , ("InProgress", M.size progress)
          , ("Downloading", S.size down)
          , ("Histo", PendS.size histo) ]
-
--- | The InProgressPiece data type describes pieces in progress of being downloaded.
---   we keep track of blocks which are pending as well as blocks which are done. We
---   also keep track of a count of the blocks. When a block is done, we cons it unto
---   @ipHaveBlocks@. When @ipHave == ipDone@, we check the piece for correctness. The
---   field @ipHaveBlocks@ could in principle be omitted, but for now it is kept since
---   we can use it for asserting implementation correctness. We note that both the
---   check operations are then O(1) and probably fairly fast.
-data InProgressPiece = InProgressPiece
-    { ipDone  :: Int -- ^ Number of blocks when piece is done
-    , ipHaveBlocks :: S.Set Block -- ^ The blocks we have
-    , ipPendingBlocks :: [Block] -- ^ Blocks still pending
-    } deriving Show
 
 -- INTERFACE
 ----------------------------------------------------------------------
@@ -181,7 +181,7 @@ rpcMessage = do
       PutbackBlocks blks -> {-# SCC "PutbackBlocks" #-}
           mapM_ putbackBlock blks
       GetDone c -> {-# SCC "GetDone" #-} do
-         done <- PS.toList =<< gets donePiece
+         done <- M.keys . M.filter (==Pending) <$> gets pieces
          liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
       PeerHave idxs -> peerHave idxs
       PeerUnhave idxs -> peerUnhave idxs
@@ -205,13 +205,6 @@ storeBlock pn blk d = {-# SCC "storeBlock" #-} do
 pieceDone :: PieceNum -> Process CF ST ()
 pieceDone pn = {-# SCC "pieceDone" #-} do
     assertPieceComplete pn
-    pend <- gets pendingPieces
-    iprog <- gets inProgress
-    pendSz <- PS.size pend
-    infoP $ "Piece #" ++ show pn
-              ++ " completed, there are "
-              ++ (show pendSz) ++ " pending "
-              ++ (show $ M.size iprog) ++ " in progress"
     l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
     ih <- asks pMgrInfoHash
     c <- asks statusCh
