@@ -12,7 +12,7 @@ import Control.Monad.State
 import qualified Data.ByteString as B
 import Prelude hiding (catch, log)
 
-import qualified Data.Attoparsec as A
+import Data.Serialize.Get
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
@@ -85,14 +85,8 @@ readW32 lbs = {-# SCC "readW32" #-}
     in (b4' + (256 * b3') + (256 * 256 * b2') + (256 * 256 * 256 * b1'))
 
 parseMsg :: Int -> B.ByteString -> Process CF Socket Message
-parseMsg l u = {-# SCC "parseMsg" #-}
-    case A.parse (getAPMsg l) u of
-        A.Done r msg -> assert (B.null r) (return msg)
-        A.Fail _ ctx err ->
-            do warningP $ "Incorrect parse in receiver, context: "
-                                ++ show ctx ++ ", " ++ show err
-               stopP
-        A.Partial _k ->
-            do errorP "Can't happen, impossible"
-               stopP
-
+parseMsg _l u = {-# SCC "parseMsg" #-}
+    case runGet decodeMsg u of
+        Left err -> do warningP $ "Incorrect parse in receiver, context: " ++ show err
+                       stopP
+        Right msg -> return msg
