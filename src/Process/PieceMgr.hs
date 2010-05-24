@@ -225,7 +225,9 @@ peerHave idxs tmv = do
     inp <- gets inProgress
     interesting <- filterM (mem ps inp) idxs
     liftIO . atomically $ putTMVar tmv interesting
-    modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+    if null interesting
+        then return ()
+        else modify (\db -> db { histogram = PendS.haves interesting (histogram db)})
   where mem ps inp p = do
             q <- PS.member p ps
             if q
@@ -234,7 +236,8 @@ peerHave idxs tmv = do
 
 
 peerUnhave :: [PieceNum] -> Process CF ST ()
-peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
+peerUnhave idxs =
+    modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
 
 endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
 endgameBroadcast pn blk = {-# SCC "endgameBroadCast" #-} do
@@ -275,7 +278,8 @@ createPieceDb mmap pmap = do
 completePiece :: PieceNum -> PieceMgrProcess ()
 completePiece pn = do
     PS.insert pn =<< gets donePiece
-    modify (\db -> db { inProgress = M.delete pn (inProgress db) })
+    modify (\db -> db { inProgress = M.delete pn (inProgress db),
+                        histogram  = PendS.remove pn (histogram db )})
 
 -- | Handle torrent completion
 checkFullCompletion :: PieceMgrProcess ()
