@@ -103,11 +103,9 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | AskInterested PS.PieceSet (TMVar Bool)
-                   -- ^ Ask if any of these pieces are interesting
                  | GetDone (TMVar [PieceNum])
                    -- ^ Get the pieces which are already done
-                 | PeerHave [PieceNum]
+                 | PeerHave [PieceNum] (TMVar [PieceNum])
                    -- ^ A peer has the given piece(s)
                  | PeerUnhave [PieceNum]
                    -- ^ A peer relinquished the given piece Indexes
@@ -116,9 +114,8 @@ instance Show PieceMgrMsg where
     show (GrabBlocks x _ _) = "GrabBlocks " ++ show x
     show (StoreBlock pn blk _) = "StoreBlock " ++ show pn ++ " " ++ show blk
     show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
-    show (AskInterested _ _)   = "AskInterested"
     show (GetDone _)           = "GetDone"
-    show (PeerHave xs)         = "PeerHave " ++ show xs
+    show (PeerHave xs _)       = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
 
 type PieceMgrChannel = TChan PieceMgrMsg
@@ -183,11 +180,8 @@ rpcMessage = do
       GetDone c -> {-# SCC "GetDone" #-} do
          done <- M.keys . M.filter (==Pending) <$> gets pieces
          liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
-      PeerHave idxs -> peerHave idxs
+      PeerHave idxs c -> peerHave idxs c
       PeerUnhave idxs -> peerUnhave idxs
-      AskInterested pieces retC -> {-# SCC "AskInterested" #-} do
-         intr <- askInterested pieces
-         liftIO . atomically $ do putTMVar retC intr -- And this neither too!
 
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
 storeBlock pn blk d = {-# SCC "storeBlock" #-} do
@@ -218,19 +212,19 @@ pieceDone pn = {-# SCC "pieceDone" #-} do
                       checkFullCompletion
       Just False -> putbackPiece pn
 
-askInterested :: PS.PieceSet -> Process CF ST Bool
-askInterested pieces = do
-    amongProg <- gets inProgress >>=
-                    anyM (flip PS.member pieces) . M.keys
-    if amongProg
-        then return True
-        else do
-            pend   <- gets pendingPieces
-            intsct <- PS.intersects pieces pend
-            return intsct
+peerHave :: [PieceNum] -> TMVar [PieceNum] -> Process CF ST ()
+peerHave idxs tmv = do
+    ps <- gets pendingPieces
+    inp <- gets inProgress
+    interesting <- filterM (mem ps inp) idxs
+    liftIO . atomically $ putTMVar tmv interesting
+    modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
+  where mem ps inp p = do
+            q <- PS.member p ps
+            if q
+                then return True
+                else return $ M.member p inp
 
-peerHave :: [PieceNum] -> Process CF ST ()
-peerHave idxs = modify (\db -> db { histogram = PendS.haves idxs (histogram db)})
 
 peerUnhave :: [PieceNum] -> Process CF ST ()
 peerUnhave idxs = modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
