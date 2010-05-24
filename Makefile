@@ -11,6 +11,12 @@ test: build
 conf:
 	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 
+conf-t:
+	runghc Setup.lhs configure --flags="debug threaded" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
+
+conf-fast:
+	runghc Setup.lhs configure --flags="threaded" --user --enable-library-profiling --enable-optimization
+
 conf-hpc:
 	runghc Setup.lhs configure --ghc-options=-fhpc --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 
