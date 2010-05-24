@@ -23,8 +23,8 @@ import Torrent
 
 data Peer = Peer SockAddr
 
-data MsgTy = FromPeer (Message, Integer)
-           | FromSenderQ Integer -- Always UpRate events
+data MsgTy = FromPeer (Message, Int)
+           | FromSenderQ Int -- Always UpRate events
            | FromChokeMgr PeerChokeMsg
            | TimerTick
 

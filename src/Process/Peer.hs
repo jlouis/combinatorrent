@@ -1,5 +1,5 @@
 -- | Peer proceeses
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
 module Process.Peer (
     -- * Interface
       Process.Peer.start
@@ -308,12 +308,13 @@ eventLoop :: Process CF ST ()
 eventLoop = do
     ty <- readInCh
     case ty of
-        FromPeer (msg, sz) -> peerMsg msg sz
-        TimerTick       -> timerTick
-        FromSenderQ l   -> (do s <- get
+        FromPeer (msg, sz) -> {-# SCC "peerMsg" #-} peerMsg msg sz
+        TimerTick       -> {-# SCC "timerTick" #-} timerTick
+        FromSenderQ l   -> {-# SCC "fromSender" #-}
+                           (do s <- get
                                let !u = RC.update l $ upRate s
                                put $! s { upRate = u})
-        FromChokeMgr m  -> chokeMgrMsg m
+        FromChokeMgr m  -> {-# SCC "chokeMgrMsg" #-} chokeMgrMsg m
     eventLoop
 
 -- | Return a list of pieces which are currently done by us
@@ -406,11 +407,16 @@ isSnubbed = do
 -- stuff.
 timerTick :: Process CF ST ()
 timerTick = do
-   mTid <- liftIO myThreadId
    checkKeepAlive
    inC <- asks inCh
    _ <- registerSTM 5 inC TimerTick
-   -- Tell the ChokeMgr about our progress
+   (nur, ndr) <- timerTickChokeMgr
+   timerTickStatus nur ndr
+
+-- Tell the ChokeMgr about our progress
+timerTickChokeMgr :: Process CF ST (Rate, Rate)
+timerTickChokeMgr = {-# SCC "timerTickChokeMgr" #-} do
+   mTid <- liftIO myThreadId
    ur <- gets upRate
    dr <- gets downRate
    t <- liftIO $ getCurrentTime
@@ -422,16 +428,22 @@ timerTick = do
    snub <- isSnubbed
    pchoke <- gets peerChoke
    rtv <- asks rateTV
+   let peerInfo = (mTid, ChokeMgr.PRI {
+                   ChokeMgr.peerUpRate = up,
+                   ChokeMgr.peerDownRate = down,
+                   ChokeMgr.peerInterested = i,
+                   ChokeMgr.peerSeeding = seed,
+                   ChokeMgr.peerSnubs = snub,
+                   ChokeMgr.peerChokingUs = pchoke })
    liftIO . atomically $ do
        q <- readTVar rtv
-       writeTVar rtv ((mTid, ChokeMgr.PRI {
-                                   ChokeMgr.peerUpRate = up,
-                                   ChokeMgr.peerDownRate = down,
-                                   ChokeMgr.peerInterested = i,
-                                   ChokeMgr.peerSeeding = seed,
-                                   ChokeMgr.peerSnubs = snub,
-                                   ChokeMgr.peerChokingUs = pchoke }) : q)
-   -- Tell the Status Process about our progress
+       writeTVar rtv (peerInfo : q)
+   return (nur, ndr)
+
+
+-- Tell the Status Process about our progress
+timerTickStatus :: RC.Rate -> RC.Rate -> Process CF ST ()
+timerTickStatus nur ndr = {-# SCC "timerTickStatus" #-} do
    let (upCnt, nuRate) = RC.extractCount $ nur
        (downCnt, ndRate) = RC.extractCount $ ndr
    stv <- asks statTV
@@ -439,8 +451,8 @@ timerTick = do
    liftIO .atomically $ do
        q <- readTVar stv
        writeTVar stv (PStat { pInfoHash = ih
-                            , pUploaded = upCnt
-                            , pDownloaded = downCnt } : q)
+                            , pUploaded = fromIntegral upCnt
+                            , pDownloaded = fromIntegral downCnt } : q)
    modify (\s -> s { upRate = nuRate, downRate = ndRate })
 
 
@@ -462,7 +474,7 @@ unchokeMsg = do
     fillBlocks
 
 -- | Process an Message from the peer in the other end of the socket.
-peerMsg :: Message -> Integer -> Process CF ST ()
+peerMsg :: Message -> Int -> Process CF ST ()
 peerMsg msg sz = do
    modify (\s -> s { downRate = RC.update sz $ downRate s})
    case msg of

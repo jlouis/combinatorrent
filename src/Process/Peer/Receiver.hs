@@ -10,13 +10,12 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Prelude hiding (catch, log)
 
 import qualified Data.Attoparsec as A
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
-import Network.Socket.ByteString.Lazy
+import Network.Socket.ByteString
 
 import Channels
 import Process
@@ -29,11 +28,11 @@ data CF = CF { rpMsgCh :: TChan MsgTy }
 instance Logging CF where
     logName _ = "Process.Peer.Receiver"
 
-demandInput :: Int -> Process CF Socket L.ByteString
+demandInput :: Int -> Process CF Socket B.ByteString
 demandInput l = {-# SCC "demandInput" #-} do
     s <- get
     bs <- liftIO $ recv s (fromIntegral l)
-    when (L.null bs) stopP
+    when (B.null bs) stopP
     return bs
 
 start :: Socket -> TChan MsgTy -> SupervisorChannel -> IO ThreadId
@@ -48,43 +47,46 @@ readSend = do
     loopHeader bs
 
 
-loopHeader :: L.ByteString -> Process CF Socket ()
+loopHeader :: B.ByteString -> Process CF Socket ()
 loopHeader bs = {-# SCC "loopHeader" #-}
-    let bsl = L.length bs
+    let bsl = B.length bs
     in if bsl >= 4
-         then let (l, r) = L.splitAt 4 bs
+         then let (l, r) = B.splitAt 4 bs
                   ll = readW32 l
               in if ll == 0
                     then loopHeader r -- KeepAlive
-                    else loopMsg r (readW32 l)
+                    else loopMsg [r] (fromIntegral (B.length r)) (readW32 l)
          else do
             inp <- demandInput 2048
-            loopHeader (L.concat [bs, inp]) -- We bet on this get called rarely
+            loopHeader (B.concat [bs, inp]) -- We bet on this get called rarely
 
-loopMsg :: L.ByteString -> Int -> Process CF Socket ()
-loopMsg lbs l = {-# SCC "loopMsg" #-} do
-    let bs_l = fromIntegral $ L.length lbs
-    if bs_l >= l
-        then do let (u, r) = L.splitAt (fromIntegral l) lbs
-                msg <- assert (L.length u == fromIntegral l) parseMsg l u
+loopMsg :: [B.ByteString] -> Int -> Int -> Process CF Socket ()
+loopMsg lbs sz l = {-# SCC "loopMsg" #-} do
+    if sz >= l
+        then do let (u, r) =
+                     B.splitAt (fromIntegral l)
+                                (case lbs of
+                                    [x] -> x
+                                    rest -> (B.concat $ reverse rest))
+                msg <- assert (B.length u == fromIntegral l) parseMsg l u
                 c <- asks rpMsgCh
                 liftIO . atomically $ writeTChan c (FromPeer (msg, fromIntegral l))
                 loopHeader r
-        else do inp <- demandInput (l - bs_l)
-                loopMsg (L.concat [lbs, inp]) l
+        else do inp <- demandInput 4096
+                loopMsg (inp : lbs) (sz + fromIntegral (B.length inp)) l
 
-readW32 :: L.ByteString -> Int
+readW32 :: B.ByteString -> Int
 readW32 lbs = {-# SCC "readW32" #-}
-    let [b1,b2,b3,b4] = L.unpack lbs
+    let [b1,b2,b3,b4] = B.unpack lbs
         b1' = fromIntegral b1
         b2' = fromIntegral b2
         b3' = fromIntegral b3
         b4' = fromIntegral b4
     in (b4' + (256 * b3') + (256 * 256 * b2') + (256 * 256 * 256 * b1'))
 
-parseMsg :: Int -> L.ByteString -> Process CF Socket Message
+parseMsg :: Int -> B.ByteString -> Process CF Socket Message
 parseMsg l u = {-# SCC "parseMsg" #-}
-    case A.parse (getAPMsg l) (B.concat $ L.toChunks u) of
+    case A.parse (getAPMsg l) u of
         A.Done r msg -> assert (B.null r) (return msg)
         A.Fail _ ctx err ->
             do warningP $ "Incorrect parse in receiver, context: "
