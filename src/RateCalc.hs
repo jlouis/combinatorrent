@@ -1,4 +1,5 @@
 -- | Rate calculation.
+{-# LANGUAGE BangPatterns #-}
 module RateCalc (
     -- * Types
       Rate
