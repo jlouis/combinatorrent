@@ -90,7 +90,7 @@ data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
+data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks) PieceNum
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
@@ -104,7 +104,7 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ A peer relinquished the given piece Indexes
 
 instance Show PieceMgrMsg where
-    show (GrabBlocks x _ _) = "GrabBlocks " ++ show x
+    show (GrabBlocks x _ _ _) = "GrabBlocks " ++ show x
     show (StoreBlock pn blk _) = "StoreBlock " ++ show pn ++ " " ++ show blk
     show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
     show (GetDone _)           = "GetDone"
@@ -163,8 +163,8 @@ rpcMessage = do
     m <- {-# SCC "Channel_Read" #-} liftIO . atomically $ readTChan ch
     traceMsg m
     case m of
-      GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
-          do blocks <- grabBlocks n eligible
+      GrabBlocks n eligible c lastpn -> {-# SCC "GrabBlocks" #-}
+          do blocks <- grabBlocks n eligible lastpn
              liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
       StoreBlock pn blk d ->
           storeBlock pn blk d
@@ -368,8 +368,8 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 -- | The call @grabBlocks n eligible@ tries to pick off up to @n@ pieces from
 --   to download. In doing so, it will only consider pieces in @eligible@. It
 --   returns a list of Blocks which where grabbed.
-grabBlocks :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
-grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
+grabBlocks :: Int -> PS.PieceSet -> PieceNum -> PieceMgrProcess Blocks
+grabBlocks k eligible _ = {-# SCC "grabBlocks" #-} do
     blocks <- tryGrab k eligible
     ps <- gets pieces
     let pendN = M.null $ M.filter (\a -> case a of Pending -> True

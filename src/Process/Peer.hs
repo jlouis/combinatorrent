@@ -108,7 +108,8 @@ data ST = ST { weChoke        :: !Bool -- ^ True if we are choking the peer
              , runningEndgame :: !Bool -- ^ True if we are in endgame
              , lastMsg        :: !Int  -- ^ Ticks from last Message
              , lastPieceMsg   :: !Int  -- ^ Ticks from last Piece Message
-             , interestingPieces :: !(S.Set PieceNum) -- ^ Pieces the peer has we are interested in
+             , interestingPieces :: !(S.Set PieceNum) -- ^ peer pieces we are interested in
+             , lastPn         :: !PieceNum
              }
 
 data ExtensionConfig = ExtensionConfig
@@ -268,7 +269,7 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
                     pdtmv havetv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces
-                    (RC.new ct) (RC.new ct) False 0 0 S.empty)
+                    (RC.new ct) (RC.new ct) False 0 0 S.empty 0)
                        ({-# SCC "PeerControl" #-}
                             cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
@@ -708,6 +709,7 @@ queuePieces :: [(PieceNum, Block)] -> Process CF ST ()
 queuePieces toQueue = do
     s <- get
     let bq = blockQueue s
+    unless (Prelude.null toQueue) $ updateLastPnCache (head toQueue)
     q <- forM toQueue
             (\(p, b) -> do
                 if S.member (p, b) bq
@@ -715,6 +717,9 @@ queuePieces toQueue = do
                     else do outChan $ SenderQ.SenderQM $ Request p b
                             return $ Just (p, b))
     put $! s { blockQueue = S.union bq (S.fromList $ catMaybes q) }
+  where
+    updateLastPnCache (pn, _) =
+        modify (\s -> s { lastPn = pn })
 
 -- | Tell the PieceManager to store the given block
 storeBlock :: PieceNum -> Block -> B.ByteString -> Process CF ST ()
@@ -726,7 +731,8 @@ grabBlocks :: Int -> Process CF ST [(PieceNum, Block)]
 grabBlocks n = do
     c <- asks grabBlockTV
     ps <- gets peerPieces
-    msgPieceMgr (GrabBlocks n ps c)
+    lpn <- gets lastPn
+    msgPieceMgr (GrabBlocks n ps c lpn)
     blks <- liftIO $ do atomically $ takeTMVar c
     case blks of
         Leech bs -> return bs
