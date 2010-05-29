@@ -308,7 +308,7 @@ putbackBlock (pn, blk) = do
 -- | Assert that a Piece is Complete. Can be omitted when we know it works
 --   and we want a faster client.
 assertPieceComplete :: PieceNum -> PieceMgrProcess ()
-assertPieceComplete pn = do
+assertPieceComplete pn = {-# SCC "assertPieceComplete" #-} do
     ps <- gets pieces
     ipp <- case M.lookup pn ps of
                 Nothing -> fail "assertPieceComplete: Could not lookup piece number"
