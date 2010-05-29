@@ -270,8 +270,7 @@ peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
                     pdtmv havetv gbtmv cs)
            (ST True False S.empty True False pieceSet nPieces
                     (RC.new ct) (RC.new ct) False 0 0 S.empty 0)
-                       ({-# SCC "PeerControl" #-}
-                            cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
+                       (cleanupP (startup nPieces) (defaultStopHandler supC) cleanup)
 
 configCapabilities :: [Capabilities] -> ExtensionConfig
 configCapabilities caps =
@@ -310,7 +309,7 @@ eventLoop :: Process CF ST ()
 eventLoop = do
     ty <- readInCh
     case ty of
-        FromPeer (msg, sz) -> {-# SCC "peerMsg" #-} peerMsg msg sz
+        FromPeer (msg, sz) -> peerMsg msg sz
         TimerTick       -> {-# SCC "timerTick" #-} timerTick
         FromSenderQ l   -> {-# SCC "fromSender" #-}
                            (do s <- get
@@ -506,22 +505,24 @@ peerMsg :: Message -> Int -> Process CF ST ()
 peerMsg msg sz = do
    modify (\s -> s { downRate = RC.update sz $ downRate s})
    case msg of
-     KeepAlive  -> return ()
-     Choke      -> asks extConf >>= fromLJ handleChokeMsg
-     Unchoke    -> unchokeMsg
-     Interested -> modify (\s -> s { peerInterested = True })
-     NotInterested -> modify (\s -> s { peerInterested = False })
-     Have pn -> haveMsg pn
-     BitField bf -> bitfieldMsg bf
-     Request pn blk -> do cf <- asks extConf
+     KeepAlive  -> {-# SCC "KeepAlive" #-} return ()
+     Choke      -> {-# SCC "Choke" #-} asks extConf >>= fromLJ handleChokeMsg
+     Unchoke    -> {-# SCC "Unchoke" #-} unchokeMsg
+     Interested -> {-# SCC "Interested" #-} modify (\s -> s { peerInterested = True })
+     NotInterested -> {-# SCC "NotInterested" #-} modify (\s -> s { peerInterested = False })
+     Have pn -> {-# SCC "Have" #-} haveMsg pn
+     BitField bf -> {-# SCC "Bitfield" #-} bitfieldMsg bf
+     Request pn blk -> {-# SCC "Request" #-} do
+                          cf <- asks extConf
                           fromLJ handleRequestMsg cf pn blk
-     Piece n os bs -> do cf <- asks extConf
+     Piece n os bs -> {-# SCC "Piece" #-} do
+                         cf <- asks extConf
                          fromLJ handlePieceMsg cf n os bs
                          modify (\st -> st { lastPieceMsg = 0 })
                          fillBlocks
-     Cancel pn blk -> cancelMsg pn blk
+     Cancel pn blk -> {-# SCC "Cancel" #-} cancelMsg pn blk
      Port _ -> return () -- No DHT yet, silently ignore
-     HaveAll -> fromLJ handleHaveAll =<< asks extConf
+     HaveAll -> {-# SCC "HaveAll" #-} fromLJ handleHaveAll =<< asks extConf
      HaveNone -> fromLJ handleHaveNone =<< asks extConf
      Suggest pn -> do cf <- asks extConf
                       fromLJ handleSuggest cf pn

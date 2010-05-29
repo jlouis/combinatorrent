@@ -84,7 +84,7 @@ executable Combinatorrent
     test-framework-quickcheck2,
     time
 
-  ghc-options: -Wall -fno-warn-orphans
+  ghc-options: -Wall -fno-warn-orphans -funbox-strict-fields
   if impl(ghc >= 6.13.0)
       ghc-options: -rtsopts
 
