@@ -69,7 +69,7 @@ start :: Socket -> [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgr
 start s caps pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
     queueC <- newTChanIO
     senderMV <- newEmptyTMVarIO
-    receiverC <- newTChanIO
+    receiverC <- newChan
     return [Worker $ Sender.start s senderMV,
             Worker $ SenderQ.start caps queueC senderMV receiverC fsC,
             Worker $ Receiver.start s receiverC,
@@ -79,7 +79,7 @@ start s caps pMgrC rtv pieceMgrC fsC stv pm nPieces ih = do
 -- INTERNAL FUNCTIONS
 ----------------------------------------------------------------------
 
-data CF = CF { inCh :: TChan MsgTy
+data CF = CF { inCh :: Chan MsgTy
              , outCh :: TChan SenderQ.SenderQMsg
              , peerMgrCh :: MgrChannel
              , pieceMgrCh :: PieceMgrChannel
@@ -87,9 +87,9 @@ data CF = CF { inCh :: TChan MsgTy
              , rateTV :: ChokeMgr.RateTVar
              , pcInfoHash :: InfoHash
              , pieceMap :: !PieceMap
-             , piecesDoneTV :: TMVar [PieceNum]
-             , haveTV :: TMVar [PieceNum]
-             , grabBlockTV :: TMVar Blocks
+             , piecesDoneTV :: MVar [PieceNum]
+             , haveTV :: MVar [PieceNum]
+             , grabBlockTV :: MVar Blocks
              , extConf :: ExtensionConfig
              }
 
@@ -257,13 +257,13 @@ errorExtendedMsg _ _ = do
     stopP
 
 peerP :: [Capabilities] -> MgrChannel -> ChokeMgr.RateTVar -> PieceMgrChannel -> PieceMap -> Int
-         -> TChan SenderQ.SenderQMsg -> TChan MsgTy -> TVar [PStat] -> InfoHash
+         -> TChan SenderQ.SenderQMsg -> Chan MsgTy -> TVar [PStat] -> InfoHash
          -> SupervisorChannel -> IO ThreadId
 peerP caps pMgrC rtv pieceMgrC pm nPieces outBound inBound stv ih supC = do
     ct <- getCurrentTime
-    pdtmv <- newEmptyTMVarIO
-    havetv <- newEmptyTMVarIO
-    gbtmv <- newEmptyTMVarIO
+    pdtmv <- newEmptyMVar
+    havetv <- newEmptyMVar
+    gbtmv <- newEmptyMVar
     pieceSet <- PS.new nPieces
     let cs = configCapabilities caps
     spawnP (CF inBound outBound pMgrC pieceMgrC stv rtv ih pm
@@ -290,7 +290,7 @@ startup nPieces = do
     -- eventually handle extended messaging
     asks extConf >>= fromLJ sendExtendedMsg
     -- Install the StatusP timer
-    _ <- registerSTM 5 ich TimerTick
+    _ <- registerMV 5 ich TimerTick
     eventLoop
 
 cleanup :: Process CF ST ()
@@ -304,7 +304,7 @@ cleanup = do
 readInCh :: Process CF ST MsgTy
 readInCh = do
     inb <- asks inCh
-    liftIO . atomically $ readTChan inb
+    liftIO $ readChan inb
 
 eventLoop :: Process CF ST ()
 eventLoop = do
@@ -324,7 +324,7 @@ getPiecesDone :: Process CF ST [PieceNum]
 getPiecesDone = do
     c  <- asks piecesDoneTV
     msgPieceMgr (GetDone c)
-    liftIO $ do atomically $ takeTMVar c
+    liftIO $ takeMVar c
 
 trackInterestRemove :: PieceNum -> Process CF ST ()
 trackInterestRemove pn = do
@@ -341,7 +341,7 @@ trackInterestAdd :: [PieceNum] -> Process CF ST ()
 trackInterestAdd pns = do
     c <- asks haveTV
     msgPieceMgr (PeerHave pns c)
-    interesting <- liftIO . atomically $ takeTMVar c
+    interesting <- liftIO $ takeMVar c
     set <- gets interestingPieces
     let !ns = upd interesting set
     if S.null ns
@@ -437,7 +437,7 @@ timerTick :: Process CF ST ()
 timerTick = do
    checkKeepAlive
    inC <- asks inCh
-   _ <- registerSTM 5 inC TimerTick
+   _ <- registerMV 5 inC TimerTick
    (nur, ndr) <- timerTickChokeMgr
    timerTickStatus nur ndr
 
@@ -733,7 +733,7 @@ grabBlocks n = do
     ps <- gets peerPieces
     lpn <- gets lastPn
     msgPieceMgr (GrabBlocks n ps c lpn)
-    blks <- liftIO $ do atomically $ takeTMVar c
+    blks <- liftIO $ takeMVar c
     case blks of
         Leech bs -> return bs
         Endgame bs ->
@@ -766,7 +766,7 @@ outChan qm = do
 msgPieceMgr :: PieceMgrMsg -> Process CF ST ()
 msgPieceMgr m = do
    pmc <- asks pieceMgrCh
-   {-# SCC "Channel_Write" #-} liftIO . atomically $ writeTChan pmc m
+   {-# SCC "Channel_Write" #-} liftIO $ writeChan pmc m
 
 
 -- IP address is given in host byte-order

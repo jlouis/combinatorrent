@@ -331,7 +331,7 @@ selectPeers ups downPeers seedPeers = do
 --   to the peer in question. If the system is really loaded, this might
 --   actually fail since the order in which messages arrive might be inverted.
 msgPeer :: PeerChannel -> PeerChokeMsg -> ChokeMgrProcess ()
-msgPeer ch = liftIO . atomically . writeTChan ch . FromChokeMgr
+msgPeer ch = liftIO . writeChan ch . FromChokeMgr
 
 -- | This function performs the choking and unchoking of peers in a round.
 performChokingUnchoking :: S.Set ThreadId -> [Peer] -> ChokeMgrProcess ()

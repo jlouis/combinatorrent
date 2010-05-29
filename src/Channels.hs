@@ -33,7 +33,7 @@ data PeerChokeMsg = ChokePeer
                   | PieceCompleted PieceNum
                   | CancelBlock PieceNum Block
 
-type PeerChannel = TChan MsgTy
+type PeerChannel = Chan MsgTy
 
 instance NFData PeerChannel where
     rnf pc = pc `seq` ()

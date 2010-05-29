@@ -6,6 +6,7 @@
 --
 module Process.Timer
     ( registerSTM
+    , registerMV
     )
 
 where
@@ -18,3 +19,9 @@ registerSTM :: MonadIO m => Int -> TChan a -> a -> m ThreadId
 registerSTM secs c m = liftIO $ forkIO $ {-# SCC "Timer" #-} do
     threadDelay (secs * 1000000)
     atomically $ writeTChan c m
+
+registerMV :: MonadIO m => Int -> Chan a -> a -> m ThreadId
+registerMV secs c m = liftIO $ forkIO $ do
+    threadDelay (secs * 1000000)
+    writeChan c m
+

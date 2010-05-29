@@ -90,15 +90,15 @@ data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks) PieceNum
+data PieceMgrMsg = GrabBlocks Int PS.PieceSet (MVar Blocks) PieceNum
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
                  | PutbackBlocks [(PieceNum, Block)]
                    -- ^ Put these blocks back for retrieval
-                 | GetDone (TMVar [PieceNum])
+                 | GetDone (MVar [PieceNum])
                    -- ^ Get the pieces which are already done
-                 | PeerHave [PieceNum] (TMVar [PieceNum])
+                 | PeerHave [PieceNum] (MVar [PieceNum])
                    -- ^ A peer has the given piece(s)
                  | PeerUnhave [PieceNum]
                    -- ^ A peer relinquished the given piece Indexes
@@ -111,7 +111,7 @@ instance Show PieceMgrMsg where
     show (PeerHave xs _)       = "PeerHave " ++ show xs
     show (PeerUnhave xs)       = "PeerUnhave " ++ show xs
 
-type PieceMgrChannel = TChan PieceMgrMsg
+type PieceMgrChannel = Chan PieceMgrMsg
 
 data CF = CF
     { pieceMgrCh :: PieceMgrChannel
@@ -160,19 +160,19 @@ traceMsg m = do
 rpcMessage :: Process CF ST ()
 rpcMessage = do
     ch <- asks pieceMgrCh
-    m <- {-# SCC "Channel_Read" #-} liftIO . atomically $ readTChan ch
+    m <- {-# SCC "Channel_Read" #-} liftIO $ readChan ch
     traceMsg m
     case m of
       GrabBlocks n eligible c lastpn -> {-# SCC "GrabBlocks" #-}
           do blocks <- grabBlocks n eligible lastpn
-             liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
+             liftIO $ do putMVar c blocks -- Is never supposed to block
       StoreBlock pn blk d ->
           storeBlock pn blk d
       PutbackBlocks blks -> {-# SCC "PutbackBlocks" #-}
           mapM_ putbackBlock blks
       GetDone c -> {-# SCC "GetDone" #-} do
          done <- doneKeys <$> gets pieces
-         liftIO . atomically $ do putTMVar c done -- Is never supposed to block either
+         liftIO $ do putMVar c done -- Is never supposed to block either
       PeerHave idxs c -> peerHave idxs c
       PeerUnhave idxs -> peerUnhave idxs
 
@@ -211,11 +211,11 @@ pieceDone pn = {-# SCC "pieceDone" #-} do
                       checkFullCompletion
       Just False -> putbackPiece pn
 
-peerHave :: [PieceNum] -> TMVar [PieceNum] -> Process CF ST ()
+peerHave :: [PieceNum] -> MVar [PieceNum] -> Process CF ST ()
 peerHave idxs tmv = do
     ps <- gets pieces
     let !interesting = filter (mem ps) idxs
-    liftIO . atomically $ putTMVar tmv interesting
+    liftIO $ putMVar tmv interesting
     if null interesting
         then return ()
         else modify (\db -> db { histogram = PendS.haves interesting (histogram db)})

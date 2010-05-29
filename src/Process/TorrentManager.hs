@@ -104,7 +104,7 @@ startTorrent' fp bc ti = do
     fspC     <- liftIO newTChanIO
     trackerC <- liftIO newTChanIO
     supC     <- liftIO newTChanIO
-    pieceMgrC  <- liftIO newTChanIO
+    pieceMgrC  <- liftIO newChan
     chokeC  <- asks tChokeCh
     statusC <- asks tStatusCh
     stv <- asks tStatusTV

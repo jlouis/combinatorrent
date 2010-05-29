@@ -33,7 +33,7 @@ data SenderQMsg = SenderQCancel PieceNum Block -- ^ Peer requested that we cance
 
 data CF = CF { sqIn :: TChan SenderQMsg
              , sqOut :: TMVar L.ByteString
-             , peerCtlCh :: TChan MsgTy
+             , peerCtlCh :: Chan MsgTy
              , readBlockTV :: TMVar B.ByteString
              , fsCh        :: FSPChannel
              , fastExtension :: Bool
@@ -48,7 +48,7 @@ instance Logging CF where
 
 -- | sendQueue Process, simple version.
 --   TODO: Split into fast and slow.
-start :: [Capabilities] -> TChan SenderQMsg -> TMVar L.ByteString -> TChan MsgTy
+start :: [Capabilities] -> TChan SenderQMsg -> TMVar L.ByteString -> Chan MsgTy
       -> FSPChannel -> SupervisorChannel -> IO ThreadId
 start caps inC outC bandwC fspC supC = do
     rbtv <- liftIO newEmptyTMVarIO
@@ -124,7 +124,7 @@ rateUpdateEvent :: Process CF ST ()
 rateUpdateEvent = {-# SCC "Peer.SendQ.rateUpd" #-} do
     l <- gets bytesTransferred
     bwc <- asks peerCtlCh
-    liftIO . atomically $ writeTChan bwc (FromSenderQ l)
+    liftIO $ writeChan bwc (FromSenderQ l)
     modify (\s -> s { bytesTransferred = 0 })
 
 -- The type of the Outgoing queue

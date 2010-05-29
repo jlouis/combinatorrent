@@ -3,7 +3,6 @@ module Process.Peer.Receiver
 where
 
 import Control.Concurrent
-import Control.Concurrent.STM
 import Control.Exception (assert)
 
 import Control.Monad.Reader
@@ -23,7 +22,7 @@ import Supervisor
 import Protocol.Wire
 
 
-data CF = CF { rpMsgCh :: TChan MsgTy }
+data CF = CF { rpMsgCh :: Chan MsgTy }
 
 instance Logging CF where
     logName _ = "Process.Peer.Receiver"
@@ -35,7 +34,7 @@ demandInput l = {-# SCC "demandInput" #-} do
     when (B.null bs) stopP
     return bs
 
-start :: Socket -> TChan MsgTy -> SupervisorChannel -> IO ThreadId
+start :: Socket -> Chan MsgTy -> SupervisorChannel -> IO ThreadId
 start s ch supC = do
    spawnP (CF ch) s
         ({-# SCC "Receiver" #-} catchP readSend
@@ -70,7 +69,7 @@ loopMsg lbs sz l = {-# SCC "loopMsg" #-} do
                                     rest -> (B.concat $ reverse rest))
                 msg <- assert (B.length u == fromIntegral l) parseMsg l u
                 c <- asks rpMsgCh
-                liftIO . atomically $ writeTChan c (FromPeer (msg, fromIntegral l))
+                liftIO $ writeChan c (FromPeer (msg, fromIntegral l))
                 loopHeader r
         else do inp <- demandInput 4096
                 loopMsg (inp : lbs) (sz + fromIntegral (B.length inp)) l
