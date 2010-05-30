@@ -357,7 +357,8 @@ chokeMgrMsg msg = do
    case msg of
        PieceCompleted pn -> do
             debugP "Telling about Piece Completion"
-            outChan $ SenderQ.SenderQM $ Have pn
+            hasPiece <- gets peerPieces >>= PS.member pn 
+            unless hasPiece $ outChan $ SenderQ.SenderQM $ Have pn
             trackInterestRemove pn
        ChokePeer -> do choking <- gets weChoke
                        when (not choking)
