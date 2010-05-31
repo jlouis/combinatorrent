@@ -706,7 +706,7 @@ endgameLoMark = 1
 
 -- | Queue up pieces for retrieval at the Peer
 queuePieces :: [(PieceNum, Block)] -> Process CF ST ()
-queuePieces toQueue = do
+queuePieces toQueue = {-# SCC "queuePieces" #-} do
     s <- get
     let bq = blockQueue s
     q <- forM toQueue
