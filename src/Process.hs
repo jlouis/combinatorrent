@@ -103,7 +103,11 @@ logP prio msg = do
 
 infoP, debugP, criticalP, warningP, errorP :: Logging a => String -> Process a b ()
 infoP  = logP INFO
+#ifdef NDEBUG
+debugP _ = return ()
+#else
 debugP = logP DEBUG
+#endif
 criticalP = logP CRITICAL
 warningP  = logP WARNING
 errorP    = logP ERROR

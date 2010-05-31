@@ -90,7 +90,7 @@ data Blocks = Leech [(PieceNum, Block)]
             | Endgame [(PieceNum, Block)]
 
 -- | Messages for RPC towards the PieceMgr.
-data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
+data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks) PieceNum
                    -- ^ Ask for grabbing some blocks
                  | StoreBlock PieceNum Block B.ByteString
                    -- ^ Ask for storing a block on the file system
@@ -104,7 +104,7 @@ data PieceMgrMsg = GrabBlocks Int PS.PieceSet (TMVar Blocks)
                    -- ^ A peer relinquished the given piece Indexes
 
 instance Show PieceMgrMsg where
-    show (GrabBlocks x _ _) = "GrabBlocks " ++ show x
+    show (GrabBlocks x _ _ _) = "GrabBlocks " ++ show x
     show (StoreBlock pn blk _) = "StoreBlock " ++ show pn ++ " " ++ show blk
     show (PutbackBlocks x)     = "PutbackBlocks " ++ show x
     show (GetDone _)           = "GetDone"
@@ -163,8 +163,8 @@ rpcMessage = do
     m <- {-# SCC "Channel_Read" #-} liftIO . atomically $ readTChan ch
     traceMsg m
     case m of
-      GrabBlocks n eligible c -> {-# SCC "GrabBlocks" #-}
-          do blocks <- grabBlocks n eligible
+      GrabBlocks n eligible c lastpn -> {-# SCC "GrabBlocks" #-}
+          do blocks <- grabBlocks n eligible lastpn
              liftIO . atomically $ do putTMVar c blocks -- Is never supposed to block
       StoreBlock pn blk d ->
           storeBlock pn blk d
@@ -351,10 +351,10 @@ updateProgress pn blk = {-# SCC "updateProgress" #-} do
                                  -- at times
                else do
                 let pg' = pg { ipHaveBlocks = S.insert blk blkSet }
-                modify (\db -> db { pieces = M.insert pn pg' (pieces db) })
-                debugP $ "Iphave : " ++ show (ipHave pg') ++ " ipDone: " ++ show (ipDone pg')
+                db <- get
+                put $! db { pieces = M.insert pn pg' (pieces db) }
                 return (ipHave pg' == ipDone pg')
-  where ipHave = S.size . ipHaveBlocks
+  where ipHave = {-# SCC "updateProgress_ipHave" #-} S.size . ipHaveBlocks
 
 blockPiece :: BlockSize -> PieceSize -> [Block]
 blockPiece blockSz pieceSize = build pieceSize 0 []
@@ -368,9 +368,9 @@ blockPiece blockSz pieceSize = build pieceSize 0 []
 -- | The call @grabBlocks n eligible@ tries to pick off up to @n@ pieces from
 --   to download. In doing so, it will only consider pieces in @eligible@. It
 --   returns a list of Blocks which where grabbed.
-grabBlocks :: Int -> PS.PieceSet -> PieceMgrProcess Blocks
-grabBlocks k eligible = {-# SCC "grabBlocks" #-} do
-    blocks <- tryGrab k eligible
+grabBlocks :: Int -> PS.PieceSet -> PieceNum -> PieceMgrProcess Blocks
+grabBlocks k eligible lastpn = {-# SCC "grabBlocks" #-} do
+    blocks <- tryGrab k eligible lastpn
     ps <- gets pieces
     let pendN = M.null $ M.filter (\a -> case a of Pending -> True
                                                    _       -> False) ps
@@ -393,9 +393,17 @@ inProgressPieces m = M.keys $ M.filter f m
 
 -- Grabbing blocks is a state machine implemented by tail calls
 -- Try grabbing pieces from the pieces in progress first
-tryGrab :: PieceNum -> PS.PieceSet -> Process CF ST [(PieceNum, Block)]
-tryGrab k ps = {-# SCC "tryGrabProgress" #-}
-    tryGrabProgress k ps [] =<< (inProgressPieces <$> gets pieces)
+tryGrab :: PieceNum -> PS.PieceSet -> PieceNum -> Process CF ST [(PieceNum, Block)]
+tryGrab k ps lastpn = {-# SCC "tryGrabProgress" #-}
+    tryGrabProgress k ps [] =<< ipp
+  where
+    ipp :: Process CF ST [PieceNum]
+    ipp = do
+            p <- gets pieces
+            let inProgress = inProgressPieces p
+            case M.lookup lastpn p of
+                Just (InProgress _ _ _) -> return $ lastpn : inProgress
+                _                       -> return $ inProgress
 
 tryGrabProgress :: PieceNum -> PS.PieceSet -> [(PieceNum, Block)] -> [PieceNum]
                 -> Process CF ST [(PieceNum, Block)]
