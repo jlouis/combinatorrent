@@ -141,7 +141,7 @@ eventLoop = do
     eventLoop
 
 drainSend :: Process CF ST ()
-drainSend = do
+drainSend = {-# SCC "drainSend" #-} do
     dl <- gets donePush
     if (null dl)
         then return ()
@@ -152,7 +152,7 @@ drainSend = do
           put $! s { donePush = tail (donePush s) }
 
 traceMsg :: PieceMgrMsg -> Process CF ST ()
-traceMsg m = do
+traceMsg m = {-# SCC "traceMsg" #-} do
     tb <- gets traceBuffer
     let !ntb = (trace $! show m) tb
     modify (\db -> db { traceBuffer = ntb })
@@ -198,10 +198,6 @@ pieceDone :: PieceNum -> Process CF ST ()
 pieceDone pn = {-# SCC "pieceDone" #-} do
     assertPieceComplete pn
     debugP $ "Marking piece #" ++ show pn ++ " done"
-    l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
-    ih <- asks pMgrInfoHash
-    c <- asks statusCh
-    liftIO . atomically $ writeTChan c (CompletedPiece ih l)
     pieceOk <- checkPiece pn
     case pieceOk of
       Nothing ->
@@ -209,10 +205,14 @@ pieceDone pn = {-# SCC "pieceDone" #-} do
       Just True -> do completePiece pn
                       markDone pn
                       checkFullCompletion
+                      l <- gets infoMap >>= (\pm -> return $! len . (pm !) $ pn)
+                      ih <- asks pMgrInfoHash
+                      c <- asks statusCh
+                      liftIO . atomically $ writeTChan c (CompletedPiece ih l)
       Just False -> putbackPiece pn
 
 peerHave :: [PieceNum] -> TMVar [PieceNum] -> Process CF ST ()
-peerHave idxs tmv = do
+peerHave idxs tmv = {-# SCC "peerHave" #-} do
     ps <- gets pieces
     let !interesting = filter (mem ps) idxs
     liftIO . atomically $ putTMVar tmv interesting
@@ -226,7 +226,7 @@ peerHave idxs tmv = do
                     Just _ -> True
 
 peerUnhave :: [PieceNum] -> Process CF ST ()
-peerUnhave idxs =
+peerUnhave idxs = {-# SCC "peerUnhave" #-}
     modify (\db -> db { histogram = PendS.unhaves idxs (histogram db)})
 
 endgameBroadcast :: PieceNum -> Block -> Process CF ST ()
@@ -244,7 +244,7 @@ markDone pn = do
     modify (\db -> db { donePush = (PieceDone ih pn) : donePush db })
 
 checkPiece :: PieceNum -> Process CF ST (Maybe Bool)
-checkPiece n = do
+checkPiece n = {-# SCC "checkPiece" #-} do
     v <- liftIO newEmptyTMVarIO
     fch <- asks fspCh
     liftIO $ do
