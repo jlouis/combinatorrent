@@ -17,9 +17,9 @@ sparkline<-function(ydata=rnorm(100,500,50),width=1.5,height=0.5,sigfigs=4) {
         plotrange=c(ymin-0.3*(ymax-ymin),ymax+0.3*(ymax-ymin)) # define plot range to leave enough room for min and max circles and text
         plot(x=1:len,y=ydata,type="l",xlim=c(1,len*1.5),ylim=plotrange,col="gray30",lwd=0.5,ann=FALSE,axes=FALSE) # plot sparkline
         points(x=c(tmin,tmax),y=c(ymin,ymax),pch=19,col=c("red","blue"),cex=0.5) # plot min and max points
-        text(x=len,y=ymin,labels=signif(ymin,sigfigs),cex=0.5,pos=4,col="red") # show minimum value
-        text(x=len,y=ymax,labels=signif(ymax,sigfigs),cex=0.5,pos=4,col="blue") # show maximum value
-        text(x=len,y=(ymin+ymax)/2,labels=yfin,cex=0.5,pos=4) # show most recent value
+        text(x=len,y=ymin,labels=signif(ymin,sigfigs),cex=0.7,pos=4,col="red") # show minimum value
+        text(x=len,y=ymax,labels=signif(ymax,sigfigs),cex=0.7,pos=4,col="blue") # show maximum value
+        text(x=len,y=(ymin+ymax)/2,labels=yfin,cex=0.7,pos=4) # show most recent value
         par(temppar) # restore graphics defaults
 }
 
@@ -32,29 +32,29 @@ max_space <- subset(MaxBytesUsed, MaxBytesUsed < (150*1024*1024))
 peak_alloc <- subset(PeakMegabytesAlloc, PeakMegabytesAlloc < 100)
 cpupnetwork <- subset(cpupnetwork, cpupnetwork < 1)
 
-png(filename="MaxBytesUsed.png", width=320, height=39, bg="transparent")
-sparkline(max_space / (1024*1024), width=3, height=0.5)
+png(filename="MaxBytesUsed.png", width=640, height=78, bg="transparent")
+sparkline(max_space / (1024*1024), width=6, height=1)
 dev.off()
 svg(filename="MaxBytesUsed.svg", width=3, height=0.5, bg="transparent")
 sparkline(max_space / (1024*1024), width=3, height=0.5)
 dev.off()
 
-png(filename="PeakMegabytes.png", width=320, height=39, bg="transparent")
-sparkline(peak_alloc, width=3, height=0.5)
+png(filename="PeakMegabytes.png", width=640, height=78, bg="transparent")
+sparkline(peak_alloc, width=6, height=1)
 dev.off()
 svg(filename="PeakMegabytes.svg", width=3, height=0.5, bg="transparent")
 sparkline(peak_alloc, width=3, height=0.5)
 dev.off()
 
-png(filename="Productivity.png", width=320, height=39, bg="transparent")
-sparkline(productivity, width=3, height=0.5)
+png(filename="Productivity.png", width=640, height=78, bg="transparent")
+sparkline(productivity, width=6, height=1)
 dev.off()
 svg(filename="Productivity.svg", width=3, height=0.5, bg="transparent")
 sparkline(productivity, width=3, height=0.5)
 dev.off()
 
-png(filename="CPUNet.png", width=320, height=39, bg="transparent")
-sparkline(cpupnetwork, width=3, height=0.5)
+png(filename="CPUNet.png", width=640, height=78, bg="transparent")
+sparkline(cpupnetwork, width=6, height=1)
 dev.off()
 svg(filename="CPUNet.svg", width=3, height=0.5, bg="transparent")
 sparkline(cpupnetwork, width=3, height=0.5)
