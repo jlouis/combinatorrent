@@ -42,10 +42,10 @@ newtype Handles = Handles [(Handle, Integer)]  -- ^[(fileHandle, fileLength)]
 projectHandles :: Handles
                -> Integer    -- ^Torrent offset
                -> Integer    -- ^Torrent size
-               -> [(Handle   -- ^File handle
-                   ,Integer  -- ^File chunk offset
-                   ,Integer  -- ^File chunk size
-                   )]
+               -> [(Handle
+                   ,Integer
+                   ,Integer
+                   )]        -- ^ (File handle, file chunk offset, file chunk size)
 {-
 projectHandles handles offset size = let r = projectHandles' handles offset size
                                      in trace ("projectHandles " ++
@@ -64,7 +64,7 @@ projectHandles (Handles handles@((h1, length1):handles')) offs size
     | offs >= length1 =
         projectHandles (Handles handles') (offs - length1) size
     | otherwise =
-        let size1 = length1 - offs  -- ^How much of h1 to take?
+        let size1 = length1 - offs  -- How much of h1 to take?
         in if size1 >= size
            then [(h1, offs, size)]
            else (h1, offs, size1) :
