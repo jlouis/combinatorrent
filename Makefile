@@ -11,6 +11,9 @@ test: build
 conf:
 	runghc Setup.lhs configure --user --enable-library-profiling --enable-executable-profiling --enable-optimization=2
 
+conf-viac:
+	runghc Setup.lhs configure --flags="viac" --user --enable-library-profiling --enable-executable-profiling --enable-optimization=2
+
 conf-debug:
 	runghc Setup.lhs configure --flags="debug" --user --enable-library-profiling --enable-executable-profiling --enable-optimization
 

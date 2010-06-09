@@ -10,7 +10,7 @@ module Protocol.Wire
     , msgSize
     , encodePacket
     , decodeMsg
-    , getMsg -- ^ Run attoparsec-based parser on input
+    , getMsg
     , getAPMsg
     , BitField
     , constructBitField
@@ -168,6 +168,7 @@ instance Serialize Message where
        <|> getAllowedFast
        <|> getExtendedMsg
 
+-- | Run attoparsec-based parser on inputgetMsg :: Parser Message
 getMsg :: Parser Message
 getMsg = do
     l <- apW32be
