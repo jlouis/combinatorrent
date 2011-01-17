@@ -155,7 +155,8 @@ traceMsg :: PieceMgrMsg -> Process CF ST ()
 traceMsg m = {-# SCC "traceMsg" #-} do
     tb <- gets traceBuffer
     let !ntb = (trace $! show m) tb
-    modify (\db -> db { traceBuffer = ntb })
+    db <- get
+    put $! db { traceBuffer = ntb }
 
 rpcMessage :: Process CF ST ()
 rpcMessage = do
@@ -186,7 +187,8 @@ storeBlock pn blk d = {-# SCC "storeBlock" #-} do
      writeFS
      dld <- gets downloading
      let !ndl = S.delete (pn, blk) dld
-     modify (\s -> s { downloading = ndl })
+     s <- get
+     put $! s { downloading = ndl }
      endgameBroadcast pn blk
      done <- updateProgress pn blk
      when done (pieceDone pn)
@@ -218,7 +220,9 @@ peerHave idxs tmv = {-# SCC "peerHave" #-} do
     liftIO . atomically $ putTMVar tmv interesting
     if null interesting
         then return ()
-        else modify (\db -> db { histogram = PendS.haves interesting (histogram db)})
+        else do
+            db <- get
+            put $! db { histogram = PendS.haves interesting (histogram db)}
   where mem ps p =
                 case M.lookup p ps of
                     Nothing -> False
@@ -490,7 +494,9 @@ assertST = {-# SCC "assertST" #-} do
                 assertSets >> assertDownloading
                 sizes <- sizeReport
                 debugP sizes
-        else modify (\db -> db { assertCount = assertCount db - 1 })
+        else do
+            db <- get
+            put $! db { assertCount = assertCount db - 1 }
   where
     -- If a piece is pending in the database, we have the following rules:
     --
@@ -524,11 +530,10 @@ assertST = {-# SCC "assertST" #-} do
     --    - If a block is ipPending, it is not in the downloading list
     --    - If a block is ipHave, it is not in the downloading list
     assertDownloading = do
-        down <- S.toList <$> gets downloading
-        mapM_ checkDownloading down
-    checkDownloading (pn, blk) = do
         pie <- gets pieces
         tr   <- gets traceBuffer
+        mapM_ (checkDownloading pie tr) =<< S.toList <$> gets downloading
+    checkDownloading pie tr (pn, blk) = do
         case M.lookup pn pie of
             Nothing -> fail $ "Piece " ++ show pn ++ " not in progress while We think it was"
             Just Pending -> fail "Impossible (checkDownloading, Pending)"
