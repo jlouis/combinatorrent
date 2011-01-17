@@ -32,10 +32,9 @@ import Data.Attoparsec as A
 import Data.Bits (testBit, setBit)
 
 import Data.Serialize
-import Data.Serialize.Put
-import Data.Serialize.Get
 
 import Data.Char
+import Data.Word
 import Data.Maybe (catMaybes)
 import Network.Socket hiding (send, sendTo, recv, recvFrom, KeepAlive)
 import Network.Socket.ByteString

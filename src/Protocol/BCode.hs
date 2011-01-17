@@ -51,8 +51,7 @@ import qualified Data.Map as M
 import Text.PrettyPrint.HughesPJ hiding (char)
 
 import Data.Serialize
-import Data.Serialize.Put
-import Data.Serialize.Get
+import Data.Word
 
 import Test.QuickCheck
 import Test.Framework

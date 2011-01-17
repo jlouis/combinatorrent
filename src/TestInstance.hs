@@ -21,21 +21,9 @@ instance Random Word32 where
   randomR = integralRandomR
   random = randomR (minBound, maxBound)
 
-instance Arbitrary Word32 where
-    arbitrary = arbitraryBoundedRandom
-
-instance CoArbitrary Word32 where
-    coarbitrary = coarbitraryIntegral
-
 instance Random Word8 where
     randomR = integralRandomR
     random = randomR (minBound, maxBound)
-
-instance Arbitrary Word8 where
-    arbitrary = arbitraryBoundedRandom
-
-instance CoArbitrary Word8 where
-    coarbitrary = coarbitraryIntegral
 
 instance Arbitrary L.ByteString where
     arbitrary = L.pack `fmap` arbitrary
