@@ -146,4 +146,5 @@ Source code Hierarchy
       - **Tracer**: Code for simple "ring"-like tracing.
       - **Version.hs.in**: Generates **Version.hs** via the configure script.
 
-# vim: filetype=none tw=76 expandtab
+<!-- vim: filetype=none tw=76 expandtab
+-->
