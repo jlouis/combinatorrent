@@ -264,7 +264,13 @@ trackerRequest uri =
 buildRequestURL :: Status.StatusState -> Process CF ST String
 buildRequestURL ss = do ti <- gets torrentInfo
                         params <- urlEncodeVars <$> buildRequestParams ss
-                        return $ concat [fromBS $ announceURL ti, "?", params]
+                        let announceString = fromBS $ announceURL ti
+                            -- announce string might already have some
+                            -- parameters in it
+                            sep = if '?' `elem` announceString
+                                    then "&"
+                                    else "?"
+                        return $ concat [announceString, sep, params]
 
 buildRequestParams :: Status.StatusState -> Process CF ST [(String, String)]
 buildRequestParams ss = do
