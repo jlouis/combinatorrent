@@ -17,7 +17,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State hiding (state)
 
 import Data.Bits
 import Data.Char (chr)

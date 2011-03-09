@@ -24,7 +24,7 @@ import Control.DeepSeq
 import Control.Exception (assert)
 
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State hiding (state)
 
 import Data.IORef
 import qualified Data.Map as M

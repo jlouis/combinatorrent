@@ -14,7 +14,7 @@ import Control.Concurrent.STM
 import Control.DeepSeq
 
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State hiding (state)
 import Data.Array
 import Data.List
 import qualified Data.PendingSet as PendS
