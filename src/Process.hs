@@ -2,9 +2,8 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleInstances,
              GeneralizedNewtypeDeriving,
              ScopedTypeVariables,
+             DeriveDataTypeable,
              MultiParamTypeClasses, CPP #-}
--- required for deriving Typeable
-{-# OPTIONS_GHC -fglasgow-exts #-}
 
 module Process (
     -- * Types
