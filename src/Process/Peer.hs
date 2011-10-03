@@ -781,7 +781,7 @@ allowedFast ip ihash sz n = generate n [] x []
             | p `elem` pcs = generate k pcs hsh rest
             | otherwise    = generate (k-1) (p : pcs) hsh rest
     generate k pcs hsh [] = do
-        nhsh <- Digest.digestBS hsh
+        let nhsh = Digest.digestBS hsh
         generate k pcs nhsh (genPieces nhsh)
 
     genPieces hash | B.null hash = []

@@ -136,8 +136,7 @@ checkPiece inf handles = {-# SCC "checkPiece" #-} do
                       do hSeek h AbsoluteSeek offs
                          L.hGet h (fromInteger size)
                  )
-  dgs <- liftIO $ D.digest bs
-  return (dgs == digest inf)
+  return (D.digest bs == digest inf)
 
 -- | Create a MissingMap from a file handle and a piecemap. The system will read each part of
 --   the file and then check it against the digest. It will create a map of what we are missing

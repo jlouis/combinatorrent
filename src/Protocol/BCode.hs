@@ -204,7 +204,7 @@ hashInfoDict bc =
                 Nothing -> fail "Could not find infoHash"
                 Just x  -> return x
        let encoded = encode ih
-       digest $ L.fromChunks $ [encoded]
+       return $ digest $ L.fromChunks $ [encoded]
 
 
 toPS :: String -> Path
