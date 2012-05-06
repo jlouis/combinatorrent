@@ -44,6 +44,9 @@ import Control.Applicative hiding (many)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+
 import Data.Char
 
 import Data.List
@@ -96,6 +99,9 @@ toBS = B.pack . map toW8
 
 fromBS :: B.ByteString -> String
 fromBS = map fromW8 . B.unpack
+
+fromUtf8BS :: B.ByteString -> String
+fromUtf8BS = T.unpack . T.decodeUtf8
 
 
 instance Serialize BCode where
@@ -295,13 +301,13 @@ numberPieces :: BCode -> Maybe Int
 numberPieces = fmap length . infoPieces
 
 infoFiles :: BCode -> Maybe [([String], Integer)]  -- ^[(filePath, fileLength)]
-infoFiles bc = let mbFpath = fromBS `fmap` infoName bc
+infoFiles bc = let mbFpath = fromUtf8BS `fmap` infoName bc
                    mbLength = infoLength bc
                    mbFiles = do BArray fileList <- searchInfo "files" bc
                                 return $ do fileDict@(BDict _) <- fileList
                                             let Just (BInt l) = search [toPS "length"] fileDict
                                                 Just (BArray pth) = search [toPS "path"] fileDict
-                                                pth' = map (\(BString s) -> fromBS s) pth
+                                                pth' = map (\(BString s) -> fromUtf8BS s) pth
                                             return (pth', l)
                in case (mbFpath, mbLength, mbFiles) of
                     (Just fpath, _, Just files) ->
@@ -347,7 +353,7 @@ pp bc =
       BArray arr -> text "[" <+> (cat $ intersperse comma al) <+> text "]"
           where al = map pp arr
       BDict mp -> text "{" <+> cat (intersperse comma mpl) <+> text "}"
-          where mpl = map (\(s, bc') -> text (fromBS s) <+> text "->" <+> pp bc') $ M.toList mp
+          where mpl = map (\(s, bc') -> text (fromUtf8BS s) <+> text "->" <+> pp bc') $ M.toList mp
 
 prettyPrint :: BCode -> String
 prettyPrint = render . pp
