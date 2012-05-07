@@ -11,6 +11,7 @@ module Protocol.BCode
               announce,
               comment,
               creationDate,
+              announceList,
               info,
               hashInfoDict,
               infoLength,
@@ -248,6 +249,15 @@ announce = search' "announce"
 comment  = search' "comment"
 creationDate = search' "creation date"
 
+
+-- | list of list of strings, according to official spec 
+announceList :: BCode -> Maybe [[B.ByteString]]
+announceList b = case search [toPS "announce-list"] b of
+                  Just (BArray xs) -> Just ( map (\(BArray s) -> map' s)  xs) 
+                  _ -> Nothing
+  where map' = map (\(BString s) -> s) 
+                       
+                  
 {- Tracker accessors -}
 trackerComplete, trackerIncomplete, trackerInterval :: BCode -> Maybe Integer
 trackerMinInterval :: BCode -> Maybe Integer

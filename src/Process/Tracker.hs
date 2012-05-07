@@ -13,6 +13,7 @@ module Process.Tracker
     )
 where
 
+import Prelude hiding (catch)  
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -27,6 +28,9 @@ import Data.Word
 import Network.Socket as S
 import Network.HTTP hiding (port)
 import Network.URI hiding (unreserved)
+import Network.Stream
+
+import Control.Exception
 
 import Protocol.BCode as BCode hiding (encode)
 import Process
@@ -112,7 +116,7 @@ start ih ti pid port statusC msgC pc supC =
             Start    ->
                 modify (\s -> s { state = Started }) >> talkTracker
             Complete ->
-                  modify (\s -> s { state = Completed }) >> talkTracker
+                modify (\s -> s { state = Completed }) >> talkTracker
           loop
     talkTracker = pokeTracker >>= timerUpdate
 
@@ -135,12 +139,7 @@ pokeTracker = do
     asks statusPCh >>=
         (\ch -> liftIO . atomically $ writeTChan ch (Status.RequestStatus ih v))
     upDownLeft <- liftIO . atomically $ takeTMVar v
-    url <- buildRequestURL upDownLeft
-    debugP $ "Request URL: " ++ url
-    uri <- case parseURI url of
-            Nothing -> fail $ "Could not parse the url " ++ url
-            Just u  -> return u
-    resp <- trackerRequest uri
+    resp <- queryTrackers upDownLeft
     case resp of
         Left err -> do infoP $ "Tracker HTTP Error: " ++ err
                        return (failTimerInterval, Just failTimerInterval)
@@ -234,12 +233,60 @@ cW128 bs =
         (q3, q4) = B.splitAt 4 r2
     in (cW32 q1, cW32 q2, cW32 q3, cW32 q4)
 
+
+
+bubbleUpURL :: AnnounceURL -> [AnnounceURL] -> Process CF ST ()
+bubbleUpURL _ _ =  return ()
+
+tryThisTier' :: Status.StatusState -> [AnnounceURL] -> Process CF ST (Either String (AnnounceURL, TrackerResponse))
+tryThisTier' _ []     = return $ Left "Empty announce-list"
+tryThisTier' s (x:xs) = do url <- buildRequestURL s x
+                           uri <- case parseURI url of
+                             Nothing -> fail $ "Could not parse the url " ++ url
+                             Just u  -> return u
+                           resp <- trackerRequest uri
+                           case resp of
+                             Left m  -> if null xs 
+                                        then return $ Left m
+                                        else tryThisTier' s xs 
+                             Right r -> return $ Right (x, r)
+
+
+-- | from BEP012: try first element in list, if it's can't be reached then second and so on
+--   first successfull URL will bubble up and become the head of this tier
+--   TorrentInfo stored in State should be updated to reflect the changes
+tryThisTier :: Status.StatusState -> [AnnounceURL] -> Process CF ST (Either String TrackerResponse)
+tryThisTier params tier = do resp <- tryThisTier' params tier
+                             case resp of
+                               Left m -> return $ Left m
+                               Right (url, r) -> do bubbleUpURL url tier
+                                                    return $ Right r
+
+
+queryTrackers' :: Status.StatusState -> [[AnnounceURL]] -> Process CF ST (Either String TrackerResponse)
+queryTrackers' _ []     = return $ Left "Empty announce-list"
+queryTrackers' p (x:[]) = tryThisTier p x --last element, so return whatever it gives us 
+queryTrackers' p (x:xs) = do resp <- tryThisTier p x
+                             case resp of 
+                               Left  _ -> queryTrackers' p xs -- in case of error, move to the next tier 
+                               Right _ -> return $ resp       -- if success just return result
+
+queryTrackers :: Status.StatusState ->  Process CF ST (Either String TrackerResponse)
+queryTrackers ss = do ti <- gets torrentInfo                      
+                      queryTrackers' ss $ announceURLs ti
+
+            
+
 -- TODO: Do not recurse infinitely here.
 trackerRequest :: URI -> Process CF ST (Either String TrackerResponse)
 trackerRequest uri =
-    do resp <- liftIO $ simpleHTTP request
+    do debugP $ "Querying URI: " ++ (show uri) 
+       resp <- liftIO $ catch (simpleHTTP request) (\e -> let err = show (e :: IOException)
+                                                          in return . Left . ErrorMisc $ err)
        case resp of
-         Left x -> return $ Left ("Error connecting: " ++ show x)
+         Left x -> do let err = "Error connecting: " ++ show x
+                      debugP err
+                      return $ Left err
          Right r ->
              case rspCode r of
                (2,_,_) ->
@@ -259,18 +306,18 @@ trackerRequest uri =
                            rqHeaders = [],
                            rqBody = ""}
 
--- Construct a new request URL. Perhaps this ought to be done with the HTTP
--- client library
-buildRequestURL :: Status.StatusState -> Process CF ST String
-buildRequestURL ss = do ti <- gets torrentInfo
-                        params <- urlEncodeVars <$> buildRequestParams ss
-                        let announceString = fromBS $ announceURL ti
-                            -- announce string might already have some
-                            -- parameters in it
-                            sep = if '?' `elem` announceString
-                                    then "&"
-                                    else "?"
-                        return $ concat [announceString, sep, params]
+--- Construct a new request URL. Perhaps this ought to be done with the HTTP
+--- client library
+buildRequestURL :: Status.StatusState -> AnnounceURL -> Process CF ST String
+buildRequestURL ss url = do params <- urlEncodeVars <$> buildRequestParams ss
+                            let announceString = fromBS url
+                             -- announce string might already have some
+                             -- parameters in it
+                                sep = if '?' `elem` announceString
+                                      then "&"
+                                      else "?"
+                            return $ concat [announceString, sep, params]
+
 
 buildRequestParams :: Status.StatusState -> Process CF ST [(String, String)]
 buildRequestParams ss = do

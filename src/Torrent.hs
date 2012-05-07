@@ -30,6 +30,7 @@ import Control.DeepSeq
 
 import Data.Array
 import Data.List
+import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import Data.Word
@@ -37,6 +38,7 @@ import Data.Word
 import Numeric
 
 import System.Random
+import System.Random.Shuffle
 import Test.QuickCheck
 
 import Protocol.BCode
@@ -58,7 +60,8 @@ type AnnounceURL = B.ByteString
 data TorrentInfo = TorrentInfo {
       infoHash    :: InfoHash,
       pieceCount  :: Int, -- Number of pieces in torrent
-      announceURL :: AnnounceURL } deriving Show
+      announceURLs :: [[AnnounceURL]]
+      } deriving Show
 
 data TorrentState = Seeding | Leeching
     deriving Show
@@ -127,15 +130,19 @@ defaultPort = 1579
 --   failing in the process.
 mkTorrentInfo :: BCode -> IO TorrentInfo
 mkTorrentInfo bc = do
-    (ann, np) <- case queryInfo bc of Nothing -> fail "Could not create torrent info"
-                                      Just x -> return x
-    ih  <- hashInfoDict bc
-    return TorrentInfo { infoHash = ih, announceURL = ann, pieceCount = np }
-  where
-    queryInfo b =
-      do ann <- announce b
-         np  <- numberPieces b
-         return (ann, np)
+  (ann, np) <- case queryInfo bc of Nothing -> fail "Could not create torrent info"
+                                    Just x -> return x
+  ih  <- hashInfoDict bc
+  let alist = fromMaybe [[ann]] $ announceList bc
+  -- BEP012 says that lists of URL inside each tier must be shuffled
+  gen <- newStdGen    
+  let alist' = map (\xs -> shuffle' xs (length xs) gen) alist    
+  return TorrentInfo { infoHash = ih, pieceCount = np, announceURLs = alist'}
+    where
+      queryInfo b =
+        do ann <- announce b
+           np  <- numberPieces b
+           return (ann, np)
 
 -- | Create a new PeerId for this client
 mkPeerId :: StdGen -> PeerId
