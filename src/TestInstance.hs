@@ -4,12 +4,21 @@ module TestInstance
     ()
 where
 
-import Data.Word
+
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import System.Random
+
 import Test.QuickCheck
+
+
+{-# LANGUAGE CPP #-}
+#if MIN_VERSION_random(1,0,1)
+-- random>=1.0.1 is exporting these instances, so don't need to redefine it
+#else
+ 
+import Data.Word
+import System.Random
 
 integralRandomR :: (Integral a, Integral b, RandomGen g, Num b) => (a, b) -> g -> (b, g)
 integralRandomR (a,b) g = case randomR (c,d) g of
@@ -24,6 +33,7 @@ instance Random Word32 where
 instance Random Word8 where
     randomR = integralRandomR
     random = randomR (minBound, maxBound)
+#endif
 
 instance Arbitrary L.ByteString where
     arbitrary = L.pack `fmap` arbitrary
