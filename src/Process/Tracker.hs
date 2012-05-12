@@ -32,7 +32,7 @@ import Network.Stream
 
 import Control.Exception
 
-import Protocol.BCode as BCode hiding (encode)
+import Protocol.BCode as BCode hiding (encode, announceList)
 import Process
 import Channels
 import Supervisor
@@ -87,6 +87,7 @@ instance Logging CF where
 -- | Internal state of the tracker CHP process
 data ST = ST {
         torrentInfo :: TorrentInfo
+      , announceList :: [[AnnounceURL]]  -- will store it separate from TorrentInfo as it could be updated
       , peerId :: PeerId
       , state :: TrackerEvent
       , localPort :: Word16
@@ -97,7 +98,7 @@ start :: InfoHash -> TorrentInfo -> PeerId -> Word16
       -> Status.StatusChannel -> TrackerChannel -> PeerMgr.PeerMgrChannel
       -> SupervisorChannel -> IO ThreadId
 start ih ti pid port statusC msgC pc supC =
-       spawnP (CF statusC msgC pc ih) (ST ti pid Stopped port 0)
+       spawnP (CF statusC msgC pc ih) (ST ti (announceURLs ti) pid Stopped port 0)
                     ({-# SCC "Tracker" #-} cleanupP loop
                         (defaultStopHandler supC)
                         stopEvent)
@@ -236,7 +237,16 @@ cW128 bs =
 
 
 bubbleUpURL :: AnnounceURL -> [AnnounceURL] -> Process CF ST ()
-bubbleUpURL _ _ =  return ()
+bubbleUpURL _ (_:[]) = return ()
+bubbleUpURL _ [] = return ()
+bubbleUpURL url tier@(x:_) = if url == x 
+                              then return ()
+                              else do
+                                alist <- gets announceList
+                                let newTier = url : filter (/=url) tier 
+                                    newAnnounceList = map (\a -> if a /= tier then a else newTier) alist 
+                                _ <- modify (\s -> s { announceList = newAnnounceList })
+                                return ()
 
 tryThisTier' :: Status.StatusState -> [AnnounceURL] -> Process CF ST (Either String (AnnounceURL, TrackerResponse))
 tryThisTier' _ []     = return $ Left "Empty announce-list"
@@ -252,9 +262,9 @@ tryThisTier' s (x:xs) = do url <- buildRequestURL s x
                              Right r -> return $ Right (x, r)
 
 
--- | from BEP012: try first element in list, if it's can't be reached then second and so on
---   first successfull URL will bubble up and become the head of this tier
---   TorrentInfo stored in State should be updated to reflect the changes
+-- | from BEP0012: try first element in list, if it's can't be reached, then second, and so on
+--   first successfull URL will bubble up and become the new head of this tier
+--   announceList stored in State should be updated to reflect the changes
 tryThisTier :: Status.StatusState -> [AnnounceURL] -> Process CF ST (Either String TrackerResponse)
 tryThisTier params tier = do resp <- tryThisTier' params tier
                              case resp of
@@ -272,8 +282,8 @@ queryTrackers' p (x:xs) = do resp <- tryThisTier p x
                                Right _ -> return $ resp       -- if success just return result
 
 queryTrackers :: Status.StatusState ->  Process CF ST (Either String TrackerResponse)
-queryTrackers ss = do ti <- gets torrentInfo                      
-                      queryTrackers' ss $ announceURLs ti
+queryTrackers ss = do alist <- gets announceList                      
+                      queryTrackers' ss alist
 
             
 
