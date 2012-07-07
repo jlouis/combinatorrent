@@ -18,7 +18,7 @@ author: Jesper Louis Andersen
 maintainer: jesper.louis.andersen@gmail.com
 stability: experimental
 synopsis: A concurrent bittorrent client
-tested-with: GHC ==6.12.1, GHC ==6.12.2, GHC ==6.13.20100426
+tested-with: GHC ==6.12.1, GHC ==6.12.2, GHC ==6.13.20100426, GHC == 7.4.1
 build-type: Configure
 
 extra-tmp-files: src/Version.hs
@@ -27,7 +27,7 @@ data-files: AUTHORS, README.md
 
 flag debug
   description: Enable debug support
-  default:     False
+  default:     True
 
 flag threaded
   description: Build with threaded runtime
@@ -85,6 +85,7 @@ executable Combinatorrent
     test-framework,
     test-framework-hunit,
     test-framework-quickcheck2,
+    text,
     time
 
   ghc-options: -Wall -fno-warn-orphans -funbox-strict-fields

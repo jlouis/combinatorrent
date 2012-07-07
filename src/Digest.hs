@@ -7,15 +7,10 @@ module Digest
   )
 where
 
-import Control.Applicative
 import Control.DeepSeq
-import Control.Monad.State
 
-import Data.Word
-
-import Foreign.Ptr
 import qualified Data.ByteString as B
-import Data.ByteString.Unsafe
+
 import qualified Data.ByteString.Lazy as L
 import qualified Crypto.Hash.SHA1 as SHA1
 

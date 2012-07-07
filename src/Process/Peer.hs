@@ -29,7 +29,7 @@ import qualified Data.PieceSet as PS
 import Data.Maybe
 import Data.Monoid(Monoid(..), Last(..))
 
-import Data.Set as S hiding (map)
+import Data.Set as S hiding (map, foldl)
 import Data.Time.Clock
 import Data.Word
 
