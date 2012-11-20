@@ -78,7 +78,7 @@ executable Combinatorrent
     parsec < 4,
     pretty,
     PSQueue,
-    QuickCheck == 2.4.*,
+    QuickCheck >= 2.4 && < 2.6,
     random,
     random-shuffle,
     stm,

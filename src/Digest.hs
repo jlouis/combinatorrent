@@ -1,5 +1,5 @@
 -- | Simple abstraction for message digests
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TypeSynonymInstances, CPP #-}
 module Digest
   ( Digest
   , digest
@@ -17,7 +17,10 @@ import qualified Crypto.Hash.SHA1 as SHA1
 -- Consider newtyping this
 type Digest = B.ByteString
 
+#if ! MIN_VERSION_bytestring(0,10,0)
+-- instance was introduced
 instance NFData Digest
+#endif
 
 digest :: L.ByteString -> B.ByteString
 digest bs = {-# SCC "sha1_digest" #-} SHA1.hashlazy bs
