@@ -21,3 +21,5 @@ Main
 report.html
 /tools/stat_db.backup.txt
 .hpc
+.cabal-sandbox/
+cabal.sandbox.config

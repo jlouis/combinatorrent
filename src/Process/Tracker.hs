@@ -21,13 +21,15 @@ import Control.Monad.Reader
 import Control.Monad.State hiding (state)
 
 import Data.Bits
-import Data.Char (chr)
+import Data.Char (chr, ord)
+import Data.List (partition)
+import Numeric (showHex)
 import qualified Data.ByteString as B
 import Data.Word
 
 import Network.Socket as S
-import Network.HTTP hiding (port)
-import Network.URI hiding (unreserved)
+import Network.HTTP hiding (port, urlEncode, urlEncodeVars)
+import Network.URI hiding (unreserved, reserved)
 import Network.Stream
 
 import Control.Exception
@@ -328,6 +330,33 @@ buildRequestURL ss url = do params <- urlEncodeVars <$> buildRequestParams ss
                                       else "?"
                             return $ concat [announceString, sep, params]
 
+
+-- copied from: the old HTTP library. this commit breaks it for us: b0177fa952a8d0f77e732cb817197864679b1c83
+urlEncode :: String -> String
+urlEncode [] = []
+urlEncode (h:t) = let str = if reserved (ord h) then escape h else [h]
+                  in str ++ urlEncode t
+ where reserved x
+          | x >= ord 'a' && x <= ord 'z' = False
+          | x >= ord 'A' && x <= ord 'Z' = False
+          | x >= ord '0' && x <= ord '9' = False
+          | x <= 0x20 || x >= 0x7F = True
+          | otherwise = x `elem` map ord 
+               [';','/','?',':','@','&'
+                ,'=','+',',','$','{','}'
+                ,'|','\\','^','[',']','`'
+                ,'<','>','#','%','"']
+
+       escape x = '%':showHex (ord x) ""
+
+urlEncodeVars :: [(String,String)] -> String
+urlEncodeVars ((n,v):t) =
+    let (same,diff) = partition ((==n) . fst) t
+    in urlEncode n ++ '=' : foldl (\x y -> x ++ ',' : urlEncode y) (urlEncode $ v) (map snd same)
+       ++ urlEncodeRest diff
+       where urlEncodeRest [] = []
+             urlEncodeRest diff = '&' : urlEncodeVars diff
+urlEncodeVars [] = []
 
 buildRequestParams :: Status.StatusState -> Process CF ST [(String, String)]
 buildRequestParams ss = do
