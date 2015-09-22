@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric, FlexibleContexts #-}
+
 -- | The following module is responsible for general types used
 --   throughout the system.
 module Torrent (
@@ -34,7 +36,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import Data.Word
-
+import GHC.Generics
 import Numeric
 
 import System.Random
@@ -64,7 +66,7 @@ data TorrentInfo = TorrentInfo {
       } deriving Show
 
 data TorrentState = Seeding | Leeching
-    deriving Show
+    deriving (Show, Generic)
 
 instance NFData TorrentState
 

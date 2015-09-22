@@ -10,7 +10,7 @@ import Control.Monad.Reader
 
 import Data.Word
 
-import Network hiding (accept)
+import Network hiding (accept, sClose)
 import Network.Socket
 import Network.BSD
 

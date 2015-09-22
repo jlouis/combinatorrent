@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE DeriveGeneric, TypeSynonymInstances, FlexibleContexts, TupleSections #-}
 module Process.ChokeMgr (
     -- * Types, Channels
       ChokeMgrChannel
@@ -22,6 +22,7 @@ import Data.List
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Traversable as T
+import GHC.Generics
 
 import Prelude hiding (catch, log)
 
@@ -49,6 +50,7 @@ data ChokeMgrMsg = Tick
                    -- ^ Note that a block is complete (endgame)
                  | TorrentComplete InfoHash
                    -- ^ Note that the torrent in question is complete
+                  deriving (Generic)
 
 instance NFData ChokeMgrMsg
 

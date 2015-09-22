@@ -49,8 +49,10 @@ data TorrentLocal = TorrentLocal
                         , tcPM      :: !PieceMap
                         }
 
+#if __GLASGOW_HASKELL__ < 710
 instance NFData ThreadId where
     rnf x = x `seq` ()
+#endif
 
 type PeerMgrChannel = TChan PeerMgrMsg
 
