@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 -- | Module for the representation of PieceSets. Exist so we can abstract on the implementation later
 module Data.PieceSet
     ( PieceSet

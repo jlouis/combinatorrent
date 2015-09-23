@@ -25,6 +25,7 @@ module Process (
     )
 where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Exception
 
@@ -42,7 +43,7 @@ import System.Log.Logger
 --   channels, and the state the internal process state. It is implemented by means of a transformer
 --   stack on top of IO.
 newtype Process a b c = Process (ReaderT a (StateT b IO) c)
-  deriving (Functor, Monad, MonadIO, MonadState b, MonadReader a)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadState b, MonadReader a)
 
 data StopException = StopException
   deriving (Show, Typeable)
