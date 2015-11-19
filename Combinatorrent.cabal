@@ -64,7 +64,7 @@ executable Combinatorrent
     base >= 3.0,
     base < 5.0,
     bytestring,
-    cereal >= 0.3 && < 0.5,
+    cereal >= 0.3 && < 0.6,
     containers,
     deepseq,
     directory,
