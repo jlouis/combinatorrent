@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP, TupleSections #-}
 module Process.PeerMgr (
    -- * Types
      Peer(..)
@@ -10,7 +10,9 @@ module Process.PeerMgr (
 )
 where
 
-import Control.Applicative
+#if __GLASGOW_HASKELL__ <= 708
+import AdaptGhcVersion
+#endif
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -112,7 +114,7 @@ incomingPeers msg =
                        _ <- addIncoming conn
                        return ()
                else do debugP "Already too many peers, closing!"
-                       liftIO $ Sock.sClose s
+                       liftIO $ Sock.close s
        NewTorrent ih tl -> do
            modify (\s -> s { cmMap = M.insert ih tl (cmMap s)})
        StopTorrent _ih -> do

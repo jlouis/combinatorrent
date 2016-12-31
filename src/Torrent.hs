@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, FlexibleContexts #-}
+{-# LANGUAGE CPP, DeriveGeneric, FlexibleContexts #-}
 
 -- | The following module is responsible for general types used
 --   throughout the system.
@@ -27,7 +27,10 @@ module Torrent (
     )
 where
 
-import Control.Applicative
+#if __GLASGOW_HASKELL__ <= 708
+import AdaptGhcVersion
+#endif
+
 import Control.DeepSeq
 
 import Data.Array

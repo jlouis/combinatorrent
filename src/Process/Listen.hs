@@ -10,7 +10,7 @@ import Control.Monad.Reader
 
 import Data.Word
 
-import Network hiding (accept, sClose)
+import Network hiding (accept)
 import Network.Socket
 import Network.BSD
 
@@ -33,10 +33,10 @@ openListen port = liftIO $ do
     proto <- getProtocolNumber "tcp"
     bracketOnError
         (socket AF_INET Stream proto)
-        (sClose)
+        (close)
         (\sock -> do
             setSocketOption sock ReuseAddr 1
-            bindSocket sock (SockAddrInet (toEnum $ fromIntegral port) iNADDR_ANY)
+            bind sock (SockAddrInet (toEnum $ fromIntegral port) iNADDR_ANY)
             listen sock maxListenQueue
             return sock
         )

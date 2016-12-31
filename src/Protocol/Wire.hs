@@ -28,7 +28,7 @@ import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import Data.Attoparsec as A
+import Data.Attoparsec.ByteString as A
 import Data.Bits (testBit, setBit)
 
 import Data.Serialize

@@ -8,13 +8,16 @@
 -- about the torrent in question. It may also respond with an error in which
 -- case we should present it to the user.
 --
+{-# LANGUAGE CPP #-}
 module Process.Tracker
     ( start
     )
 where
 
-import Prelude hiding (catch)  
-import Control.Applicative
+#if __GLASGOW_HASKELL__ <= 708
+import AdaptGhcVersion
+#endif
+
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.Reader
@@ -206,7 +209,7 @@ decodeIps4 bs | B.null bs = []
                     let (ip, r1) = B.splitAt 4 bs
                         (port, r2) = B.splitAt 2 r1
                         i' = cW32 ip
-                        p' = PortNum $ cW16 port
+                        p' = fromIntegral $ cW16 port
                     in PeerMgr.Peer (S.SockAddrInet p' i') : decodeIps4 r2
               | otherwise = [] -- Some trackers fail spectacularly
 
@@ -216,7 +219,7 @@ decodeIps6 bs | B.null bs = []
                     let (ip6, r1) = B.splitAt 16 bs
                         (port, r2) = B.splitAt 2 r1
                         i' = cW128 ip6
-                        p' = PortNum $ cW16 port
+                        p' = fromIntegral $ cW16 port
                     in PeerMgr.Peer (S.SockAddrInet6 p' 0 i' 0) : decodeIps6 r2
               | otherwise = [] -- Some trackers fail spectacularly
 
@@ -241,12 +244,12 @@ cW128 bs =
 bubbleUpURL :: AnnounceURL -> [AnnounceURL] -> Process CF ST ()
 bubbleUpURL _ (_:[]) = return ()
 bubbleUpURL _ [] = return ()
-bubbleUpURL url tier@(x:_) = if url == x 
+bubbleUpURL url tier@(x:_) = if url == x
                               then return ()
                               else do
                                 alist <- gets announceList
-                                let newTier = url : filter (/=url) tier 
-                                    newAnnounceList = map (\a -> if a /= tier then a else newTier) alist 
+                                let newTier = url : filter (/=url) tier
+                                    newAnnounceList = map (\a -> if a /= tier then a else newTier) alist
                                 _ <- modify (\s -> s { announceList = newAnnounceList })
                                 return ()
 
@@ -258,9 +261,9 @@ tryThisTier' s (x:xs) = do url <- buildRequestURL s x
                              Just u  -> return u
                            resp <- trackerRequest uri
                            case resp of
-                             Left m  -> if null xs 
+                             Left m  -> if null xs
                                         then return $ Left m
-                                        else tryThisTier' s xs 
+                                        else tryThisTier' s xs
                              Right r -> return $ Right (x, r)
 
 
@@ -277,22 +280,22 @@ tryThisTier params tier = do resp <- tryThisTier' params tier
 
 queryTrackers' :: Status.StatusState -> [[AnnounceURL]] -> Process CF ST (Either String TrackerResponse)
 queryTrackers' _ []     = return $ Left "Empty announce-list"
-queryTrackers' p (x:[]) = tryThisTier p x --last element, so return whatever it gives us 
+queryTrackers' p (x:[]) = tryThisTier p x --last element, so return whatever it gives us
 queryTrackers' p (x:xs) = do resp <- tryThisTier p x
-                             case resp of 
-                               Left  _ -> queryTrackers' p xs -- in case of error, move to the next tier 
+                             case resp of
+                               Left  _ -> queryTrackers' p xs -- in case of error, move to the next tier
                                Right _ -> return $ resp       -- if success just return result
 
 queryTrackers :: Status.StatusState ->  Process CF ST (Either String TrackerResponse)
-queryTrackers ss = do alist <- gets announceList                      
+queryTrackers ss = do alist <- gets announceList
                       queryTrackers' ss alist
 
-            
+
 
 -- TODO: Do not recurse infinitely here.
 trackerRequest :: URI -> Process CF ST (Either String TrackerResponse)
 trackerRequest uri =
-    do debugP $ "Querying URI: " ++ (show uri) 
+    do debugP $ "Querying URI: " ++ (show uri)
        resp <- liftIO $ catch (simpleHTTP request) (\e -> let err = show (e :: IOException)
                                                           in return . Left . ErrorMisc $ err)
        case resp of
@@ -341,7 +344,7 @@ urlEncode (h:t) = let str = if reserved (ord h) then escape h else [h]
           | x >= ord 'A' && x <= ord 'Z' = False
           | x >= ord '0' && x <= ord '9' = False
           | x <= 0x20 || x >= 0x7F = True
-          | otherwise = x `elem` map ord 
+          | otherwise = x `elem` map ord
                [';','/','?',':','@','&'
                 ,'=','+',',','$','{','}'
                 ,'|','\\','^','[',']','`'

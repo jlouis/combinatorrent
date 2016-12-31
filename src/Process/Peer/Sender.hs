@@ -27,7 +27,7 @@ start :: Socket -> TMVar L.ByteString -> SupervisorChannel -> IO ThreadId
 start s ch supC = spawnP (CF ch s) () ({-# SCC "Sender" #-}
                                           (cleanupP pgm
                                             (defaultStopHandler supC)
-                                            (liftIO $ sClose s)))
+                                            (liftIO $ close s)))
 pgm :: Process CF () ()
 pgm = do
    ch <- asks chan

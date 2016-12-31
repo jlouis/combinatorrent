@@ -23,7 +23,7 @@ import Control.Concurrent.STM
 import Control.Monad.State
 import Control.Monad.Reader
 
-import Prelude hiding (catch)
+import Prelude
 
 import Process
 

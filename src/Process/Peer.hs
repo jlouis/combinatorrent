@@ -8,7 +8,8 @@ module Process.Peer (
     )
 where
 
-import Control.Applicative
+import AdaptGhcVersion
+
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.DeepSeq
@@ -18,7 +19,7 @@ import Control.Exception
 import Control.Monad.State
 import Control.Monad.Reader
 
-import Prelude hiding (catch, log)
+import Prelude hiding (log)
 
 import Data.Array
 import Data.Bits
@@ -27,7 +28,7 @@ import Data.Function (on)
 
 import qualified Data.PieceSet as PS
 import Data.Maybe
-import Data.Monoid(Monoid(..), Last(..))
+import Data.Monoid(Last(..))
 
 import Data.Set as S hiding (map, foldl)
 import Data.Time.Clock
@@ -790,8 +791,8 @@ allowedFast ip ihash sz n = generate n [] x []
                           bytes :: [Word32]
                           bytes    = [fromIntegral z `shiftL` s |
                                             (z, s) <- zip (B.unpack h) [24,16,8,0]]
-                          ntohl = fromIntegral . sum
-                      in ((ntohl bytes) `mod` fromIntegral sz) : genPieces rest
+                          fntohl = fromIntegral . sum
+                      in ((fntohl bytes) `mod` fromIntegral sz) : genPieces rest
     -- To prevent a Peer to reconnect, obtain a new IP and thus new FAST-set pieces, we mask out
     -- the lower bits
     ipBytes     = B.pack $ map fromIntegral
