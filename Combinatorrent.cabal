@@ -76,7 +76,6 @@ executable Combinatorrent
     mtl,
     network,
     network-uri,
-    parsec < 4,
     pretty,
     PSQueue,
     QuickCheck >= 2.4 && < 2.9,
