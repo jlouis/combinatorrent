@@ -1,6 +1,8 @@
 Combinatorrent - a bittorrent client.
 =====================================
 
+[![Build Status](https://secure.travis-ci.org/jlouis/combinatorrent.svg?branch=master)](http://travis-ci.org/jlouis/combinatorrent)
+
 Introduction
 ----------
 
