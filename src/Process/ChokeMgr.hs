@@ -24,7 +24,7 @@ import qualified Data.Set as S
 import Data.Traversable as T
 import GHC.Generics
 
-import Prelude hiding (catch, log)
+import Prelude hiding (log)
 
 import System.Random
 
@@ -246,7 +246,7 @@ compareInv x y =
         EQ -> EQ
         GT -> LT
 
-comparingWith :: Ord a => (a -> a -> Ordering) -> (b -> a) -> b -> b -> Ordering
+comparingWith :: (a -> a -> Ordering) -> (b -> a) -> b -> b -> Ordering
 comparingWith comp project x y =
     comp (project x) (project y)
 

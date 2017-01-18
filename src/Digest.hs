@@ -7,8 +7,6 @@ module Digest
   )
 where
 
-import Control.DeepSeq
-
 import qualified Data.ByteString as B
 
 import qualified Data.ByteString.Lazy as L

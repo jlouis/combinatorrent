@@ -10,7 +10,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import qualified Data.ByteString as B
-import Prelude hiding (catch, log)
+import Prelude hiding (log)
 
 import Data.Serialize.Get
 

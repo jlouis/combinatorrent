@@ -10,7 +10,7 @@ import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Prelude hiding (catch, log)
+import Prelude hiding (log)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L

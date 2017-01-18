@@ -37,10 +37,6 @@ flag threadscope
   description: Enable the eventlog necessary for ThreadScope
   default: False
 
-flag viac
-  description: Build executable over GCC compilation
-  default: False
-
 executable Combinatorrent
   hs-source-dirs: src
   main-is: Combinatorrent.hs
@@ -55,8 +51,6 @@ executable Combinatorrent
     Process.Peer.Sender,
     Process.Peer.SenderQ,
     Process.Peer.Receiver
-
-  extensions: CPP
 
   build-depends:
     array >= 0.3,
@@ -76,7 +70,6 @@ executable Combinatorrent
     mtl,
     network,
     network-uri,
-    parsec < 4,
     pretty,
     PSQueue,
     QuickCheck >= 2.4 && < 2.9,
@@ -89,15 +82,11 @@ executable Combinatorrent
     text,
     time
 
-  ghc-options: -Wall -fno-warn-orphans -funbox-strict-fields
+  extensions: CPP
+  ghc-options: -Wall -fwarn-tabs -fno-warn-orphans -funbox-strict-fields -threaded -O2
+
   if impl(ghc >= 6.13.0)
       ghc-options: -rtsopts
-
-  if flag(viac)
-      ghc-options: -fvia-C -optc-O3
-
-  if flag(threaded)
-      ghc-options: -threaded
 
   if !flag(debug)
       cpp-options: "-DNDEBUG"

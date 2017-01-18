@@ -34,7 +34,7 @@ import Control.Monad.State.Strict
 
 import Data.Typeable
 
-import Prelude hiding (catch, log)
+import Prelude hiding (log)
 
 import System.Log.Logger
 
